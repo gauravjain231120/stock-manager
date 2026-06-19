@@ -1,17 +1,11 @@
 import { registerTotals, recentEntries, channelBreakdown } from '@/lib/register';
 import { PageHeader, Panel, Table, Th, Td, Tr, StatCard } from '@/components/ui';
 import { RegisterEntryForm } from '@/components/RegisterEntryForm';
-import { ActionButton } from '@/components/ActionButton';
-import { num, timeAgo } from '@/lib/format';
+import { RecentEntriesTable } from '@/components/RecentEntriesTable';
+import { num } from '@/lib/format';
 import { PLATFORM_LABELS, Platform } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
-
-const TYPE_LABEL: Record<string, string> = {
-  PRODUCED: 'Produce',
-  SOLD: 'Ship',
-  RETURNED: 'Return',
-};
 
 function platformLabel(channel?: string | null) {
   if (!channel) return '—';
@@ -19,7 +13,7 @@ function platformLabel(channel?: string | null) {
 }
 
 export default async function RegisterPage() {
-  const [rows, recent, byPlatform] = await Promise.all([registerTotals(), recentEntries(15), channelBreakdown()]);
+  const [rows, recent, byPlatform] = await Promise.all([registerTotals(), recentEntries(200), channelBreakdown()]);
   const totals = rows.reduce(
     (a, r) => ({
       produced: a.produced + r.produced,
@@ -77,29 +71,16 @@ export default async function RegisterPage() {
       ) : null}
 
       <div className="mt-6">
-        <Panel title="Recent entries">
-          <Table head={<><Th>When</Th><Th>Action</Th><Th>SKU</Th><Th>Platform</Th><Th right>Qty</Th><Th right>Undo</Th></>} empty={recent.length === 0}>
-            {recent.map((m) => (
-              <Tr key={String(m._id)}>
-                <Td>{timeAgo(m.createdAt as unknown as Date)}</Td>
-                <Td>{TYPE_LABEL[m.type] ?? m.type}</Td>
-                <Td mono>{m.sku}</Td>
-                <Td>{platformLabel(m.channel)}</Td>
-                <Td right>{num(Math.abs(m.qty))}</Td>
-                <Td right>
-                  <ActionButton
-                    label="Delete"
-                    endpoint={`/api/register/${String(m._id)}`}
-                    method="DELETE"
-                    variant="danger"
-                    confirm="Delete this entry? The stock count will be adjusted back."
-                    successMessage="deleted"
-                  />
-                </Td>
-              </Tr>
-            ))}
-          </Table>
-        </Panel>
+        <RecentEntriesTable
+          entries={recent.map((m) => ({
+            id: String(m._id),
+            createdAt: (m.createdAt as unknown as Date).toISOString(),
+            type: m.type,
+            sku: m.sku,
+            qty: m.qty,
+            channel: m.channel ?? null,
+          }))}
+        />
       </div>
     </main>
   );
