@@ -32,6 +32,13 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
+
+# local mongodb data (dev replica set)
+/.mongo/
+
+# locally-uploaded product images (dev only; prod uses Vercel Blob)
+/public/uploads/
 
 # vercel
 .vercel

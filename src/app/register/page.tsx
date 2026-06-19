@@ -1,0 +1,106 @@
+import { registerTotals, recentEntries, channelBreakdown } from '@/lib/register';
+import { PageHeader, Panel, Table, Th, Td, Tr, StatCard } from '@/components/ui';
+import { RegisterEntryForm } from '@/components/RegisterEntryForm';
+import { ActionButton } from '@/components/ActionButton';
+import { num, timeAgo } from '@/lib/format';
+import { PLATFORM_LABELS, Platform } from '@/lib/constants';
+
+export const dynamic = 'force-dynamic';
+
+const TYPE_LABEL: Record<string, string> = {
+  PRODUCED: 'Produce',
+  SOLD: 'Ship',
+  RETURNED: 'Return',
+};
+
+function platformLabel(channel?: string | null) {
+  if (!channel) return '—';
+  return PLATFORM_LABELS[channel as Platform] ?? channel;
+}
+
+export default async function RegisterPage() {
+  const [rows, recent, byPlatform] = await Promise.all([registerTotals(), recentEntries(15), channelBreakdown()]);
+  const totals = rows.reduce(
+    (a, r) => ({
+      produced: a.produced + r.produced,
+      shipped: a.shipped + r.shipped,
+      returned: a.returned + r.returned,
+      inStock: a.inStock + r.inStock,
+    }),
+    { produced: 0, shipped: 0, returned: 0, inStock: 0 },
+  );
+
+  return (
+    <main className="px-6 py-8">
+      <PageHeader title="Stock Log" subtitle="The simple way: pick a product, choose Produce / Ship / Return, enter a quantity." />
+
+      <div className="mb-6">
+        <RegisterEntryForm products={rows.map((r) => ({ sku: r.sku, name: r.name }))} />
+      </div>
+
+      <section className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <StatCard label="In stock" value={num(totals.inStock)} />
+        <StatCard label="Produced" value={num(totals.produced)} tone="good" />
+        <StatCard label="Shipped" value={num(totals.shipped)} />
+        <StatCard label="Returned" value={num(totals.returned)} tone={totals.returned ? 'warn' : 'default'} />
+      </section>
+
+      <Panel title={`Per product (${rows.length})`}>
+        <Table head={<><Th>SKU</Th><Th>Name</Th><Th right>Produced</Th><Th right>Shipped</Th><Th right>Returned</Th><Th right>In stock</Th></>} empty={rows.length === 0}>
+          {rows.map((r) => (
+            <Tr key={r.sku}>
+              <Td mono>{r.sku}</Td>
+              <Td>{r.name}</Td>
+              <Td right>{num(r.produced)}</Td>
+              <Td right>{num(r.shipped)}</Td>
+              <Td right>{num(r.returned)}</Td>
+              <Td right><b>{num(r.inStock)}</b></Td>
+            </Tr>
+          ))}
+        </Table>
+      </Panel>
+
+      {byPlatform.length > 0 ? (
+        <div className="mt-6">
+          <Panel title="Shipped by platform">
+            <Table head={<><Th>Platform</Th><Th right>Shipped</Th><Th right>Returned</Th></>}>
+              {byPlatform.map((p) => (
+                <Tr key={p.channel}>
+                  <Td>{platformLabel(p.channel)}</Td>
+                  <Td right>{num(p.shipped)}</Td>
+                  <Td right>{num(p.returned)}</Td>
+                </Tr>
+              ))}
+            </Table>
+          </Panel>
+        </div>
+      ) : null}
+
+      <div className="mt-6">
+        <Panel title="Recent entries">
+          <Table head={<><Th>When</Th><Th>Action</Th><Th>SKU</Th><Th>Platform</Th><Th right>Qty</Th><Th right>Undo</Th></>} empty={recent.length === 0}>
+            {recent.map((m) => (
+              <Tr key={String(m._id)}>
+                <Td>{timeAgo(m.createdAt as unknown as Date)}</Td>
+                <Td>{TYPE_LABEL[m.type] ?? m.type}</Td>
+                <Td mono>{m.sku}</Td>
+                <Td>{platformLabel(m.channel)}</Td>
+                <Td right>{num(Math.abs(m.qty))}</Td>
+                <Td right>
+                  <ActionButton
+                    label="Delete"
+                    endpoint={`/api/register/${String(m._id)}`}
+                    method="DELETE"
+                    variant="danger"
+                    confirm="Delete this entry? The stock count will be adjusted back."
+                    successMessage="deleted"
+                  />
+                </Td>
+              </Tr>
+            ))}
+          </Table>
+        </Panel>
+      </div>
+    </main>
+  );
+}

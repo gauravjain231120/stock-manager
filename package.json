@@ -6,21 +6,36 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:up": "mkdir -p ./.mongo/data && mongod --port 27018 --dbpath ./.mongo/data --replSet rs0 --bind_ip 127.0.0.1",
+    "db:init": "mongosh --quiet --port 27018 --eval 'try{rs.initiate({_id:\"rs0\",members:[{_id:0,host:\"127.0.0.1:27018\"}]});print(\"initiated\")}catch(e){print(e.codeName)}'",
+    "db:status": "mongosh --quiet --port 27018 --eval 'print(rs.status().members[0].stateStr)'",
+    "setup:locations": "tsx --tsconfig tsconfig.scripts.json scripts/setup-locations.ts",
+    "import": "tsx --tsconfig tsconfig.scripts.json scripts/import.ts",
+    "verify": "tsx --tsconfig tsconfig.scripts.json scripts/verify-phase0.ts",
+    "verify:e2e": "tsx --tsconfig tsconfig.scripts.json scripts/verify-e2e.ts",
+    "seed:demo": "tsx --tsconfig tsconfig.scripts.json scripts/seed-demo.ts",
+    "clean": "tsx --tsconfig tsconfig.scripts.json scripts/clean.ts"
   },
   "dependencies": {
+    "@vercel/blob": "^2.4.1",
+    "csv-parse": "^7.0.0",
+    "mongoose": "^9.7.1",
     "next": "16.2.9",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "dotenv": "^17.4.2",
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
     "tailwindcss": "^4",
+    "tsx": "^4.22.4",
     "typescript": "^5"
   }
 }

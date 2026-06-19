@@ -1,0 +1,9 @@
+sku,name,size,color,category,costPrice,mrp,openingQty,locationCode
+TSHIRT-BLK-M,Round Neck T-Shirt,M,Black,T-Shirts,180,599,120,MAIN
+TSHIRT-BLK-L,Round Neck T-Shirt,L,Black,T-Shirts,180,599,90,MAIN
+TSHIRT-WHT-M,Round Neck T-Shirt,M,White,T-Shirts,180,599,75,MAIN
+TSHIRT-WHT-L,Round Neck T-Shirt,L,White,T-Shirts,180,599,60,MAIN
+HOODIE-GRY-L,Zip Hoodie,L,Grey,Hoodies,420,1299,40,MAIN
+HOODIE-GRY-XL,Zip Hoodie,XL,Grey,Hoodies,420,1299,25,MAIN
+CAP-NAVY-OS,Baseball Cap,OS,Navy,Caps,90,349,200,MAIN
+SOCKS-AST-OS,Ankle Socks (3 pack),OS,Assorted,Socks,70,249,0,MAIN
