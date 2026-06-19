@@ -2,6 +2,7 @@
 
 import { FormEvent, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useConfirm } from '@/components/ConfirmProvider';
 
 const input = 'rounded-lg border border-black/15 bg-transparent px-3 py-1.5 text-sm dark:border-white/20';
 const btn = 'rounded-lg bg-black px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-neutral-200';
@@ -18,6 +19,7 @@ function variantSku(base: string, color?: string, size?: string) {
 
 export function AddProductForm() {
   const router = useRouter();
+  const ask = useConfirm();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
@@ -61,13 +63,28 @@ export function AddProductForm() {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    setBusy(true);
-    setMsg(null);
     const variants = combos.map((c) => ({
       color: c.color,
       size: c.size,
       openingQty: Number(qty[`${c.color ?? ''}|${c.size ?? ''}`] || 0),
     }));
+    const totalOpening = variants.reduce((a, v) => a + (v.openingQty || 0), 0);
+
+    const ok = await ask({
+      title: 'Create product?',
+      details: [
+        { label: 'Name', value: name },
+        { label: 'Code', value: baseCode || '—' },
+        { label: 'Variants', value: String(variants.length) },
+        { label: 'Opening stock', value: String(totalOpening) },
+        ...(mrp ? [{ label: 'MRP', value: `₹${mrp}` }] : []),
+      ],
+      confirmLabel: 'Create',
+    });
+    if (!ok) return;
+
+    setBusy(true);
+    setMsg(null);
     try {
       const res = await fetch('/api/products', {
         method: 'POST',

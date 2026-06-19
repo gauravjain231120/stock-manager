@@ -57,7 +57,15 @@ export function RecentEntriesTable({ entries }: { entries: Entry[] }) {
                 endpoint={`/api/register/${e.id}`}
                 method="DELETE"
                 variant="danger"
-                confirm="Delete this entry? The stock count will be adjusted back."
+                confirmTitle="Delete this entry?"
+                confirm="The stock count will be adjusted back."
+                confirmDetails={[
+                  { label: 'Action', value: TYPE_LABEL[e.type] ?? e.type },
+                  { label: 'SKU', value: e.sku },
+                  { label: 'Quantity', value: String(Math.abs(e.qty)) },
+                  ...(e.channel ? [{ label: 'Platform', value: platformLabel(e.channel) }] : []),
+                ]}
+                confirmLabel="Delete"
                 successMessage="undone ✓"
               />
             </Td>

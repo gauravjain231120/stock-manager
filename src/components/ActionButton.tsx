@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { useConfirm } from '@/components/ConfirmProvider';
 
 type Variant = 'primary' | 'secondary' | 'danger';
 
@@ -22,6 +23,9 @@ export function ActionButton({
   body,
   variant = 'secondary',
   confirm,
+  confirmTitle,
+  confirmDetails,
+  confirmLabel,
   successMessage = 'Done ✓',
 }: {
   label: string;
@@ -29,17 +33,31 @@ export function ActionButton({
   method?: 'POST' | 'PUT' | 'GET' | 'DELETE';
   body?: unknown;
   variant?: Variant;
+  // Show a confirmation modal before acting. `confirm` is the description line.
   confirm?: string;
+  confirmTitle?: string;
+  confirmDetails?: { label: string; value: string }[];
+  confirmLabel?: string;
   // A plain string (server components can't pass functions to client components).
   successMessage?: string;
 }) {
   const router = useRouter();
+  const ask = useConfirm();
   const [pending, startTransition] = useTransition();
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
   async function run() {
-    if (confirm && !window.confirm(confirm)) return;
+    if (confirm || confirmTitle || confirmDetails) {
+      const ok = await ask({
+        title: confirmTitle ?? 'Please confirm',
+        description: confirm,
+        details: confirmDetails,
+        tone: variant === 'danger' ? 'danger' : 'default',
+        confirmLabel: confirmLabel ?? label,
+      });
+      if (!ok) return;
+    }
     setBusy(true);
     setMsg(null);
     try {

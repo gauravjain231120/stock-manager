@@ -4,6 +4,7 @@ import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { PLATFORMS, PLATFORM_LABELS, Platform } from '@/lib/constants';
 import { SearchableSelect } from '@/components/SearchableSelect';
+import { useConfirm } from '@/components/ConfirmProvider';
 
 const ACTIONS = [
   { key: 'PRODUCE', label: 'Produce', help: 'made new units (+)', tone: 'bg-emerald-600' },
@@ -15,6 +16,7 @@ const input = 'rounded-lg border border-black/15 bg-transparent px-3 py-2 text-s
 
 export function RegisterEntryForm({ products }: { products: { sku: string; name: string }[] }) {
   const router = useRouter();
+  const ask = useConfirm();
   const [sku, setSku] = useState(products[0]?.sku ?? '');
   const [action, setAction] = useState<(typeof ACTIONS)[number]['key']>('PRODUCE');
   const [channel, setChannel] = useState<Platform>('AMAZON');
@@ -26,6 +28,21 @@ export function RegisterEntryForm({ products }: { products: { sku: string; name:
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+
+    const actionLabel = ACTIONS.find((a) => a.key === action)?.label ?? action;
+    const productName = products.find((p) => p.sku === sku)?.name;
+    const ok = await ask({
+      title: `Confirm ${actionLabel}`,
+      details: [
+        { label: 'Product', value: productName ? `${sku} — ${productName}` : sku },
+        { label: 'Action', value: actionLabel },
+        { label: 'Quantity', value: qty || '0' },
+        ...(needsPlatform ? [{ label: 'Platform', value: PLATFORM_LABELS[channel] }] : []),
+      ],
+      confirmLabel: actionLabel,
+    });
+    if (!ok) return;
+
     setBusy(true);
     setMsg(null);
     try {

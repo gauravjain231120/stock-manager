@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui';
+import { useConfirm } from '@/components/ConfirmProvider';
 import { inr, num } from '@/lib/format';
 
 interface Variant {
@@ -32,6 +33,7 @@ function qtyColor(n: number) {
 
 export function ProductCard({ group }: { group: CardGroup }) {
   const router = useRouter();
+  const ask = useConfirm();
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -97,32 +99,69 @@ export function ProductCard({ group }: { group: CardGroup }) {
   }
 
   async function save() {
-    const ok = await call(`/api/products/${group.code}`, 'PATCH', {
+    const ok = await ask({
+      title: 'Save changes?',
+      details: [
+        { label: 'Name', value: name },
+        { label: 'Category', value: category || '—' },
+        { label: 'MRP', value: mrp ? `₹${mrp}` : '—' },
+      ],
+      confirmLabel: 'Save',
+    });
+    if (!ok) return;
+    const done = await call(`/api/products/${group.code}`, 'PATCH', {
       name,
       category: category || undefined,
       mrp: mrp ? Number(mrp) : undefined,
       imageUrl: imageUrl || undefined,
     });
-    if (ok) setEditing(false);
+    if (done) setEditing(false);
   }
 
   async function addVariant() {
     if (!vColor && !vSize) return;
-    const ok = await call(`/api/products/${group.code}/variant`, 'POST', {
+    const ok = await ask({
+      title: 'Add variant?',
+      details: [
+        { label: 'Variant', value: [vColor, vSize].filter(Boolean).join(' / ') },
+        { label: 'Opening stock', value: vQty || '0' },
+      ],
+      confirmLabel: 'Add',
+    });
+    if (!ok) return;
+    const done = await call(`/api/products/${group.code}/variant`, 'POST', {
       color: vColor || undefined,
       size: vSize || undefined,
       openingQty: vQty ? Number(vQty) : 0,
     });
-    if (ok) { setVColor(''); setVSize(''); setVQty(''); }
+    if (done) { setVColor(''); setVSize(''); setVQty(''); }
   }
 
   async function removeVariant(sku: string) {
-    if (!window.confirm(`Remove variant ${sku} and its stock?`)) return;
+    const ok = await ask({
+      title: 'Remove variant?',
+      description: 'This variant and its stock will be removed.',
+      details: [{ label: 'SKU', value: sku }],
+      tone: 'danger',
+      confirmLabel: 'Remove',
+    });
+    if (!ok) return;
     await call(`/api/products/${group.code}/variant?sku=${encodeURIComponent(sku)}`, 'DELETE');
   }
 
   async function deleteProduct() {
-    if (!window.confirm(`Delete "${group.name}" and all ${group.variantCount} variant(s) with their stock? This cannot be undone.`)) return;
+    const ok = await ask({
+      title: 'Delete product?',
+      description: 'This cannot be undone.',
+      details: [
+        { label: 'Product', value: group.name },
+        { label: 'Variants', value: String(group.variantCount) },
+        { label: 'Stock removed', value: String(group.totalStock) },
+      ],
+      tone: 'danger',
+      confirmLabel: 'Delete',
+    });
+    if (!ok) return;
     await call(`/api/products/${group.code}`, 'DELETE');
   }
 
