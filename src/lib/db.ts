@@ -33,6 +33,10 @@ export async function connectDB(): Promise<typeof mongoose> {
       bufferCommands: false,
       // Keep the serverless pool small.
       maxPoolSize: 10,
+      // Fail fast (within Vercel's function limit) with a clear error instead of
+      // hanging for 30s when the DB is unreachable (e.g. Atlas IP not allowlisted).
+      serverSelectionTimeoutMS: 8000,
+      connectTimeoutMS: 8000,
     });
   }
 
