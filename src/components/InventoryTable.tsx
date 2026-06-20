@@ -58,13 +58,14 @@ export function InventoryTable({ rows }: { rows: InvRow[] }) {
         </div>
       }
     >
-      <Table head={<><Th>SKU</Th><Th>Name</Th><Th>Category</Th><Th right>On hand</Th><Th right>Status</Th></>} empty={filtered.length === 0}>
+      <Table head={<><Th>SKU</Th><Th>Name</Th><Th>Size</Th><Th>Category</Th><Th right>On hand</Th><Th right>Status</Th></>} empty={filtered.length === 0}>
         {filtered.map((r) => {
           const s = stockStatus(r.onHand);
           return (
             <Tr key={r.sku}>
               <Td mono>{r.sku}</Td>
               <Td>{r.name}</Td>
+              <Td>{r.sku.split('-').pop()}</Td>
               <Td>{r.category}</Td>
               <Td right><EditableStock sku={r.sku} value={r.onHand} /></Td>
               <Td right><Badge tone={s.tone}>{s.label}</Badge></Td>

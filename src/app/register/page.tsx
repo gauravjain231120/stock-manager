@@ -41,11 +41,12 @@ export default async function RegisterPage() {
       </section>
 
       <Panel title={`Per product (${rows.length})`}>
-        <Table head={<><Th>SKU</Th><Th>Name</Th><Th right>Produced</Th><Th right>Shipped</Th><Th right>Returned</Th><Th right>In stock</Th></>} empty={rows.length === 0}>
+        <Table head={<><Th>SKU</Th><Th>Name</Th><Th>Size</Th><Th right>Produced</Th><Th right>Shipped</Th><Th right>Returned</Th><Th right>In stock</Th></>} empty={rows.length === 0}>
           {rows.map((r) => (
             <Tr key={r.sku}>
               <Td mono>{r.sku}</Td>
               <Td>{r.name}</Td>
+              <Td>{r.sku.split('-').pop()}</Td>
               <Td right>{num(r.produced)}</Td>
               <Td right>{num(r.shipped)}</Td>
               <Td right>{num(r.returned)}</Td>
