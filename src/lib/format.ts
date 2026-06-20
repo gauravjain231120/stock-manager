@@ -16,6 +16,29 @@ export function dateTime(d?: Date | string | null): string {
   return new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeStyle: 'short' }).format(date);
 }
 
+const SIZE_ORDER = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL', 'OS', 'FREE'];
+
+/**
+ * Sort variants so the same product+colour group together, then by real size
+ * order (XS, S, M, L, XL, XXL) instead of alphabetical (which gives L, M, S…).
+ * Keys off the SKU: everything before the last "-" is the colour group, the
+ * last segment is the size.
+ */
+export function compareVariant(aSku: string, bSku: string): number {
+  const cut = (s: string): [string, string] => {
+    const i = s.lastIndexOf('-');
+    return i < 0 ? [s, ''] : [s.slice(0, i), s.slice(i + 1)];
+  };
+  const [ap, asz] = cut(aSku);
+  const [bp, bsz] = cut(bSku);
+  if (ap !== bp) return ap.localeCompare(bp);
+  const idx = (x: string) => {
+    const i = SIZE_ORDER.indexOf(x.toUpperCase());
+    return i < 0 ? 99 : i;
+  };
+  return idx(asz) - idx(bsz) || asz.localeCompare(bsz);
+}
+
 export function timeAgo(d?: Date | string | null): string {
   if (!d) return 'never';
   const date = typeof d === 'string' ? new Date(d) : d;

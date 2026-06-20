@@ -3,7 +3,7 @@ import { PageHeader, Panel, Table, Th, Td, Tr, StatCard } from '@/components/ui'
 import { RegisterEntryForm } from '@/components/RegisterEntryForm';
 import { RecentEntriesTable } from '@/components/RecentEntriesTable';
 import { EditableStock } from '@/components/EditableStock';
-import { num } from '@/lib/format';
+import { num, compareVariant } from '@/lib/format';
 import { PLATFORM_LABELS, Platform } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
@@ -42,7 +42,7 @@ export default async function RegisterPage() {
 
       <Panel title={`Per product (${rows.length})`}>
         <Table head={<><Th>SKU</Th><Th>Name</Th><Th>Size</Th><Th right>Produced</Th><Th right>Shipped</Th><Th right>Returned</Th><Th right>In stock</Th></>} empty={rows.length === 0}>
-          {rows.map((r) => (
+          {[...rows].sort((a, b) => compareVariant(a.sku, b.sku)).map((r) => (
             <Tr key={r.sku}>
               <Td mono>{r.sku}</Td>
               <Td>{r.name}</Td>
