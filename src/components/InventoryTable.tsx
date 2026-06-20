@@ -13,7 +13,7 @@ export interface InvRow {
 
 // 0 = make it, 1–5 = low, >5 = good.
 function stockStatus(onHand: number) {
-  if (onHand <= 0) return { label: 'Make', tone: 'danger' as const, color: 'text-red-600' };
+  if (onHand <= 0) return { label: 'Out of stock', tone: 'danger' as const, color: 'text-red-600' };
   if (onHand <= 5) return { label: 'Low', tone: 'warn' as const, color: 'text-amber-600' };
   return { label: 'Good', tone: 'good' as const, color: 'text-emerald-600' };
 }
