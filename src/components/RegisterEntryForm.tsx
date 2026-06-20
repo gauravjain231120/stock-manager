@@ -18,7 +18,7 @@ const ACTIONS = [
   { key: 'RETURN', label: 'Return', help: 'came back (+)', tone: 'bg-amber-600', Icon: Undo2 },
 ] as const;
 
-const input = 'rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20';
+const input = 'rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm text-neutral-900 dark:border-white/20 dark:text-white';
 
 export function RegisterEntryForm({ products }: { products: { sku: string; name: string }[] }) {
   const router = useRouter();

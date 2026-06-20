@@ -24,7 +24,7 @@ function platformLabel(channel: string | null) {
   return PLATFORM_LABELS[channel as Platform] ?? channel;
 }
 
-const inputCls = 'rounded-lg border border-black/15 bg-transparent px-2 py-1 text-sm dark:border-white/20';
+const inputCls = 'rounded-lg border border-black/15 bg-transparent px-2 py-1 text-sm text-neutral-900 dark:border-white/20 dark:text-white';
 
 export function RecentEntriesTable({ entries }: { entries: Entry[] }) {
   const router = useRouter();

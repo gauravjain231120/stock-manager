@@ -24,7 +24,7 @@ export interface CardGroup {
   variants: Variant[];
 }
 
-const input = 'w-full rounded-lg border border-black/15 bg-transparent px-3 py-1.5 text-sm dark:border-white/20';
+const input = 'w-full rounded-lg border border-black/15 bg-transparent px-3 py-1.5 text-sm text-neutral-900 dark:border-white/20 dark:text-white';
 
 function qtyColor(n: number) {
   if (n <= 0) return 'text-red-600';

@@ -4,7 +4,7 @@ import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 const inputCls =
-  'rounded-lg border border-black/15 bg-transparent px-3 py-1.5 text-sm dark:border-white/20';
+  'rounded-lg border border-black/15 bg-transparent px-3 py-1.5 text-sm text-neutral-900 dark:border-white/20 dark:text-white';
 const btnCls =
   'rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50';
 

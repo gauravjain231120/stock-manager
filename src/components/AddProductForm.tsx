@@ -4,7 +4,7 @@ import { FormEvent, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useConfirm } from '@/components/ConfirmProvider';
 
-const input = 'rounded-lg border border-black/15 bg-transparent px-3 py-1.5 text-sm dark:border-white/20';
+const input = 'rounded-lg border border-black/15 bg-transparent px-3 py-1.5 text-sm text-neutral-900 dark:border-white/20 dark:text-white';
 const btn = 'rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50';
 
 function slug(s: string) {

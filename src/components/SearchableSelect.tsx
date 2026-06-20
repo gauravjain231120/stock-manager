@@ -50,7 +50,7 @@ export function SearchableSelect({
   return (
     <div ref={ref} className="relative">
       <input
-        className="w-full rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20"
+        className="w-full rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm text-neutral-900 placeholder-neutral-400 dark:border-white/20 dark:text-white dark:placeholder-neutral-500"
         value={open ? query : selected?.label ?? ''}
         placeholder={selected ? selected.label : placeholder}
         onFocus={() => setOpen(true)}
@@ -78,7 +78,7 @@ export function SearchableSelect({
                 type="button"
                 key={o.value}
                 onClick={() => pick(o.value)}
-                className={`block w-full px-3 py-2 text-left text-sm hover:bg-black/5 dark:hover:bg-white/10 ${
+                className={`block w-full px-3 py-2 text-left text-sm text-neutral-800 hover:bg-black/5 dark:text-neutral-100 dark:hover:bg-white/10 ${
                   o.value === value ? 'bg-black/5 dark:bg-white/10' : ''
                 }`}
               >

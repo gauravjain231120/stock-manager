@@ -64,7 +64,7 @@ export function EditableStock({ sku, value }: { sku: string; value: number }) {
             if (e.key === 'Enter') save();
             if (e.key === 'Escape') setEditing(false);
           }}
-          className="w-20 rounded-lg border border-black/15 bg-transparent px-2 py-1 text-right text-sm dark:border-white/20"
+          className="w-20 rounded-lg border border-black/15 bg-transparent px-2 py-1 text-right text-sm text-neutral-900 dark:border-white/20 dark:text-white"
         />
         <button onClick={save} disabled={busy} className="px-1 text-emerald-600 disabled:opacity-50" title="Save">✓</button>
         <button onClick={() => setEditing(false)} className="px-1 text-neutral-400" title="Cancel">✕</button>
