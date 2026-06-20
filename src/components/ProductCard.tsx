@@ -249,7 +249,7 @@ export function ProductCard({ group }: { group: CardGroup }) {
             <div className="flex items-center justify-end gap-2">
               {msg ? <span className="mr-auto text-xs text-neutral-500">{msg}</span> : null}
               <button onClick={() => setEditing(false)} className="rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">Cancel</button>
-              <button onClick={save} disabled={busy || uploading || !name} className="rounded-lg bg-black px-4 py-1.5 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-neutral-200">{busy ? 'Saving…' : 'Save'}</button>
+              <button onClick={save} disabled={busy || uploading || !name} className="rounded-lg bg-brand-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">{busy ? 'Saving…' : 'Save'}</button>
             </div>
           </div>
         )}

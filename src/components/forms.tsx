@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 const inputCls =
   'rounded-lg border border-black/15 bg-transparent px-3 py-1.5 text-sm dark:border-white/20';
 const btnCls =
-  'rounded-lg bg-black px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-neutral-200';
+  'rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50';
 
 function useSubmit(endpoint: string, method: 'POST' | 'PUT' = 'POST') {
   const router = useRouter();

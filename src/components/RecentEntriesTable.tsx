@@ -138,7 +138,7 @@ export function RecentEntriesTable({ entries }: { entries: Entry[] }) {
               <Td right>
                 {editing ? (
                   <span className="inline-flex gap-2">
-                    <button onClick={() => saveEdit(e)} disabled={busy} className="rounded-lg bg-black px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50 dark:bg-white dark:text-black">Save</button>
+                    <button onClick={() => saveEdit(e)} disabled={busy} className="rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">Save</button>
                     <button onClick={() => setEditId(null)} className="rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">Cancel</button>
                   </span>
                 ) : (

@@ -2,18 +2,20 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Plus, Truck, Undo2 } from 'lucide-react';
 import { PLATFORMS, PLATFORM_LABELS, Platform } from '@/lib/constants';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { useConfirm } from '@/components/ConfirmProvider';
+import { useToast } from '@/components/ToastProvider';
 
 function todayStr() {
   return new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD (local)
 }
 
 const ACTIONS = [
-  { key: 'PRODUCE', label: 'Produce', help: 'made new units (+)', tone: 'bg-emerald-600' },
-  { key: 'SHIP', label: 'Ship', help: 'sent to customer (−)', tone: 'bg-blue-600' },
-  { key: 'RETURN', label: 'Return', help: 'came back (+)', tone: 'bg-amber-600' },
+  { key: 'PRODUCE', label: 'Produce', help: 'made new units (+)', tone: 'bg-emerald-600', Icon: Plus },
+  { key: 'SHIP', label: 'Ship', help: 'sent to customer (−)', tone: 'bg-blue-600', Icon: Truck },
+  { key: 'RETURN', label: 'Return', help: 'came back (+)', tone: 'bg-amber-600', Icon: Undo2 },
 ] as const;
 
 const input = 'rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/20';
@@ -21,13 +23,13 @@ const input = 'rounded-lg border border-black/15 bg-transparent px-3 py-2 text-s
 export function RegisterEntryForm({ products }: { products: { sku: string; name: string }[] }) {
   const router = useRouter();
   const ask = useConfirm();
+  const toast = useToast();
   const [sku, setSku] = useState(products[0]?.sku ?? '');
   const [action, setAction] = useState<(typeof ACTIONS)[number]['key']>('PRODUCE');
   const [channel, setChannel] = useState<Platform>('AMAZON');
   const [qty, setQty] = useState('');
   const [date, setDate] = useState('');
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   // Default the date to today on the client (after mount, to avoid an SSR
@@ -56,7 +58,6 @@ export function RegisterEntryForm({ products }: { products: { sku: string; name:
     if (!ok) return;
 
     setBusy(true);
-    setMsg(null);
     setErr(null);
     try {
       const today = todayStr();
@@ -78,7 +79,7 @@ export function RegisterEntryForm({ products }: { products: { sku: string; name:
         const raw = data?.error || `Error ${res.status}`;
         setErr(/insufficient stock|not enough stock/i.test(raw) ? `Not enough stock to ship ${qty}.` : raw);
       } else {
-        setMsg('Saved ✓');
+        toast.success(`${actionLabel} saved ✓`);
         setQty('');
         router.refresh();
       }
@@ -110,7 +111,7 @@ export function RegisterEntryForm({ products }: { products: { sku: string; name:
           Quantity
           <input className={input} type="number" min={1} value={qty} onChange={(e) => setQty(e.target.value)} placeholder="0" required />
         </label>
-        <button className="rounded-lg bg-black px-5 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-neutral-200" disabled={busy || !qty || !sku}>
+        <button className="rounded-lg bg-brand-600 px-5 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50" disabled={busy || !qty || !sku}>
           {busy ? 'Saving…' : 'Add'}
         </button>
       </div>
@@ -121,11 +122,12 @@ export function RegisterEntryForm({ products }: { products: { sku: string; name:
             type="button"
             key={a.key}
             onClick={() => setAction(a.key)}
-            className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
-              action === a.key ? `${a.tone} text-white` : 'border border-black/15 text-neutral-600 hover:bg-black/5 dark:border-white/20 dark:text-neutral-300 dark:hover:bg-white/10'
+            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+              action === a.key ? `${a.tone} text-white shadow-sm` : 'border border-black/15 text-neutral-600 hover:bg-black/5 dark:border-white/20 dark:text-neutral-300 dark:hover:bg-white/10'
             }`}
             title={a.help}
           >
+            <a.Icon size={15} />
             {a.label}
           </button>
         ))}
@@ -147,8 +149,6 @@ export function RegisterEntryForm({ products }: { products: { sku: string; name:
           Date
           <input className={input} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
         </label>
-
-        {msg ? <span className="self-center text-xs font-medium text-emerald-600">{msg}</span> : null}
       </div>
     </form>
   );

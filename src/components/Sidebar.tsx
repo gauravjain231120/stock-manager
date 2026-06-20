@@ -2,39 +2,48 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { ClipboardList, Shirt, Boxes } from 'lucide-react';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 const NAV = [
-  { href: '/register', label: 'Stock Log' },
-  { href: '/products', label: 'Products' },
-  { href: '/inventory', label: 'Inventory' },
+  { href: '/register', label: 'Stock Log', Icon: ClipboardList },
+  { href: '/products', label: 'Products', Icon: Shirt },
+  { href: '/inventory', label: 'Inventory', Icon: Boxes },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
   return (
-    <aside className="flex w-56 shrink-0 flex-col border-r border-black/10 bg-white px-3 py-5 dark:border-white/10 dark:bg-neutral-950">
-      <div className="px-2 pb-5">
-        <div className="text-lg font-bold">Stock Manager</div>
-        <div className="text-xs text-neutral-500">Simple stock tracking</div>
+    <aside className="flex w-60 shrink-0 flex-col border-r border-black/10 bg-white px-3 py-5 dark:border-white/10 dark:bg-neutral-950">
+      <div className="mb-7 px-2">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/rangrooh-logo.png" alt="Rangrooh" className="h-7 w-auto dark:brightness-0 dark:invert" />
+        <div className="mt-1.5 text-[11px] text-neutral-500">Stock Manager</div>
       </div>
+
       <nav className="flex flex-col gap-1">
-        {NAV.map((item) => {
-          const active = pathname.startsWith(item.href);
+        {NAV.map(({ href, label, Icon }) => {
+          const active = pathname.startsWith(href);
           return (
             <Link
-              key={item.href}
-              href={item.href}
-              className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
+              key={href}
+              href={href}
+              className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
                 active
-                  ? 'bg-black text-white dark:bg-white dark:text-black'
-                  : 'text-neutral-600 hover:bg-black/5 dark:text-neutral-300 dark:hover:bg-white/10'
+                  ? 'bg-brand-600 text-white shadow-sm'
+                  : 'text-neutral-600 hover:bg-brand-50 hover:text-brand-700 dark:text-neutral-300 dark:hover:bg-white/10 dark:hover:text-white'
               }`}
             >
-              {item.label}
+              <Icon size={18} className="shrink-0" />
+              {label}
             </Link>
           );
         })}
       </nav>
+
+      <div className="mt-auto pt-4">
+        <ThemeToggle />
+      </div>
     </aside>
   );
 }

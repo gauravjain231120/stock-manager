@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useConfirm } from '@/components/ConfirmProvider';
 
 const input = 'rounded-lg border border-black/15 bg-transparent px-3 py-1.5 text-sm dark:border-white/20';
-const btn = 'rounded-lg bg-black px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-neutral-200';
+const btn = 'rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50';
 
 function slug(s: string) {
   return s.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '');

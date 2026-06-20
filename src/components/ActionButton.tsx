@@ -3,11 +3,12 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { useConfirm } from '@/components/ConfirmProvider';
+import { useToast } from '@/components/ToastProvider';
 
 type Variant = 'primary' | 'secondary' | 'danger';
 
 const styles: Record<Variant, string> = {
-  primary: 'bg-black text-white hover:bg-neutral-800 dark:bg-white dark:text-black dark:hover:bg-neutral-200',
+  primary: 'bg-brand-600 text-white hover:bg-brand-700',
   secondary: 'border border-black/15 hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10',
   danger: 'bg-red-600 text-white hover:bg-red-700',
 };
@@ -43,9 +44,9 @@ export function ActionButton({
 }) {
   const router = useRouter();
   const ask = useConfirm();
+  const toast = useToast();
   const [pending, startTransition] = useTransition();
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
 
   async function run() {
     if (confirm || confirmTitle || confirmDetails) {
@@ -59,7 +60,6 @@ export function ActionButton({
       if (!ok) return;
     }
     setBusy(true);
-    setMsg(null);
     try {
       const res = await fetch(endpoint, {
         method,
@@ -68,28 +68,25 @@ export function ActionButton({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setMsg(data?.error || `Error ${res.status}`);
+        toast.error(data?.error || `Error ${res.status}`);
       } else {
-        setMsg(successMessage);
+        toast.success(successMessage);
         startTransition(() => router.refresh());
       }
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : 'Request failed');
+      toast.error(e instanceof Error ? e.message : 'Request failed');
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <span className="inline-flex items-center gap-2">
-      <button
-        onClick={run}
-        disabled={busy || pending}
-        className={`rounded-lg px-3 py-1.5 text-sm font-medium transition disabled:opacity-50 ${styles[variant]}`}
-      >
-        {busy || pending ? '…' : label}
-      </button>
-      {msg ? <span className="text-xs text-neutral-500">{msg}</span> : null}
-    </span>
+    <button
+      onClick={run}
+      disabled={busy || pending}
+      className={`rounded-lg px-3 py-1.5 text-sm font-medium transition disabled:opacity-50 ${styles[variant]}`}
+    >
+      {busy || pending ? '…' : label}
+    </button>
   );
 }

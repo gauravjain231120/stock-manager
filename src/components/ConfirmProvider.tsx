@@ -78,9 +78,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
                 autoFocus
                 onClick={() => close(true)}
                 className={`rounded-lg px-4 py-1.5 text-sm font-medium text-white ${
-                  opts.tone === 'danger'
-                    ? 'bg-red-600 hover:bg-red-700'
-                    : 'bg-black hover:bg-neutral-800 dark:bg-white dark:text-black dark:hover:bg-neutral-200'
+                  opts.tone === 'danger' ? 'bg-red-600 hover:bg-red-700' : 'bg-brand-600 hover:bg-brand-700'
                 }`}
               >
                 {opts.confirmLabel ?? 'Confirm'}
