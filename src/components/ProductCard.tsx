@@ -32,7 +32,7 @@ function qtyColor(n: number) {
   return 'text-emerald-600';
 }
 
-export function ProductCard({ group }: { group: CardGroup }) {
+export function ProductCard({ group, categories = [] }: { group: CardGroup; categories?: string[] }) {
   const router = useRouter();
   const ask = useConfirm();
   const [editing, setEditing] = useState(false);
@@ -112,7 +112,7 @@ export function ProductCard({ group }: { group: CardGroup }) {
     if (!ok) return;
     const done = await call(`/api/products/${group.code}`, 'PATCH', {
       name,
-      category: category || undefined,
+      category: category.trim(),
       mrp: mrp ? Number(mrp) : undefined,
       imageUrl: imageUrl || undefined,
     });
@@ -212,15 +212,30 @@ export function ProductCard({ group }: { group: CardGroup }) {
           </>
         ) : (
           <div className="flex flex-col gap-3">
-            <input className={input} value={name} onChange={(e) => setName(e.target.value)} placeholder="Product name" />
+            <label className="flex flex-col gap-1 text-xs text-neutral-500">
+              Product name
+              <input className={input} value={name} onChange={(e) => setName(e.target.value)} placeholder="Product name" />
+            </label>
             <div className="flex gap-2">
-              <input className={input} value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Category" />
-              <input className={input} type="number" min={0} value={mrp} onChange={(e) => setMrp(e.target.value)} placeholder="MRP ₹" />
+              <label className="flex flex-1 flex-col gap-1 text-xs text-neutral-500">
+                Category
+                <input className={input} list={`cat-${group.code}`} value={category} onChange={(e) => setCategory(e.target.value)} placeholder="e.g. Halter Neck" />
+                <datalist id={`cat-${group.code}`}>
+                  {categories.map((c) => <option key={c} value={c} />)}
+                </datalist>
+              </label>
+              <label className="flex w-28 flex-col gap-1 text-xs text-neutral-500">
+                MRP ₹
+                <input className={input} type="number" min={0} value={mrp} onChange={(e) => setMrp(e.target.value)} placeholder="999" />
+              </label>
             </div>
-            <div className="flex items-center gap-2 text-xs text-neutral-500">
-              <input type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} className="text-xs" />
-              {uploading ? <span>uploading…</span> : null}
-            </div>
+            <label className="flex flex-col gap-1 text-xs text-neutral-500">
+              Photo
+              <div className="flex items-center gap-2">
+                <input type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} className="text-xs" />
+                {uploading ? <span>uploading…</span> : null}
+              </div>
+            </label>
             <input className={input} value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} placeholder="…or image URL" />
 
             <div className="rounded-lg border border-black/10 dark:border-white/10">

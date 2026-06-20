@@ -10,6 +10,7 @@ export default async function ProductsPage() {
   const { groups } = await getProductGroups();
   const totalVariants = groups.reduce((a, g) => a + g.variantCount, 0);
   const totalUnits = groups.reduce((a, g) => a + g.totalStock, 0);
+  const categories = [...new Set(groups.map((g) => g.category).filter(Boolean))].sort() as string[];
 
   return (
     <main className="px-6 py-8">
@@ -30,7 +31,7 @@ export default async function ProductsPage() {
       ) : (
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {groups.map((g) => (
-            <ProductCard key={g.code} group={g} />
+            <ProductCard key={g.code} group={g} categories={categories} />
           ))}
         </div>
       )}
