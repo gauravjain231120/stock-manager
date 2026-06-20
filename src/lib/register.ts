@@ -17,20 +17,110 @@ export const REGISTER_ACTIONS: RegisterAction[] = ['PRODUCE', 'SHIP', 'RETURN'];
  *   RETURN   +stock   units came back, good to resell
  * (An exchange = Return the old item + Ship the replacement.)
  */
-export async function recordEntry(sku: string, action: RegisterAction, qty: number, channel?: string) {
+// Movement types shown in the Stock Log as editable/deletable entries —
+// includes opening-stock adjustments from creating a product.
+const EDITABLE_TYPES: string[] = [
+  MovementType.PRODUCED,
+  MovementType.SOLD,
+  MovementType.RETURNED,
+  MovementType.ADJUSTED,
+];
+
+export async function recordEntry(
+  sku: string,
+  action: RegisterAction,
+  qty: number,
+  channel?: string,
+  date?: Date,
+) {
   if (qty <= 0) throw new Error('Quantity must be greater than 0');
   const s = sku.trim().toUpperCase();
   const loc = SystemLocation.MAIN;
 
+  let movementId: mongoose.Types.ObjectId | undefined;
   switch (action) {
     case 'PRODUCE':
-      return applyMovement({ sku: s, locationCode: loc, qty, type: MovementType.PRODUCED, refType: 'REGISTER' });
+      movementId = await applyMovement({ sku: s, locationCode: loc, qty, type: MovementType.PRODUCED, refType: 'REGISTER' });
+      break;
     case 'RETURN':
-      return applyMovement({ sku: s, locationCode: loc, qty, type: MovementType.RETURNED, channel, refType: 'REGISTER' });
+      movementId = await applyMovement({ sku: s, locationCode: loc, qty, type: MovementType.RETURNED, channel, refType: 'REGISTER' });
+      break;
     case 'SHIP':
-      return sellUnits({ sku: s, locationCode: loc, qty, channel, refType: 'REGISTER' });
+      movementId = await sellUnits({ sku: s, locationCode: loc, qty, channel, refType: 'REGISTER' });
+      break;
     default:
       throw new Error(`Unknown action ${action}`);
+  }
+
+  // Backdate the entry if a date was given (e.g. "shipped last week").
+  // Use the native driver so Mongoose's timestamp handling doesn't override it.
+  if (date && movementId) {
+    await StockMovementModel.collection.updateOne({ _id: movementId }, { $set: { createdAt: date } });
+  }
+  return movementId;
+}
+
+/**
+ * Edit a Stock Log entry: change its quantity, platform, and/or date. Done by
+ * atomically reversing the old stock effect and applying the new one, so the
+ * count stays correct. Refuses if it would make stock negative.
+ */
+export async function editEntry(
+  id: string,
+  changes: { qty?: number; channel?: string | null; date?: Date },
+) {
+  await connectDB();
+  const mv = await StockMovementModel.findById(id).lean();
+  if (!mv) throw new Error('Entry not found');
+  if (!EDITABLE_TYPES.includes(mv.type)) throw new Error('This entry cannot be edited');
+  const isOutbound = mv.type === MovementType.SOLD;
+  const hasPlatform = mv.type === MovementType.SOLD || mv.type === MovementType.RETURNED;
+
+  const newQty = changes.qty != null ? changes.qty : Math.abs(mv.qty);
+  if (newQty <= 0) throw new Error('Quantity must be greater than 0');
+  const newChannel = hasPlatform ? changes.channel ?? mv.channel ?? undefined : undefined;
+  const newDate = changes.date ?? (mv.createdAt as unknown as Date);
+  const reverseDelta = -mv.qty; // undo the old stock effect
+  const newSignedQty = isOutbound ? -newQty : newQty;
+
+  const session = await mongoose.startSession();
+  try {
+    await session.withTransaction(async () => {
+      // 1) reverse the old movement
+      if (reverseDelta !== 0) {
+        const rev = await SkuStockModel.findOneAndUpdate(
+          { sku: mv.sku, locationCode: mv.locationCode, $expr: { $gte: [{ $add: ['$onHand', reverseDelta] }, '$reserved'] } },
+          { $inc: { onHand: reverseDelta } },
+          { session, returnDocument: 'after' },
+        );
+        if (!rev) throw new Error('Cannot edit: those units have already been shipped (stock would go negative).');
+      }
+      await StockMovementModel.deleteOne({ _id: mv._id }, { session });
+
+      // 2) apply the new values
+      if (isOutbound) {
+        const dec = await SkuStockModel.findOneAndUpdate(
+          { sku: mv.sku, locationCode: mv.locationCode, $expr: { $gte: [{ $subtract: ['$onHand', '$reserved'] }, newQty] } },
+          { $inc: { onHand: -newQty } },
+          { session, returnDocument: 'after' },
+        );
+        if (!dec) throw new Error('Cannot edit: not enough stock to ship that quantity.');
+      } else {
+        await SkuStockModel.updateOne(
+          { sku: mv.sku, locationCode: mv.locationCode },
+          { $inc: { onHand: newQty } },
+          { session, upsert: true },
+        );
+      }
+
+      // timestamps:false so our explicit createdAt (the chosen date) is kept.
+      await StockMovementModel.create(
+        [{ sku: mv.sku, locationCode: mv.locationCode, qty: newSignedQty, type: mv.type, channel: newChannel, refType: mv.refType, createdAt: newDate }],
+        { session, timestamps: false },
+      );
+    });
+  } finally {
+    await session.endSession();
   }
 }
 
@@ -44,7 +134,7 @@ export async function deleteEntry(movementId: string) {
   await connectDB();
   const mv = await StockMovementModel.findById(movementId).lean();
   if (!mv) throw new Error('Entry not found');
-  if (mv.refType !== 'REGISTER') throw new Error('Only Stock Log entries can be deleted here');
+  if (!EDITABLE_TYPES.includes(mv.type)) throw new Error('This entry cannot be deleted here');
 
   const reverse = -mv.qty; // undo the original stock delta
   const session = await mongoose.startSession();
@@ -120,10 +210,13 @@ export async function registerTotals(): Promise<RegisterRow[]> {
   });
 }
 
-/** Recent Stock-Log entries. */
-export async function recentEntries(limit = 20) {
+/** All stock entries (produce/ship/return + opening-stock adjustments). */
+export async function recentEntries(limit = 1000) {
   await connectDB();
-  return StockMovementModel.find({ refType: 'REGISTER' }).sort({ createdAt: -1 }).limit(limit).lean();
+  return StockMovementModel.find({ type: { $in: EDITABLE_TYPES as MovementType[] } })
+    .sort({ createdAt: -1 })
+    .limit(limit)
+    .lean();
 }
 
 export interface ChannelBreakdownRow {

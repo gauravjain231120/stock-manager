@@ -1,10 +1,14 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { PLATFORMS, PLATFORM_LABELS, Platform } from '@/lib/constants';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { useConfirm } from '@/components/ConfirmProvider';
+
+function todayStr() {
+  return new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD (local)
+}
 
 const ACTIONS = [
   { key: 'PRODUCE', label: 'Produce', help: 'made new units (+)', tone: 'bg-emerald-600' },
@@ -21,8 +25,15 @@ export function RegisterEntryForm({ products }: { products: { sku: string; name:
   const [action, setAction] = useState<(typeof ACTIONS)[number]['key']>('PRODUCE');
   const [channel, setChannel] = useState<Platform>('AMAZON');
   const [qty, setQty] = useState('');
+  const [date, setDate] = useState('');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  // Default the date to today on the client (after mount, to avoid an SSR
+  // hydration mismatch since the server doesn't know the user's timezone).
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => setDate(todayStr()), []);
 
   const needsPlatform = action === 'SHIP' || action === 'RETURN';
 
@@ -38,6 +49,7 @@ export function RegisterEntryForm({ products }: { products: { sku: string; name:
         { label: 'Action', value: actionLabel },
         { label: 'Quantity', value: qty || '0' },
         ...(needsPlatform ? [{ label: 'Platform', value: PLATFORM_LABELS[channel] }] : []),
+        { label: 'Date', value: date && date !== todayStr() ? date : 'Today' },
       ],
       confirmLabel: actionLabel,
     });
@@ -45,21 +57,33 @@ export function RegisterEntryForm({ products }: { products: { sku: string; name:
 
     setBusy(true);
     setMsg(null);
+    setErr(null);
     try {
+      const today = todayStr();
       const res = await fetch('/api/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sku, action, qty: Number(qty), channel: needsPlatform ? channel : undefined }),
+        // Only send a date when it's a PAST date; for today, omit it so the real
+        // time-of-day is kept.
+        body: JSON.stringify({
+          sku,
+          action,
+          qty: Number(qty),
+          channel: needsPlatform ? channel : undefined,
+          date: date && date !== today ? date : undefined,
+        }),
       });
       const data = await res.json();
-      if (!res.ok) setMsg(data?.error || `Error ${res.status}`);
-      else {
+      if (!res.ok) {
+        const raw = data?.error || `Error ${res.status}`;
+        setErr(/insufficient stock|not enough stock/i.test(raw) ? `Not enough stock to ship ${qty}.` : raw);
+      } else {
         setMsg('Saved ✓');
         setQty('');
         router.refresh();
       }
-    } catch (err) {
-      setMsg(err instanceof Error ? err.message : 'Failed');
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Request failed');
     } finally {
       setBusy(false);
     }
@@ -67,6 +91,11 @@ export function RegisterEntryForm({ products }: { products: { sku: string; name:
 
   return (
     <form onSubmit={onSubmit} className="rounded-xl border border-black/10 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-neutral-900">
+      {err ? (
+        <div className="mb-4 rounded-lg border border-red-300 bg-red-50 px-4 py-2.5 text-sm font-medium text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
+          ⚠ {err}
+        </div>
+      ) : null}
       <div className="grid gap-4 sm:grid-cols-[2fr_1fr_auto] sm:items-end">
         <label className="flex flex-col gap-1 text-xs text-neutral-500">
           Product
@@ -114,7 +143,12 @@ export function RegisterEntryForm({ products }: { products: { sku: string; name:
           <span className="self-center text-xs text-neutral-400">{ACTIONS.find((a) => a.key === action)?.help}</span>
         )}
 
-        {msg ? <span className="self-center text-xs text-neutral-500">· {msg}</span> : null}
+        <label className="ml-1 flex items-center gap-2 text-xs text-neutral-500">
+          Date
+          <input className={input} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        </label>
+
+        {msg ? <span className="self-center text-xs font-medium text-emerald-600">{msg}</span> : null}
       </div>
     </form>
   );

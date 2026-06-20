@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Panel, Table, Th, Td, Tr, Badge } from '@/components/ui';
-import { num } from '@/lib/format';
+import { EditableStock } from '@/components/EditableStock';
 
 export interface InvRow {
   sku: string;
@@ -45,7 +45,7 @@ export function InventoryTable({ rows }: { rows: InvRow[] }) {
               <Td mono>{r.sku}</Td>
               <Td>{r.name}</Td>
               <Td>{r.category}</Td>
-              <Td right><span className={`font-semibold ${s.color}`}>{num(r.onHand)}</span></Td>
+              <Td right><EditableStock sku={r.sku} value={r.onHand} /></Td>
               <Td right><Badge tone={s.tone}>{s.label}</Badge></Td>
             </Tr>
           );

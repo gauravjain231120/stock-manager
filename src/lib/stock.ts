@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import { connectDB } from '@/lib/db';
-import { MovementType } from '@/lib/constants';
+import { MovementType, SystemLocation } from '@/lib/constants';
 import { StockMovementModel } from '@/models/StockMovement';
 import { SkuStockModel } from '@/models/SkuStock';
 
@@ -98,7 +98,7 @@ export async function sellUnits(args: {
 
   const session = await mongoose.startSession();
   try {
-    let ok = false;
+    let movementId: mongoose.Types.ObjectId | undefined;
     await session.withTransaction(async () => {
       // Atomic, conditional decrement. If the guard fails, no doc matches and we
       // get null -> abort the transaction.
@@ -116,7 +116,7 @@ export async function sellUnits(args: {
         throw new InsufficientStockError(sku, locationCode, args.qty);
       }
 
-      await StockMovementModel.create(
+      const [mv] = await StockMovementModel.create(
         [
           {
             sku,
@@ -131,9 +131,9 @@ export async function sellUnits(args: {
         ],
         { session },
       );
-      ok = true;
+      movementId = mv._id;
     });
-    return ok;
+    return movementId;
   } finally {
     await session.endSession();
   }
@@ -188,6 +188,31 @@ export async function transferStock(args: {
   } finally {
     await session.endSession();
   }
+}
+
+/**
+ * Set a SKU's current stock to an exact number (e.g. after a physical count).
+ * Records the difference as an ADJUSTED movement so the ledger stays auditable.
+ */
+export async function setStock(sku: string, newOnHand: number) {
+  if (newOnHand < 0) throw new Error('Stock cannot be negative');
+  await connectDB();
+  const s = norm(sku);
+  const loc = SystemLocation.MAIN;
+  const cur = await SkuStockModel.findOne({ sku: s, locationCode: loc }).lean();
+  const current = cur?.onHand ?? 0;
+  const diff = newOnHand - current;
+  if (diff !== 0) {
+    await applyMovement({
+      sku: s,
+      locationCode: loc,
+      qty: diff,
+      type: MovementType.ADJUSTED,
+      refType: 'CORRECTION',
+      note: `Stock set to ${newOnHand}`,
+    });
+  }
+  return { sku: s, onHand: newOnHand, diff };
 }
 
 /** Current cached stock for a single (sku, location), or zeros if none yet. */

@@ -2,6 +2,7 @@ import { registerTotals, recentEntries, channelBreakdown } from '@/lib/register'
 import { PageHeader, Panel, Table, Th, Td, Tr, StatCard } from '@/components/ui';
 import { RegisterEntryForm } from '@/components/RegisterEntryForm';
 import { RecentEntriesTable } from '@/components/RecentEntriesTable';
+import { EditableStock } from '@/components/EditableStock';
 import { num } from '@/lib/format';
 import { PLATFORM_LABELS, Platform } from '@/lib/constants';
 
@@ -13,7 +14,7 @@ function platformLabel(channel?: string | null) {
 }
 
 export default async function RegisterPage() {
-  const [rows, recent, byPlatform] = await Promise.all([registerTotals(), recentEntries(200), channelBreakdown()]);
+  const [rows, recent, byPlatform] = await Promise.all([registerTotals(), recentEntries(1000), channelBreakdown()]);
   const totals = rows.reduce(
     (a, r) => ({
       produced: a.produced + r.produced,
@@ -48,7 +49,7 @@ export default async function RegisterPage() {
               <Td right>{num(r.produced)}</Td>
               <Td right>{num(r.shipped)}</Td>
               <Td right>{num(r.returned)}</Td>
-              <Td right><b>{num(r.inStock)}</b></Td>
+              <Td right><EditableStock sku={r.sku} value={r.inStock} /></Td>
             </Tr>
           ))}
         </Table>

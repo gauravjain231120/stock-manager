@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui';
 import { useConfirm } from '@/components/ConfirmProvider';
+import { EditableStock } from '@/components/EditableStock';
 import { inr, num } from '@/lib/format';
 
 interface Variant {
@@ -199,7 +200,7 @@ export function ProductCard({ group }: { group: CardGroup }) {
                 {group.variants.map((v) => (
                   <tr key={v.sku} className="border-t border-black/5 dark:border-white/5">
                     <td className="py-1 text-neutral-600 dark:text-neutral-300">{[v.color, v.size].filter(Boolean).join(' / ') || v.sku}</td>
-                    <td className={`py-1 text-right font-medium tabular-nums ${qtyColor(v.onHand)}`}>{v.onHand}</td>
+                    <td className="py-1 text-right"><EditableStock sku={v.sku} value={v.onHand} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -229,7 +230,7 @@ export function ProductCard({ group }: { group: CardGroup }) {
                   {group.variants.map((v) => (
                     <tr key={v.sku} className="border-t border-black/5 dark:border-white/5">
                       <td className="py-1 pl-3 text-neutral-600 dark:text-neutral-300">{[v.color, v.size].filter(Boolean).join(' / ') || v.sku}</td>
-                      <td className="py-1 text-right tabular-nums">{v.onHand}</td>
+                      <td className="py-1 text-right"><EditableStock sku={v.sku} value={v.onHand} /></td>
                       <td className="py-1 pr-2 text-right">
                         <button onClick={() => removeVariant(v.sku)} disabled={busy} className="px-1 text-red-600 hover:text-red-700" title="Remove variant">×</button>
                       </td>
