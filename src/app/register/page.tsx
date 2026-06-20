@@ -3,7 +3,7 @@ import { PageHeader, Panel, Table, Th, Td, Tr, StatCard } from '@/components/ui'
 import { RegisterEntryForm } from '@/components/RegisterEntryForm';
 import { RecentEntriesTable } from '@/components/RecentEntriesTable';
 import { EditableStock } from '@/components/EditableStock';
-import { num, compareVariant } from '@/lib/format';
+import { num, compareVariant, groupVariants } from '@/lib/format';
 import { PLATFORM_LABELS, Platform } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
@@ -40,21 +40,27 @@ export default async function RegisterPage() {
         <StatCard label="Returned" value={num(totals.returned)} tone={totals.returned ? 'warn' : 'default'} />
       </section>
 
-      <Panel title={`Per product (${rows.length})`}>
-        <Table head={<><Th>SKU</Th><Th>Name</Th><Th>Size</Th><Th right>Produced</Th><Th right>Shipped</Th><Th right>Returned</Th><Th right>In stock</Th></>} empty={rows.length === 0}>
-          {[...rows].sort((a, b) => compareVariant(a.sku, b.sku)).map((r) => (
-            <Tr key={r.sku}>
-              <Td mono>{r.sku}</Td>
-              <Td>{r.name}</Td>
-              <Td>{r.sku.split('-').pop()}</Td>
-              <Td right>{num(r.produced)}</Td>
-              <Td right>{num(r.shipped)}</Td>
-              <Td right>{num(r.returned)}</Td>
-              <Td right><EditableStock sku={r.sku} value={r.inStock} /></Td>
-            </Tr>
-          ))}
-        </Table>
-      </Panel>
+      <h2 className="mb-3 text-sm font-medium text-neutral-500">Per product ({rows.length})</h2>
+      <div className="space-y-4">
+        {groupVariants([...rows].sort((a, b) => compareVariant(a.sku, b.sku)), (r) => r.sku.split('-').pop() ?? '').map((g) => {
+          const groupStock = g.rows.reduce((a, r) => a + r.inStock, 0);
+          return (
+            <Panel key={g.key} title={g.title} actions={<span className="text-xs text-neutral-400">{num(groupStock)} in stock</span>}>
+              <Table head={<><Th>Size</Th><Th right>Produced</Th><Th right>Shipped</Th><Th right>Returned</Th><Th right>In stock</Th></>}>
+                {g.rows.map((r) => (
+                  <Tr key={r.sku}>
+                    <Td>{r.sku.split('-').pop()}</Td>
+                    <Td right>{num(r.produced)}</Td>
+                    <Td right>{num(r.shipped)}</Td>
+                    <Td right>{num(r.returned)}</Td>
+                    <Td right><EditableStock sku={r.sku} value={r.inStock} /></Td>
+                  </Tr>
+                ))}
+              </Table>
+            </Panel>
+          );
+        })}
+      </div>
 
       {byPlatform.length > 0 ? (
         <div className="mt-6">

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Panel, Table, Th, Td, Tr, Badge } from '@/components/ui';
 import { EditableStock } from '@/components/EditableStock';
-import { compareVariant } from '@/lib/format';
+import { compareVariant, groupVariants } from '@/lib/format';
 
 export interface InvRow {
   sku: string;
@@ -37,10 +37,12 @@ export function InventoryTable({ rows }: { rows: InvRow[] }) {
     })
     .sort((a, b) => compareVariant(a.sku, b.sku));
 
+  const groups = groupVariants(filtered, (r) => r.sku.split('-').pop() ?? '');
+
   return (
-    <Panel
-      title={`All products (${filtered.length})`}
-      actions={
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-sm font-medium">All products ({filtered.length})</h2>
         <div className="flex flex-wrap items-center gap-2">
           <select
             value={cat}
@@ -59,23 +61,31 @@ export function InventoryTable({ rows }: { rows: InvRow[] }) {
             className="w-64 rounded-lg border border-black/15 bg-transparent px-3 py-1.5 text-sm text-neutral-900 dark:border-white/20 dark:text-white"
           />
         </div>
-      }
-    >
-      <Table head={<><Th>SKU</Th><Th>Name</Th><Th>Size</Th><Th>Category</Th><Th right>On hand</Th><Th right>Status</Th></>} empty={filtered.length === 0}>
-        {filtered.map((r) => {
-          const s = stockStatus(r.onHand);
+      </div>
+
+      {groups.length === 0 ? (
+        <Panel><div className="px-5 py-8 text-center text-sm text-neutral-400">No matches.</div></Panel>
+      ) : (
+        groups.map((g) => {
+          const groupStock = g.rows.reduce((a, r) => a + r.onHand, 0);
           return (
-            <Tr key={r.sku}>
-              <Td mono>{r.sku}</Td>
-              <Td>{r.name}</Td>
-              <Td>{r.sku.split('-').pop()}</Td>
-              <Td>{r.category}</Td>
-              <Td right><EditableStock sku={r.sku} value={r.onHand} /></Td>
-              <Td right><Badge tone={s.tone}>{s.label}</Badge></Td>
-            </Tr>
+            <Panel key={g.key} title={g.title} actions={<span className="text-xs text-neutral-400">{groupStock} on hand</span>}>
+              <Table head={<><Th>Size</Th><Th right>On hand</Th><Th right>Status</Th></>}>
+                {g.rows.map((r) => {
+                  const s = stockStatus(r.onHand);
+                  return (
+                    <Tr key={r.sku}>
+                      <Td>{r.sku.split('-').pop()}</Td>
+                      <Td right><EditableStock sku={r.sku} value={r.onHand} /></Td>
+                      <Td right><Badge tone={s.tone}>{s.label}</Badge></Td>
+                    </Tr>
+                  );
+                })}
+              </Table>
+            </Panel>
           );
-        })}
-      </Table>
-    </Panel>
+        })
+      )}
+    </div>
   );
 }

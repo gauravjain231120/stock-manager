@@ -39,6 +39,34 @@ export function compareVariant(aSku: string, bSku: string): number {
   return idx(asz) - idx(bsz) || asz.localeCompare(bsz);
 }
 
+/**
+ * Group already-sorted variants by colour (the SKU minus its last/size segment).
+ * Returns one entry per product+colour, with a title (the product name without
+ * the trailing size word) and its rows in order. Used to render a card per group.
+ */
+export function groupVariants<T extends { sku: string; name: string }>(
+  rows: T[],
+  sizeOf: (r: T) => string,
+): { key: string; title: string; rows: T[] }[] {
+  const out: { key: string; title: string; rows: T[] }[] = [];
+  const byKey = new Map<string, { key: string; title: string; rows: T[] }>();
+  for (const r of rows) {
+    const i = r.sku.lastIndexOf('-');
+    const key = i < 0 ? r.sku : r.sku.slice(0, i);
+    let g = byKey.get(key);
+    if (!g) {
+      const sz = (sizeOf(r) || '').toUpperCase();
+      const parts = r.name.trim().split(/\s+/);
+      const title = parts.length > 1 && parts[parts.length - 1].toUpperCase() === sz ? parts.slice(0, -1).join(' ') : r.name;
+      g = { key, title, rows: [] };
+      byKey.set(key, g);
+      out.push(g);
+    }
+    g.rows.push(r);
+  }
+  return out;
+}
+
 export function timeAgo(d?: Date | string | null): string {
   if (!d) return 'never';
   const date = typeof d === 'string' ? new Date(d) : d;
