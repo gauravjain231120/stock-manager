@@ -21,13 +21,16 @@ function stockStatus(onHand: number) {
 export function InventoryTable({ rows }: { rows: InvRow[] }) {
   const [q, setQ] = useState('');
   const [cat, setCat] = useState('');
-  const query = q.trim().toLowerCase();
+  const terms = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
 
   const categories = [...new Set(rows.map((r) => r.category).filter(Boolean))].sort();
 
   const filtered = rows.filter((r) => {
     if (cat && r.category !== cat) return false;
-    if (query && !`${r.sku} ${r.name} ${r.category}`.toLowerCase().includes(query)) return false;
+    if (terms.length) {
+      const hay = `${r.sku} ${r.name} ${r.category}`.toLowerCase();
+      if (!terms.every((t) => hay.includes(t))) return false;
+    }
     return true;
   });
 

@@ -39,9 +39,12 @@ export function RecentEntriesTable({ entries }: { entries: Entry[] }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  const query = q.trim().toLowerCase();
-  const filtered = query
-    ? entries.filter((e) => `${e.sku} ${TYPE_LABEL[e.type] ?? e.type} ${platformLabel(e.channel)}`.toLowerCase().includes(query))
+  const terms = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const filtered = terms.length
+    ? entries.filter((e) => {
+        const hay = `${e.sku} ${TYPE_LABEL[e.type] ?? e.type} ${platformLabel(e.channel)}`.toLowerCase();
+        return terms.every((t) => hay.includes(t));
+      })
     : entries;
 
   function startEdit(e: Entry) {

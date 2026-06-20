@@ -27,8 +27,15 @@ export function SearchableSelect({
   const ref = useRef<HTMLDivElement>(null);
 
   const selected = options.find((o) => o.value === value);
-  const q = query.trim().toLowerCase();
-  const filtered = q ? options.filter((o) => o.label.toLowerCase().includes(q)) : options;
+  // Match every typed word independently (any order): "halter blue" -> options
+  // whose label contains both "halter" and "blue".
+  const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const filtered = terms.length
+    ? options.filter((o) => {
+        const l = o.label.toLowerCase();
+        return terms.every((t) => l.includes(t));
+      })
+    : options;
 
   useEffect(() => {
     function onDoc(e: MouseEvent) {
