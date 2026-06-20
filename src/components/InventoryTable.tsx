@@ -20,21 +20,39 @@ function stockStatus(onHand: number) {
 
 export function InventoryTable({ rows }: { rows: InvRow[] }) {
   const [q, setQ] = useState('');
+  const [cat, setCat] = useState('');
   const query = q.trim().toLowerCase();
-  const filtered = query
-    ? rows.filter((r) => `${r.sku} ${r.name} ${r.category}`.toLowerCase().includes(query))
-    : rows;
+
+  const categories = [...new Set(rows.map((r) => r.category).filter(Boolean))].sort();
+
+  const filtered = rows.filter((r) => {
+    if (cat && r.category !== cat) return false;
+    if (query && !`${r.sku} ${r.name} ${r.category}`.toLowerCase().includes(query)) return false;
+    return true;
+  });
 
   return (
     <Panel
       title={`All products (${filtered.length})`}
       actions={
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Search SKU, name or category…"
-          className="w-64 rounded-lg border border-black/15 bg-transparent px-3 py-1.5 text-sm dark:border-white/20"
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={cat}
+            onChange={(e) => setCat(e.target.value)}
+            className="rounded-lg border border-black/15 bg-transparent px-3 py-1.5 text-sm text-neutral-900 dark:border-white/20 dark:text-white"
+          >
+            <option value="">All categories</option>
+            {categories.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search SKU, name or category…"
+            className="w-64 rounded-lg border border-black/15 bg-transparent px-3 py-1.5 text-sm text-neutral-900 dark:border-white/20 dark:text-white"
+          />
+        </div>
       }
     >
       <Table head={<><Th>SKU</Th><Th>Name</Th><Th>Category</Th><Th right>On hand</Th><Th right>Status</Th></>} empty={filtered.length === 0}>
