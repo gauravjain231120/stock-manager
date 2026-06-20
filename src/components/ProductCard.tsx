@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui';
 import { useConfirm } from '@/components/ConfirmProvider';
 import { EditableStock } from '@/components/EditableStock';
-import { inr, num } from '@/lib/format';
+import { inr, num, compareVariant } from '@/lib/format';
 
 interface Variant {
   sku: string;
@@ -50,6 +50,9 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
   const [vColor, setVColor] = useState('');
   const [vSize, setVSize] = useState('');
   const [vQty, setVQty] = useState('');
+
+  // Variants sorted by colour, then real size order (XS, S, M, L, XL, XXL).
+  const variants = [...group.variants].sort((a, b) => compareVariant(a.sku, b.sku));
 
   function startEdit() {
     setName(group.name);
@@ -197,7 +200,7 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
             </div>
             <table className="mt-3 w-full text-xs">
               <tbody>
-                {group.variants.map((v) => (
+                {variants.map((v) => (
                   <tr key={v.sku} className="border-t border-black/5 dark:border-white/5">
                     <td className="py-1 text-neutral-600 dark:text-neutral-300">{[v.color, v.size].filter(Boolean).join(' / ') || v.sku}</td>
                     <td className="py-1 text-right"><EditableStock sku={v.sku} value={v.onHand} /></td>
@@ -242,7 +245,7 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
               <div className="px-3 py-1.5 text-xs font-medium text-neutral-500">Variants</div>
               <table className="w-full text-xs">
                 <tbody>
-                  {group.variants.map((v) => (
+                  {variants.map((v) => (
                     <tr key={v.sku} className="border-t border-black/5 dark:border-white/5">
                       <td className="py-1 pl-3 text-neutral-600 dark:text-neutral-300">{[v.color, v.size].filter(Boolean).join(' / ') || v.sku}</td>
                       <td className="py-1 text-right"><EditableStock sku={v.sku} value={v.onHand} /></td>
