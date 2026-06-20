@@ -12,6 +12,12 @@ function todayStr() {
   return new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD (local)
 }
 
+function qtyColor(n: number) {
+  if (n <= 0) return 'text-red-600';
+  if (n <= 5) return 'text-amber-600';
+  return 'text-emerald-600';
+}
+
 const ACTIONS = [
   { key: 'PRODUCE', label: 'Produce', help: 'made new units (+)', tone: 'bg-emerald-600', Icon: Plus },
   { key: 'SHIP', label: 'Ship', help: 'sent to customer (−)', tone: 'bg-blue-600', Icon: Truck },
@@ -20,7 +26,7 @@ const ACTIONS = [
 
 const input = 'rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm text-neutral-900 dark:border-white/20 dark:text-white';
 
-export function RegisterEntryForm({ products }: { products: { sku: string; name: string }[] }) {
+export function RegisterEntryForm({ products }: { products: { sku: string; name: string; inStock?: number }[] }) {
   const router = useRouter();
   const ask = useConfirm();
   const toast = useToast();
@@ -38,6 +44,7 @@ export function RegisterEntryForm({ products }: { products: { sku: string; name:
   useEffect(() => setDate(todayStr()), []);
 
   const needsPlatform = action === 'SHIP' || action === 'RETURN';
+  const selectedStock = products.find((p) => p.sku === sku)?.inStock ?? 0;
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -99,7 +106,12 @@ export function RegisterEntryForm({ products }: { products: { sku: string; name:
       ) : null}
       <div className="grid gap-4 sm:grid-cols-[2fr_1fr_auto] sm:items-end">
         <label className="flex flex-col gap-1 text-xs text-neutral-500">
-          Product
+          <span className="flex items-center justify-between">
+            <span>Product</span>
+            {sku ? (
+              <span>In stock: <b className={qtyColor(selectedStock)}>{selectedStock}</b></span>
+            ) : null}
+          </span>
           <SearchableSelect
             options={products.map((p) => ({ value: p.sku, label: `${p.sku} — ${p.name}` }))}
             value={sku}
