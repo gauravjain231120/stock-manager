@@ -210,6 +210,33 @@ export async function registerTotals(): Promise<RegisterRow[]> {
   });
 }
 
+export interface ProduceRow {
+  sku: string;
+  name: string;
+  shipped: number;
+  inStock: number;
+  suggest: number;
+}
+
+/**
+ * Restock worklist: variants that actually sell (shipped > 0) but are now Low
+ * (<= 5) or Out of stock, sorted by most-shipped first. `suggest` is a rough
+ * make quantity to cover the demand already seen (shipped minus what's on hand).
+ */
+export async function getProduceList(): Promise<ProduceRow[]> {
+  const rows = await registerTotals();
+  return rows
+    .filter((r) => r.shipped > 0 && r.inStock <= 5)
+    .sort((a, b) => b.shipped - a.shipped || a.inStock - b.inStock)
+    .map((r) => ({
+      sku: r.sku,
+      name: r.name,
+      shipped: r.shipped,
+      inStock: r.inStock,
+      suggest: Math.max(1, r.shipped - r.inStock),
+    }));
+}
+
 /** All stock entries (produce/ship/return + opening-stock adjustments). */
 export async function recentEntries(limit = 1000) {
   await connectDB();
