@@ -41,13 +41,13 @@ export function InventoryTable({ rows }: { rows: InvRow[] }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-sm font-medium">All products ({filtered.length})</h2>
+      <div>
+        <h2 className="mb-3 text-sm font-medium">All products ({filtered.length})</h2>
         <div className="flex flex-wrap items-center gap-2">
           <select
             value={cat}
             onChange={(e) => setCat(e.target.value)}
-            className="rounded-lg border border-black/15 bg-transparent px-3 py-1.5 text-sm text-neutral-900 dark:border-white/20 dark:text-white"
+            className="rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm text-neutral-900 dark:border-white/20 dark:text-white"
           >
             <option value="">All categories</option>
             {categories.map((c) => (
@@ -58,7 +58,7 @@ export function InventoryTable({ rows }: { rows: InvRow[] }) {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search SKU, name or category…"
-            className="w-64 rounded-lg border border-black/15 bg-transparent px-3 py-1.5 text-sm text-neutral-900 dark:border-white/20 dark:text-white"
+            className="min-w-[16rem] flex-1 rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm text-neutral-900 dark:border-white/20 dark:text-white"
           />
         </div>
       </div>
