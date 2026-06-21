@@ -2,13 +2,14 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { ClipboardList, Shirt, Boxes, LogOut } from 'lucide-react';
+import { ClipboardList, Shirt, Boxes, Factory, LogOut } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
 
 const NAV = [
   { href: '/register', label: 'Stock Log', Icon: ClipboardList },
   { href: '/products', label: 'Products', Icon: Shirt },
   { href: '/inventory', label: 'Inventory', Icon: Boxes },
+  { href: '/produce', label: 'Produce', Icon: Factory },
 ];
 
 export function Sidebar() {

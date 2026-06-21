@@ -1,0 +1,41 @@
+import { getProduceList } from '@/lib/register';
+import { PageHeader, Panel, Table, Th, Td, Tr, Badge } from '@/components/ui';
+import { num } from '@/lib/format';
+
+export const dynamic = 'force-dynamic';
+
+export default async function ProducePage() {
+  const produce = await getProduceList();
+  const outCount = produce.filter((p) => p.inStock <= 0).length;
+
+  return (
+    <main className="px-6 py-8">
+      <PageHeader title="Produce" subtitle="Your best-selling sizes that are now low or out of stock — make these first." />
+
+      <Panel title={`To produce (${produce.length}) — ${outCount} out of stock`}>
+        <Table
+          head={<><Th>Product / Size</Th><Th right>Shipped</Th><Th right>In stock</Th><Th right>Status</Th><Th right>Make ~</Th></>}
+          empty={produce.length === 0}
+        >
+          {produce.map((p) => {
+            const out = p.inStock <= 0;
+            return (
+              <Tr key={p.sku}>
+                <Td>{p.name}</Td>
+                <Td right>{num(p.shipped)}</Td>
+                <Td right>{p.inStock}</Td>
+                <Td right><Badge tone={out ? 'danger' : 'warn'}>{out ? 'Out of stock' : 'Low'}</Badge></Td>
+                <Td right><span className="font-semibold text-brand-600">{p.suggest}</span></Td>
+              </Tr>
+            );
+          })}
+        </Table>
+      </Panel>
+
+      <p className="mt-3 px-1 text-xs text-neutral-400">
+        Only variants you&apos;ve actually sold that are now low (≤5) or out of stock, most-shipped first.
+        &ldquo;Make ~&rdquo; is a rough quantity to cover the demand already seen (shipped − current stock).
+      </p>
+    </main>
+  );
+}
