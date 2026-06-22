@@ -4,6 +4,7 @@ import "./globals.css";
 import { Sidebar } from "@/components/Sidebar";
 import { ConfirmProvider } from "@/components/ConfirmProvider";
 import { ToastProvider } from "@/components/ToastProvider";
+import { ThemeManager } from "@/components/ThemeManager";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -29,13 +30,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      suppressHydrationWarning
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full bg-neutral-50 dark:bg-black">
+    <html lang="en" suppressHydrationWarning>
+      <body className={`${geistSans.variable} ${geistMono.variable} min-h-screen antialiased bg-neutral-50 dark:bg-black`}>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        <ThemeManager />
         <ToastProvider>
           <ConfirmProvider>
             <div className="flex min-h-screen">
