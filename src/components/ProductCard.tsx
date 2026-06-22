@@ -154,9 +154,9 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
   }
 
   async function deleteProduct() {
-    const ok = await ask({
+    const pw = await ask({
       title: 'Delete product?',
-      description: 'This cannot be undone.',
+      description: 'This cannot be undone. Enter your password to confirm.',
       details: [
         { label: 'Product', value: group.name },
         { label: 'Variants', value: String(group.variantCount) },
@@ -164,9 +164,10 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
       ],
       tone: 'danger',
       confirmLabel: 'Delete',
+      password: true,
     });
-    if (!ok) return;
-    await call(`/api/products/${group.code}`, 'DELETE');
+    if (typeof pw !== 'string' || !pw) return;
+    await call(`/api/products/${group.code}`, 'DELETE', { password: pw });
   }
 
   return (

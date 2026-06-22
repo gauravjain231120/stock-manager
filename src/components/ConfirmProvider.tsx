@@ -8,41 +8,51 @@ export interface ConfirmOptions {
   details?: { label: string; value: string }[];
   confirmLabel?: string;
   tone?: 'default' | 'danger';
+  /** Require typing a password; resolves with the entered string instead of `true`. */
+  password?: boolean;
 }
 
-const ConfirmCtx = createContext<(o: ConfirmOptions) => Promise<boolean>>(async () => false);
+type ConfirmResult = string | boolean;
 
-/** await confirm({ title, details, ... }) -> true if the user confirms. */
+const ConfirmCtx = createContext<(o: ConfirmOptions) => Promise<ConfirmResult>>(async () => false);
+
+/** await confirm({ title, ... }) -> true (or the typed password) if confirmed, else false. */
 export function useConfirm() {
   return useContext(ConfirmCtx);
 }
 
 export function ConfirmProvider({ children }: { children: ReactNode }) {
   const [opts, setOpts] = useState<ConfirmOptions | null>(null);
-  const [, setResolver] = useState<{ fn: (ok: boolean) => void } | null>(null);
+  const [pw, setPw] = useState('');
+  const [, setResolver] = useState<{ fn: (r: ConfirmResult) => void } | null>(null);
 
   const confirm = useCallback((o: ConfirmOptions) => {
     setOpts(o);
-    return new Promise<boolean>((resolve) => setResolver({ fn: resolve }));
+    setPw('');
+    return new Promise<ConfirmResult>((resolve) => setResolver({ fn: resolve }));
   }, []);
 
-  const close = useCallback((ok: boolean) => {
+  const close = useCallback((result: ConfirmResult) => {
     setResolver((r) => {
-      r?.fn(ok);
+      r?.fn(result);
       return null;
     });
     setOpts(null);
+    setPw('');
   }, []);
 
   useEffect(() => {
     if (!opts) return;
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') close(false);
-      else if (e.key === 'Enter') close(true);
+      else if (e.key === 'Enter') {
+        if (opts!.password && !pw.trim()) return;
+        close(opts!.password ? pw : true);
+      }
     }
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [opts, close]);
+  }, [opts, close, pw]);
 
   return (
     <ConfirmCtx.Provider value={confirm}>
@@ -67,6 +77,20 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
               </div>
             ) : null}
 
+            {opts.password ? (
+              <label className="mt-4 block text-xs text-neutral-500">
+                Enter password to confirm
+                <input
+                  type="password"
+                  autoFocus
+                  value={pw}
+                  onChange={(e) => setPw(e.target.value)}
+                  placeholder="Password"
+                  className="mt-1 w-full rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm text-neutral-900 dark:border-white/20 dark:text-white"
+                />
+              </label>
+            ) : null}
+
             <div className="mt-5 flex justify-end gap-2">
               <button
                 onClick={() => close(false)}
@@ -75,9 +99,10 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
                 Cancel
               </button>
               <button
-                autoFocus
-                onClick={() => close(true)}
-                className={`rounded-lg px-4 py-1.5 text-sm font-medium text-white ${
+                autoFocus={!opts.password}
+                disabled={opts.password ? !pw.trim() : false}
+                onClick={() => close(opts.password ? pw : true)}
+                className={`rounded-lg px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50 ${
                   opts.tone === 'danger' ? 'bg-red-600 hover:bg-red-700' : 'bg-brand-600 hover:bg-brand-700'
                 }`}
               >

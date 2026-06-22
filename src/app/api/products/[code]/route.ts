@@ -3,6 +3,9 @@ import { deleteProductGroup, updateProductGroup } from '@/lib/products';
 
 export const dynamic = 'force-dynamic';
 
+// Deleting a product requires the password (same as login). Overridable in prod.
+const DELETE_PASSWORD = process.env.AUTH_PASSWORD ?? 'rangrooh@123';
+
 const Patch = z.object({
   name: z.string().min(1).optional(),
   category: z.string().optional(),
@@ -26,9 +29,14 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ code: string 
   }
 }
 
-/** DELETE /api/products/[code] -> delete a product and all its variant SKUs/stock. */
-export async function DELETE(_req: Request, ctx: { params: Promise<{ code: string }> }) {
+/** DELETE /api/products/[code] -> delete a product and all its variant SKUs/stock.
+ *  Requires the correct password in the body. */
+export async function DELETE(req: Request, ctx: { params: Promise<{ code: string }> }) {
   const { code } = await ctx.params;
+  const body = await req.json().catch(() => ({} as { password?: string }));
+  if (body?.password !== DELETE_PASSWORD) {
+    return Response.json({ error: 'Wrong password — product not deleted.' }, { status: 403 });
+  }
   try {
     const res = await deleteProductGroup(code);
     return Response.json({ ok: true, ...res });
