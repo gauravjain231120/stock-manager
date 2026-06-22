@@ -256,7 +256,7 @@ export interface ChannelBreakdownRow {
 export async function channelBreakdown(): Promise<ChannelBreakdownRow[]> {
   await connectDB();
   const rows = await StockMovementModel.aggregate<{ _id: { channel: string; type: string }; qty: number }>([
-    { $match: { refType: 'REGISTER', channel: { $ne: null }, type: { $in: [MovementType.SOLD, MovementType.RETURNED] } } },
+    { $match: { channel: { $ne: null }, type: { $in: [MovementType.SOLD, MovementType.RETURNED] } } },
     { $group: { _id: { channel: '$channel', type: '$type' }, qty: { $sum: '$qty' } } },
   ]);
 
