@@ -10,6 +10,8 @@ export interface InvRow {
   name: string;
   category: string;
   onHand: number;
+  shipped: number;
+  returned: number;
 }
 
 // 0 = make it, 1–5 = low, >5 = good.
@@ -70,12 +72,14 @@ export function InventoryTable({ rows }: { rows: InvRow[] }) {
           const groupStock = g.rows.reduce((a, r) => a + r.onHand, 0);
           return (
             <Panel key={g.key} title={g.title} actions={<span className="text-xs text-neutral-400">{groupStock} on hand</span>}>
-              <Table head={<><Th>Size</Th><Th right>On hand</Th><Th right>Status</Th></>}>
+              <Table head={<><Th>Size</Th><Th right>Shipped</Th><Th right>Returned</Th><Th right>On hand</Th><Th right>Status</Th></>}>
                 {g.rows.map((r) => {
                   const s = stockStatus(r.onHand);
                   return (
                     <Tr key={r.sku}>
                       <Td>{r.sku.split('-').pop()}</Td>
+                      <Td right>{r.shipped}</Td>
+                      <Td right>{r.returned}</Td>
                       <Td right><EditableStock sku={r.sku} value={r.onHand} /></Td>
                       <Td right><Badge tone={s.tone}>{s.label}</Badge></Td>
                     </Tr>
