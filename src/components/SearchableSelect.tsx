@@ -8,8 +8,9 @@ export interface Option {
 }
 
 /**
- * A type-to-filter dropdown (combobox). Click to open, type to search, click or
- * press Enter to pick. Keeps the picker usable when there are many products.
+ * A type-to-filter dropdown (combobox). Click to open, type to search, use the
+ * ↑/↓ arrow keys to move and Enter to pick (or click). Keeps the picker usable
+ * when there are many products.
  */
 export function SearchableSelect({
   options,
@@ -24,7 +25,9 @@ export function SearchableSelect({
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [active, setActive] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
+  const activeRef = useRef<HTMLButtonElement>(null);
 
   const selected = options.find((o) => o.value === value);
   // Match every typed word independently (any order): "halter blue" -> options
@@ -36,6 +39,7 @@ export function SearchableSelect({
         return terms.every((t) => l.includes(t));
       })
     : options;
+  const activeIdx = Math.min(active, Math.max(0, filtered.length - 1));
 
   useEffect(() => {
     function onDoc(e: MouseEvent) {
@@ -47,6 +51,11 @@ export function SearchableSelect({
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
   }, []);
+
+  // Keep the highlighted option scrolled into view.
+  useEffect(() => {
+    if (open) activeRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [activeIdx, open]);
 
   function pick(v: string) {
     onChange(v);
@@ -60,18 +69,30 @@ export function SearchableSelect({
         className="w-full rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm text-neutral-900 placeholder-neutral-400 dark:border-white/20 dark:text-white dark:placeholder-neutral-500"
         value={open ? query : selected?.label ?? ''}
         placeholder={selected ? selected.label : placeholder}
-        onFocus={() => setOpen(true)}
+        onFocus={() => {
+          setOpen(true);
+          setActive(Math.max(0, options.findIndex((o) => o.value === value)));
+        }}
         onChange={(e) => {
           setQuery(e.target.value);
           setOpen(true);
+          setActive(0);
         }}
         onKeyDown={(e) => {
-          if (e.key === 'Escape') {
+          if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setOpen(true);
+            setActive((a) => Math.min(a + 1, filtered.length - 1));
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setActive((a) => Math.max(a - 1, 0));
+          } else if (e.key === 'Enter') {
+            e.preventDefault();
+            const opt = filtered[activeIdx];
+            if (opt) pick(opt.value);
+          } else if (e.key === 'Escape') {
             setOpen(false);
             setQuery('');
-          } else if (e.key === 'Enter' && filtered.length) {
-            e.preventDefault();
-            pick(filtered[0].value);
           }
         }}
       />
@@ -80,13 +101,19 @@ export function SearchableSelect({
           {filtered.length === 0 ? (
             <div className="px-3 py-2 text-sm text-neutral-400">No matches</div>
           ) : (
-            filtered.map((o) => (
+            filtered.map((o, i) => (
               <button
                 type="button"
                 key={o.value}
+                ref={i === activeIdx ? activeRef : null}
                 onClick={() => pick(o.value)}
-                className={`block w-full px-3 py-2 text-left text-sm text-neutral-800 hover:bg-black/5 dark:text-neutral-100 dark:hover:bg-white/10 ${
-                  o.value === value ? 'bg-black/5 dark:bg-white/10' : ''
+                onMouseEnter={() => setActive(i)}
+                className={`block w-full px-3 py-2 text-left text-sm text-neutral-800 dark:text-neutral-100 ${
+                  i === activeIdx
+                    ? 'bg-brand-50 text-brand-700 dark:bg-white/15 dark:text-white'
+                    : o.value === value
+                      ? 'bg-black/5 dark:bg-white/10'
+                      : ''
                 }`}
               >
                 {o.label}
