@@ -68,18 +68,18 @@ export function groupVariants<T extends { sku: string; name: string }>(
 }
 
 /**
- * Search match. True if every typed word appears (any order) — so "halter blue"
- * works — OR the whole query with punctuation stripped is a substring, so
- * "rrc006cofbluxl" matches "RRC-006-CO-F-BLU-XL".
+ * Search match, ignoring case and all punctuation/spaces on BOTH sides. Each
+ * typed word must appear (in any order) in the punctuation-free text. So
+ * "coordset blue", "coord blue", and "rrc006cofbluxl" all match
+ * "RRC-001-CO-A-BLU-L — Co-ord Set Blue-Cross L".
  */
 export function matchesSearch(haystack: string, query: string): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return true;
-  const h = haystack.toLowerCase();
-  const terms = q.split(/\s+/).filter(Boolean);
-  if (terms.every((t) => h.includes(t))) return true;
   const squish = (s: string) => s.replace(/[^a-z0-9]/g, '');
-  return squish(h).includes(squish(q));
+  const h = squish(haystack.toLowerCase());
+  const terms = q.split(/\s+/).map(squish).filter(Boolean);
+  return terms.every((t) => h.includes(t));
 }
 
 export function timeAgo(d?: Date | string | null): string {
