@@ -189,6 +189,29 @@ export async function removeVariant(sku: string) {
 }
 
 /**
+ * Rename a variant's SKU, carrying its stock, ledger history and channel mappings
+ * over to the new code so nothing is lost. Fails if the new SKU already exists.
+ */
+export async function renameVariantSku(oldSku: string, newSku: string) {
+  await connectDB();
+  const o = oldSku.trim().toUpperCase();
+  const n = newSku.trim().toUpperCase();
+  if (!n) throw new Error('New SKU is required');
+  if (n === o) return { sku: n };
+  if (!(await ProductModel.exists({ sku: o }))) throw new Error('Variant not found');
+  if (await ProductModel.exists({ sku: n })) throw new Error(`SKU "${n}" already exists`);
+
+  await Promise.all([
+    ProductModel.updateOne({ sku: o }, { $set: { sku: n } }),
+    SkuStockModel.updateMany({ sku: o }, { $set: { sku: n } }),
+    StockMovementModel.updateMany({ sku: o }, { $set: { sku: n } }),
+    ChannelListingModel.updateMany({ sku: o }, { $set: { sku: n } }),
+    ChannelInventoryStateModel.updateMany({ sku: o }, { $set: { sku: n } }),
+  ]);
+  return { sku: n };
+}
+
+/**
  * Delete a product and everything tied to its variant SKUs: the variant Products,
  * their stock, ledger movements, channel mappings and channel state. Use to remove
  * a product added by mistake.

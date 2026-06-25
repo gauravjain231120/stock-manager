@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui';
 import { useConfirm } from '@/components/ConfirmProvider';
 import { EditableStock } from '@/components/EditableStock';
+import { EditableSku } from '@/components/EditableSku';
 import { inr, num, compareVariant } from '@/lib/format';
 
 interface Variant {
@@ -248,9 +249,12 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
                 <tbody>
                   {variants.map((v) => (
                     <tr key={v.sku} className="border-t border-black/5 dark:border-white/5">
-                      <td className="py-1 pl-3 text-neutral-600 dark:text-neutral-300">{[v.color, v.size].filter(Boolean).join(' / ') || v.sku}</td>
-                      <td className="py-1 text-right"><EditableStock sku={v.sku} value={v.onHand} /></td>
-                      <td className="py-1 pr-2 text-right">
+                      <td className="py-1 pl-3">
+                        <div className="text-neutral-600 dark:text-neutral-300">{[v.color, v.size].filter(Boolean).join(' / ') || v.sku}</div>
+                        <EditableSku code={group.code} sku={v.sku} />
+                      </td>
+                      <td className="py-1 text-right align-top"><EditableStock sku={v.sku} value={v.onHand} /></td>
+                      <td className="py-1 pr-2 text-right align-top">
                         <button onClick={() => removeVariant(v.sku)} disabled={busy} className="px-1 text-red-600 hover:text-red-700" title="Remove variant">×</button>
                       </td>
                     </tr>
