@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Panel, Table, Th, Td, Tr, Badge } from '@/components/ui';
 import { EditableStock } from '@/components/EditableStock';
-import { compareVariant, groupVariants } from '@/lib/format';
+import { compareVariant, groupVariants, matchesSearch } from '@/lib/format';
 
 export interface InvRow {
   sku: string;
@@ -24,17 +24,13 @@ function stockStatus(onHand: number) {
 export function InventoryTable({ rows }: { rows: InvRow[] }) {
   const [q, setQ] = useState('');
   const [cat, setCat] = useState('');
-  const terms = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
 
   const categories = [...new Set(rows.map((r) => r.category).filter(Boolean))].sort();
 
   const filtered = rows
     .filter((r) => {
       if (cat && r.category !== cat) return false;
-      if (terms.length) {
-        const hay = `${r.sku} ${r.name} ${r.category}`.toLowerCase();
-        if (!terms.every((t) => hay.includes(t))) return false;
-      }
+      if (q.trim() && !matchesSearch(`${r.sku} ${r.name} ${r.category}`, q)) return false;
       return true;
     })
     .sort((a, b) => compareVariant(a.sku, b.sku));

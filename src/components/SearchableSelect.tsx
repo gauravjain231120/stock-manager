@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { matchesSearch } from '@/lib/format';
 
 export interface Option {
   value: string;
@@ -30,15 +31,8 @@ export function SearchableSelect({
   const activeRef = useRef<HTMLButtonElement>(null);
 
   const selected = options.find((o) => o.value === value);
-  // Match every typed word independently (any order): "halter blue" -> options
-  // whose label contains both "halter" and "blue".
-  const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  const filtered = terms.length
-    ? options.filter((o) => {
-        const l = o.label.toLowerCase();
-        return terms.every((t) => l.includes(t));
-      })
-    : options;
+  // Word match ("halter blue") or punctuation-free SKU match ("rrc006cofbluxl").
+  const filtered = query.trim() ? options.filter((o) => matchesSearch(o.label, query)) : options;
   const activeIdx = Math.min(active, Math.max(0, filtered.length - 1));
 
   useEffect(() => {
