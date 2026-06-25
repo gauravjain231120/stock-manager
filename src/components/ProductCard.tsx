@@ -204,8 +204,11 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
               <tbody>
                 {variants.map((v) => (
                   <tr key={v.sku} className="border-t border-black/5 dark:border-white/5">
-                    <td className="py-1 text-neutral-600 dark:text-neutral-300">{[v.color, v.size].filter(Boolean).join(' / ') || v.sku}</td>
-                    <td className="py-1 text-right"><EditableStock sku={v.sku} value={v.onHand} /></td>
+                    <td className="py-1">
+                      <div className="text-neutral-600 dark:text-neutral-300">{[v.color, v.size].filter(Boolean).join(' / ') || v.sku}</div>
+                      <div className="font-mono text-[10px] text-neutral-400">{v.sku}</div>
+                    </td>
+                    <td className="py-1 text-right align-top"><EditableStock sku={v.sku} value={v.onHand} /></td>
                   </tr>
                 ))}
               </tbody>
