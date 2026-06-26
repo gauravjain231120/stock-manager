@@ -89,7 +89,7 @@ export async function editEntry(
       // 1) reverse the old movement
       if (reverseDelta !== 0) {
         const rev = await SkuStockModel.findOneAndUpdate(
-          { sku: mv.sku, locationCode: mv.locationCode, $expr: { $gte: [{ $add: ['$onHand', reverseDelta] }, '$reserved'] } },
+          { sku: mv.sku, locationCode: mv.locationCode, $expr: { $gte: [{ $add: ['$onHand', reverseDelta] }, 0] } },
           { $inc: { onHand: reverseDelta } },
           { session, returnDocument: 'after' },
         );
@@ -142,7 +142,7 @@ export async function deleteEntry(movementId: string) {
     await session.withTransaction(async () => {
       if (reverse !== 0) {
         const upd = await SkuStockModel.findOneAndUpdate(
-          { sku: mv.sku, locationCode: mv.locationCode, $expr: { $gte: [{ $add: ['$onHand', reverse] }, '$reserved'] } },
+          { sku: mv.sku, locationCode: mv.locationCode, $expr: { $gte: [{ $add: ['$onHand', reverse] }, 0] } },
           { $inc: { onHand: reverse } },
           { session, returnDocument: 'after' },
         );
