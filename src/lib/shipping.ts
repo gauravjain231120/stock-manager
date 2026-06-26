@@ -50,12 +50,20 @@ export async function addPending(input: { sku: string; qty: number; channel?: st
   if (!(qty >= 1)) throw new Error('Quantity must be at least 1');
   if (!(await ProductModel.exists({ sku }))) throw new Error('Product not found');
 
+  const channel = input.channel || undefined;
   await SkuStockModel.updateOne(
     { sku, locationCode: MAIN },
     { $inc: { reserved: qty }, $setOnInsert: { onHand: 0, buffer: 0 } },
     { upsert: true },
   );
-  const doc = await PendingShipmentModel.create({ sku, qty, channel: input.channel, orderId: input.orderId });
+  // If the same product (+ platform) is already queued, just add to its quantity.
+  const existing = await PendingShipmentModel.findOne({ sku, channel: channel ?? { $in: [null, undefined] } });
+  if (existing) {
+    existing.qty += qty;
+    await existing.save();
+    return { id: String(existing._id) };
+  }
+  const doc = await PendingShipmentModel.create({ sku, qty, channel });
   return { id: String(doc._id) };
 }
 

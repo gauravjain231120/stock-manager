@@ -13,7 +13,8 @@ export function num(n?: number | null): string {
 export function dateTime(d?: Date | string | null): string {
   if (!d) return '—';
   const date = typeof d === 'string' ? new Date(d) : d;
-  return new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeStyle: 'short' }).format(date);
+  // Pin to India time so it's consistent whether rendered on the server (UTC) or client.
+  return new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Kolkata' }).format(date);
 }
 
 const SIZE_ORDER = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL', 'OS', 'FREE'];

@@ -53,9 +53,10 @@ export default async function ShipPage() {
           ) : null
         }
       >
-        <Table head={<><Th>Added</Th><Th>Product</Th><Th>Platform</Th><Th right>Stock</Th><Th right>Status</Th><Th right>Qty</Th><Th right>Action</Th></>} empty={pending.length === 0}>
+        <Table head={<><Th>Added</Th><Th>Product</Th><Th>Platform</Th><Th right>Stock</Th><Th right>Status</Th><Th right>Qty</Th><Th right>After ship</Th><Th right>Action</Th></>} empty={pending.length === 0}>
           {pending.map((p) => {
             const s = stockStatus(p.onHand);
+            const after = p.onHand - p.qty;
             return (
             <Tr key={p.id}>
               <Td>{dateTime(p.createdAt)}</Td>
@@ -67,6 +68,7 @@ export default async function ShipPage() {
               <Td right><span className={`font-semibold ${s.color}`}>{p.onHand}</span></Td>
               <Td right><Badge tone={s.tone}>{s.label}</Badge></Td>
               <Td right>{p.qty}</Td>
+              <Td right><span className={`font-semibold ${stockStatus(after).color}`}>{after}</span></Td>
               <Td right>
                 <span className="inline-flex gap-2">
                   <ActionButton label="Ship" endpoint={`/api/pending/${p.id}`} method="POST" variant="primary" successMessage="Shipped ✓" />
