@@ -57,7 +57,7 @@ export async function addPending(input: { sku: string; qty: number; channel?: st
     { upsert: true },
   );
   // If the same product (+ platform) is already queued, just add to its quantity.
-  const existing = await PendingShipmentModel.findOne({ sku, channel: channel ?? { $in: [null, undefined] } });
+  const existing = await PendingShipmentModel.findOne({ sku, ...(channel ? { channel } : {}) });
   if (existing) {
     existing.qty += qty;
     await existing.save();
