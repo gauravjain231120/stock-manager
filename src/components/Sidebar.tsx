@@ -2,11 +2,13 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { ClipboardList, Shirt, Boxes, Factory, LogOut } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { ClipboardList, Truck, Shirt, Boxes, Factory, LogOut } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
 
 const NAV = [
   { href: '/register', label: 'Stock Log', Icon: ClipboardList },
+  { href: '/ship', label: 'Ready to Ship', Icon: Truck },
   { href: '/products', label: 'Products', Icon: Shirt },
   { href: '/inventory', label: 'Inventory', Icon: Boxes },
   { href: '/produce', label: 'Produce', Icon: Factory },
@@ -15,6 +17,17 @@ const NAV = [
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const [toPack, setToPack] = useState<number | null>(null);
+
+  // Live count for the "Ready to Ship" badge; refreshes when the page changes.
+  useEffect(() => {
+    let on = true;
+    fetch('/api/pending')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (on && d) setToPack(d.count ?? 0); })
+      .catch(() => {});
+    return () => { on = false; };
+  }, [pathname]);
 
   // No sidebar on the login screen.
   if (pathname === '/login') return null;
@@ -47,7 +60,10 @@ export function Sidebar() {
               }`}
             >
               <Icon size={18} className="shrink-0" />
-              {label}
+              <span className="flex-1">{label}</span>
+              {href === '/ship' && toPack ? (
+                <span className={`rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${active ? 'bg-white/20 text-white' : 'bg-brand-600 text-white'}`}>{toPack}</span>
+              ) : null}
             </Link>
           );
         })}
