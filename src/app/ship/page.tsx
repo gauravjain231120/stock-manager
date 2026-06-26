@@ -2,6 +2,7 @@ import { listPending, shipProducts } from '@/lib/shipping';
 import { PageHeader, Panel, Table, Th, Td, Tr, StatCard, Badge } from '@/components/ui';
 import { AddPendingForm } from '@/components/AddPendingForm';
 import { ActionButton } from '@/components/ActionButton';
+import { ShipButton } from '@/components/ShipButton';
 import { num, dateTime } from '@/lib/format';
 import { PLATFORM_LABELS, Platform } from '@/lib/constants';
 
@@ -74,15 +75,7 @@ export default async function ShipPage() {
               <Td right><span className={`font-semibold ${stockStatus(after).color}`}>{after}</span></Td>
               <Td right>
                 <span className="inline-flex gap-2">
-                  <ActionButton
-                    label="Ship"
-                    endpoint={`/api/pending/${p.id}`}
-                    method="POST"
-                    variant="primary"
-                    successMessage="Shipped ✓"
-                    disabled={after < 0}
-                    title={after < 0 ? 'Not enough stock — produce it first' : undefined}
-                  />
+                  <ShipButton id={p.id} name={p.name} sku={p.sku} qty={p.qty} stock={p.onHand} />
                   <ActionButton
                     label="Cancel"
                     endpoint={`/api/pending/${p.id}`}

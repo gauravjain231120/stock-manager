@@ -56,7 +56,13 @@ export async function addPending(input: { sku: string; qty: number; channel?: st
     { $inc: { reserved: qty }, $setOnInsert: { onHand: 0, buffer: 0 } },
     { upsert: true },
   );
-  // Each order is its own row — same item added again makes a separate entry.
+  // Same product (+ platform) already queued -> add to its quantity.
+  const existing = await PendingShipmentModel.findOne({ sku, ...(channel ? { channel } : {}) });
+  if (existing) {
+    existing.qty += qty;
+    await existing.save();
+    return { id: String(existing._id) };
+  }
   const doc = await PendingShipmentModel.create({ sku, qty, channel });
   return { id: String(doc._id) };
 }
@@ -93,22 +99,28 @@ export async function pendingCount(): Promise<number> {
   return PendingShipmentModel.countDocuments();
 }
 
-/** Pack & ship: deduct stock (Sold movement), release the reservation, remove from queue. */
-export async function shipPending(id: string) {
+/**
+ * Pack & ship `qty` units from a queue entry (defaults to the whole entry):
+ * deduct stock, release that many reservations, and remove the entry (or reduce
+ * its qty if only part was shipped).
+ */
+export async function shipPending(id: string, qty?: number) {
   await connectDB();
   const p = await PendingShipmentModel.findById(id);
   if (!p) throw new Error('Item not found');
+  const shipQty = qty && qty > 0 ? Math.min(Math.floor(qty), p.qty) : p.qty;
   const session = await mongoose.startSession();
   try {
     await session.withTransaction(async () => {
-      await postMovement(session, { sku: p.sku, locationCode: MAIN, qty: -p.qty, type: MovementType.SOLD, channel: p.channel || undefined, refType: 'SHIP' });
-      await SkuStockModel.updateOne({ sku: p.sku, locationCode: MAIN }, { $inc: { reserved: -p.qty } }, { session });
-      await PendingShipmentModel.deleteOne({ _id: p._id }, { session });
+      await postMovement(session, { sku: p.sku, locationCode: MAIN, qty: -shipQty, type: MovementType.SOLD, channel: p.channel || undefined, refType: 'SHIP' });
+      await SkuStockModel.updateOne({ sku: p.sku, locationCode: MAIN }, { $inc: { reserved: -shipQty } }, { session });
+      if (shipQty >= p.qty) await PendingShipmentModel.deleteOne({ _id: p._id }, { session });
+      else await PendingShipmentModel.updateOne({ _id: p._id }, { $inc: { qty: -shipQty } }, { session });
     });
   } finally {
     await session.endSession();
   }
-  return { sku: p.sku, qty: p.qty };
+  return { sku: p.sku, qty: shipQty };
 }
 
 /** Cancel: release the reservation and remove from queue. No stock deducted. */
