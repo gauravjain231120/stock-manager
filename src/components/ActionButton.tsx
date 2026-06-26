@@ -28,6 +28,8 @@ export function ActionButton({
   confirmDetails,
   confirmLabel,
   successMessage = 'Done ✓',
+  disabled = false,
+  title,
 }: {
   label: string;
   endpoint: string;
@@ -41,6 +43,8 @@ export function ActionButton({
   confirmLabel?: string;
   // A plain string (server components can't pass functions to client components).
   successMessage?: string;
+  disabled?: boolean;
+  title?: string;
 }) {
   const router = useRouter();
   const ask = useConfirm();
@@ -83,8 +87,9 @@ export function ActionButton({
   return (
     <button
       onClick={run}
-      disabled={busy || pending}
-      className={`rounded-lg px-3 py-1.5 text-sm font-medium transition disabled:opacity-50 ${styles[variant]}`}
+      disabled={busy || pending || disabled}
+      title={title}
+      className={`rounded-lg px-3 py-1.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-40 ${styles[variant]}`}
     >
       {busy || pending ? '…' : label}
     </button>

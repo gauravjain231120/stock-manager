@@ -21,6 +21,7 @@ function stockStatus(n: number) {
 export default async function ShipPage() {
   const [pending, products] = await Promise.all([listPending(), shipProducts()]);
   const units = pending.reduce((a, p) => a + p.qty, 0);
+  const anyShort = pending.some((p) => p.onHand < p.qty);
 
   return (
     <main className="px-6 py-8">
@@ -49,6 +50,8 @@ export default async function ShipPage() {
               confirmDetails={[{ label: 'Items', value: String(pending.length) }, { label: 'Units', value: String(units) }]}
               confirmLabel="Ship all"
               successMessage="All shipped ✓"
+              disabled={anyShort}
+              title={anyShort ? 'Some items are out of stock — produce them or remove them first' : undefined}
             />
           ) : null
         }
@@ -71,7 +74,15 @@ export default async function ShipPage() {
               <Td right><span className={`font-semibold ${stockStatus(after).color}`}>{after}</span></Td>
               <Td right>
                 <span className="inline-flex gap-2">
-                  <ActionButton label="Ship" endpoint={`/api/pending/${p.id}`} method="POST" variant="primary" successMessage="Shipped ✓" />
+                  <ActionButton
+                    label="Ship"
+                    endpoint={`/api/pending/${p.id}`}
+                    method="POST"
+                    variant="primary"
+                    successMessage="Shipped ✓"
+                    disabled={after < 0}
+                    title={after < 0 ? 'Not enough stock — produce it first' : undefined}
+                  />
                   <ActionButton
                     label="Cancel"
                     endpoint={`/api/pending/${p.id}`}
