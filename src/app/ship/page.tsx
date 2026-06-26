@@ -22,7 +22,11 @@ function stockStatus(n: number) {
 export default async function ShipPage() {
   const [pending, products] = await Promise.all([listPending(), shipProducts()]);
   const units = pending.reduce((a, p) => a + p.qty, 0);
-  const anyShort = pending.some((p) => p.onHand < p.qty);
+  // Total queued units per product — a product can appear on >1 row (different platforms),
+  // so "After ship" reflects what's left once ALL its queued units ship, not just this row's.
+  const queuedBySku = new Map<string, number>();
+  for (const p of pending) queuedBySku.set(p.sku, (queuedBySku.get(p.sku) ?? 0) + p.qty);
+  const anyShort = pending.some((p) => (queuedBySku.get(p.sku) ?? 0) > p.onHand);
 
   return (
     <main className="px-6 py-8">
@@ -60,7 +64,7 @@ export default async function ShipPage() {
         <Table head={<><Th>Added</Th><Th>Product</Th><Th>Platform</Th><Th right>Stock</Th><Th right>Status</Th><Th right>Qty</Th><Th right>After ship</Th><Th right>Action</Th></>} empty={pending.length === 0}>
           {pending.map((p) => {
             const s = stockStatus(p.onHand);
-            const after = p.onHand - p.qty;
+            const after = p.onHand - (queuedBySku.get(p.sku) ?? p.qty);
             return (
             <Tr key={p.id}>
               <Td>{dateTime(p.createdAt)}</Td>
