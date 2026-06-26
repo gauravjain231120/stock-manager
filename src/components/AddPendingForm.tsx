@@ -17,7 +17,6 @@ export function AddPendingForm({ products }: { products: P[] }) {
   const [sku, setSku] = useState(products[0]?.sku ?? '');
   const [qty, setQty] = useState('1');
   const [channel, setChannel] = useState<Platform>('AMAZON');
-  const [orderId, setOrderId] = useState('');
   const [busy, setBusy] = useState(false);
 
   const sel = products.find((p) => p.sku === sku);
@@ -30,14 +29,13 @@ export function AddPendingForm({ products }: { products: P[] }) {
       const res = await fetch('/api/pending', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sku, qty: Number(qty), channel, orderId: orderId.trim() || undefined }),
+        body: JSON.stringify({ sku, qty: Number(qty), channel }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) toast.error(data?.error || 'Failed to add');
       else {
         toast.success('Added to Ready to Ship ✓');
         setQty('1');
-        setOrderId('');
         router.refresh();
       }
     } finally {
@@ -47,7 +45,7 @@ export function AddPendingForm({ products }: { products: P[] }) {
 
   return (
     <form onSubmit={onSubmit} className="rounded-xl border border-black/10 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-neutral-900">
-      <div className="grid gap-4 sm:grid-cols-[2fr_auto_auto_1fr_auto] sm:items-end">
+      <div className="grid gap-4 sm:grid-cols-[2fr_auto_auto_auto] sm:items-end">
         <label className="flex flex-col gap-1 text-xs text-neutral-500">
           <span className="flex items-center justify-between">
             <span>Product</span>
@@ -73,10 +71,6 @@ export function AddPendingForm({ products }: { products: P[] }) {
           <select className={input} value={channel} onChange={(e) => setChannel(e.target.value as Platform)}>
             {PLATFORMS.map((p) => <option key={p} value={p}>{PLATFORM_LABELS[p]}</option>)}
           </select>
-        </label>
-        <label className="flex flex-col gap-1 text-xs text-neutral-500">
-          Order ID <span className="text-neutral-400">(optional)</span>
-          <input className={input} value={orderId} onChange={(e) => setOrderId(e.target.value)} placeholder="403-…" />
         </label>
         <button
           disabled={busy || !sku || !qty}

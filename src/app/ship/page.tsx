@@ -1,5 +1,5 @@
 import { listPending, shipProducts } from '@/lib/shipping';
-import { PageHeader, Panel, Table, Th, Td, Tr, StatCard } from '@/components/ui';
+import { PageHeader, Panel, Table, Th, Td, Tr, StatCard, Badge } from '@/components/ui';
 import { AddPendingForm } from '@/components/AddPendingForm';
 import { ActionButton } from '@/components/ActionButton';
 import { num, dateTime } from '@/lib/format';
@@ -10,6 +10,12 @@ export const dynamic = 'force-dynamic';
 function platformLabel(c?: string | null) {
   if (!c) return '—';
   return PLATFORM_LABELS[c as Platform] ?? c;
+}
+
+function stockStatus(n: number) {
+  if (n <= 0) return { label: 'Out of stock', tone: 'danger' as const, color: 'text-red-600' };
+  if (n <= 5) return { label: 'Low', tone: 'warn' as const, color: 'text-amber-600' };
+  return { label: 'Good', tone: 'good' as const, color: 'text-emerald-600' };
 }
 
 export default async function ShipPage() {
@@ -47,8 +53,10 @@ export default async function ShipPage() {
           ) : null
         }
       >
-        <Table head={<><Th>Added</Th><Th>Product</Th><Th>Platform</Th><Th>Order ID</Th><Th right>Qty</Th><Th right>Action</Th></>} empty={pending.length === 0}>
-          {pending.map((p) => (
+        <Table head={<><Th>Added</Th><Th>Product</Th><Th>Platform</Th><Th right>Stock</Th><Th right>Status</Th><Th right>Qty</Th><Th right>Action</Th></>} empty={pending.length === 0}>
+          {pending.map((p) => {
+            const s = stockStatus(p.onHand);
+            return (
             <Tr key={p.id}>
               <Td>{dateTime(p.createdAt)}</Td>
               <Td>
@@ -56,7 +64,8 @@ export default async function ShipPage() {
                 <div className="font-mono text-[11px] text-neutral-400">{p.sku}</div>
               </Td>
               <Td>{platformLabel(p.channel)}</Td>
-              <Td mono>{p.orderId || '—'}</Td>
+              <Td right><span className={`font-semibold ${s.color}`}>{p.onHand}</span></Td>
+              <Td right><Badge tone={s.tone}>{s.label}</Badge></Td>
               <Td right>{p.qty}</Td>
               <Td right>
                 <span className="inline-flex gap-2">
@@ -75,7 +84,8 @@ export default async function ShipPage() {
                 </span>
               </Td>
             </Tr>
-          ))}
+            );
+          })}
         </Table>
       </Panel>
 
