@@ -3,7 +3,7 @@ import { PageHeader, Panel, Table, Th, Td, Tr, StatCard, Badge } from '@/compone
 import { AddPendingForm } from '@/components/AddPendingForm';
 import { ActionButton } from '@/components/ActionButton';
 import { ShipButton } from '@/components/ShipButton';
-import { num, dateTime } from '@/lib/format';
+import { num } from '@/lib/format';
 import { PLATFORM_LABELS, Platform } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
@@ -61,13 +61,12 @@ export default async function ShipPage() {
           ) : null
         }
       >
-        <Table head={<><Th>Added</Th><Th>Product</Th><Th>Platform</Th><Th right>Stock</Th><Th right>Status</Th><Th right>Qty</Th><Th right>After ship</Th><Th right>Action</Th></>} empty={pending.length === 0}>
+        <Table head={<><Th>Product</Th><Th>Platform</Th><Th right>Stock</Th><Th right>Status</Th><Th right>Qty</Th><Th right>After ship</Th><Th right>Action</Th></>} empty={pending.length === 0}>
           {pending.map((p) => {
             const s = stockStatus(p.onHand);
             const after = p.onHand - (queuedBySku.get(p.sku) ?? p.qty);
             return (
             <Tr key={p.id}>
-              <Td>{dateTime(p.createdAt)}</Td>
               <Td>
                 <div>{p.name}</div>
                 <div className="font-mono text-[11px] text-neutral-400">{p.sku}</div>
