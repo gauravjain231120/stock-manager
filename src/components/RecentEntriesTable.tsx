@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Panel, Table, Th, Td, Tr } from '@/components/ui';
 import { ActionButton } from '@/components/ActionButton';
 import { useConfirm } from '@/components/ConfirmProvider';
-import { dateTime, matchesSearch } from '@/lib/format';
+import { dateOnly, matchesSearch } from '@/lib/format';
 import { PLATFORMS, PLATFORM_LABELS, Platform } from '@/lib/constants';
 
 export interface Entry {
@@ -113,7 +113,7 @@ export function RecentEntriesTable({ entries }: { entries: Entry[] }) {
                 {editing ? (
                   <input type="date" className={inputCls} value={eDate} onChange={(ev) => setEDate(ev.target.value)} />
                 ) : (
-                  dateTime(e.createdAt)
+                  dateOnly(e.createdAt)
                 )}
               </Td>
               <Td>{TYPE_LABEL[e.type] ?? e.type}</Td>

@@ -17,6 +17,12 @@ export function dateTime(d?: Date | string | null): string {
   return new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Kolkata' }).format(date);
 }
 
+export function dateOnly(d?: Date | string | null): string {
+  if (!d) return '—';
+  const date = typeof d === 'string' ? new Date(d) : d;
+  return new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeZone: 'Asia/Kolkata' }).format(date);
+}
+
 const SIZE_ORDER = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL', 'OS', 'FREE'];
 
 /**

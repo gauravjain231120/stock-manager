@@ -26,6 +26,10 @@ const EDITABLE_TYPES: string[] = [
   MovementType.ADJUSTED,
 ];
 
+// Only the real stock actions show in the "All entries" list. Opening balances
+// and direct stock-quantity edits (ADJUSTED) are intentionally hidden.
+const LISTED_TYPES: string[] = [MovementType.PRODUCED, MovementType.SOLD, MovementType.RETURNED];
+
 export async function recordEntry(
   sku: string,
   action: RegisterAction,
@@ -240,7 +244,7 @@ export async function getProduceList(): Promise<ProduceRow[]> {
 /** All stock entries (produce/ship/return + opening-stock adjustments). */
 export async function recentEntries(limit = 1000) {
   await connectDB();
-  return StockMovementModel.find({ type: { $in: EDITABLE_TYPES as MovementType[] } })
+  return StockMovementModel.find({ type: { $in: LISTED_TYPES as MovementType[] } })
     .sort({ createdAt: -1 })
     .limit(limit)
     .lean();
