@@ -13,7 +13,7 @@ export default async function ProductsPage() {
   const categories = [...new Set(groups.map((g) => g.category).filter(Boolean))].sort() as string[];
 
   return (
-    <main className="px-6 py-8">
+    <main className="px-4 py-6 sm:px-6 sm:py-8">
       <PageHeader title="Products" subtitle="Add a product with a photo and its colours & sizes — each variant gets its own tracked stock." />
 
       <section className="mb-6 grid grid-cols-3 gap-4 sm:max-w-2xl">

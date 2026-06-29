@@ -36,9 +36,9 @@ export default function RootLayout({
         <ThemeManager />
         <ToastProvider>
           <ConfirmProvider>
-            <div className="flex min-h-screen">
+            <div className="flex min-h-screen flex-col md:flex-row">
               <Sidebar />
-              <div className="flex-1 overflow-x-hidden">{children}</div>
+              <div className="min-w-0 flex-1 overflow-x-hidden">{children}</div>
             </div>
           </ConfirmProvider>
         </ToastProvider>

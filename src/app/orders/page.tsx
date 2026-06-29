@@ -10,7 +10,7 @@ export default async function OrdersPage() {
   const needsStock = orders.filter((o) => o.status === 'NEEDS_STOCK').length;
 
   return (
-    <main className="px-6 py-8">
+    <main className="px-4 py-6 sm:px-6 sm:py-8">
       <PageHeader
         title="Orders"
         subtitle="Orders pulled from each channel. Every fulfilled line posts a SOLD movement and resyncs stock."

@@ -25,7 +25,7 @@ export default async function RegisterPage() {
   );
 
   return (
-    <main className="px-6 py-8">
+    <main className="px-4 py-6 sm:px-6 sm:py-8">
       <PageHeader title="Stock Log" subtitle="The simple way: pick a product, choose Produce / Ship / Return, enter a quantity." />
 
       <div className="mb-6">

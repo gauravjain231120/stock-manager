@@ -29,7 +29,7 @@ export default async function ShipPage() {
   const anyShort = pending.some((p) => (queuedBySku.get(p.sku) ?? 0) > p.onHand);
 
   return (
-    <main className="px-6 py-8">
+    <main className="px-4 py-6 sm:px-6 sm:py-8">
       <PageHeader title="Ready to Ship" subtitle="Add each order as it comes in; hit Ship when you pack it. Stock is reserved until shipped." />
 
       <div className="mb-6">

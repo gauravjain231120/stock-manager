@@ -13,7 +13,7 @@ export default async function InventoryPage() {
   const low = rows.filter((r) => r.onHand > 0 && r.onHand <= 5).length;
 
   return (
-    <main className="px-6 py-8">
+    <main className="px-4 py-6 sm:px-6 sm:py-8">
       <PageHeader title="Inventory" subtitle="Current stock for each product." />
 
       <section className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-4">

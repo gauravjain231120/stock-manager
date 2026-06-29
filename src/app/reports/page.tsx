@@ -8,7 +8,7 @@ export default async function ReportsPage() {
   const r = await reportBundle(30);
 
   return (
-    <main className="px-6 py-8">
+    <main className="px-4 py-6 sm:px-6 sm:py-8">
       <PageHeader title="Reports" subtitle={`Last ${r.windowDays} days.`} />
 
       <section className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">

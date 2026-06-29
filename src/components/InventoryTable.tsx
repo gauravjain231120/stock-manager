@@ -45,7 +45,7 @@ export function InventoryTable({ rows }: { rows: InvRow[] }) {
           <select
             value={cat}
             onChange={(e) => setCat(e.target.value)}
-            className="rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm text-neutral-900 dark:border-white/20 dark:text-white"
+            className="w-full rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm text-neutral-900 dark:border-white/20 dark:text-white sm:w-auto"
           >
             <option value="">All categories</option>
             {categories.map((c) => (
@@ -56,7 +56,7 @@ export function InventoryTable({ rows }: { rows: InvRow[] }) {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search SKU, name or category…"
-            className="min-w-[16rem] flex-1 rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm text-neutral-900 dark:border-white/20 dark:text-white"
+            className="w-full flex-1 rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm text-neutral-900 dark:border-white/20 dark:text-white sm:w-auto sm:min-w-[16rem]"
           />
         </div>
       </div>

@@ -11,7 +11,7 @@ export default async function ReturnsPage() {
   const damaged = returns.filter((r) => r.grade === 'DAMAGED').length;
 
   return (
-    <main className="px-6 py-8">
+    <main className="px-4 py-6 sm:px-6 sm:py-8">
       <PageHeader
         title="Returns"
         subtitle="Returned units land in quarantine, then you grade them sellable (back to stock) or damaged."

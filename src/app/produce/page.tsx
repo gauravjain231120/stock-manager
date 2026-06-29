@@ -9,7 +9,7 @@ export default async function ProducePage() {
   const outCount = produce.filter((p) => p.inStock <= 0).length;
 
   return (
-    <main className="px-6 py-8">
+    <main className="px-4 py-6 sm:px-6 sm:py-8">
       <PageHeader title="Produce" subtitle="Your best-selling sizes that are now low or out of stock — make these first." />
 
       <Panel title={`To produce (${produce.length}) — ${outCount} out of stock`}>

@@ -15,7 +15,7 @@ export default async function Dashboard() {
   const needsReorder = repl.filter((r) => r.needsReorder).length;
 
   return (
-    <main className="px-6 py-8">
+    <main className="px-4 py-6 sm:px-6 sm:py-8">
       <PageHeader
         title="Dashboard"
         subtitle="One trustworthy stock number, straight from the immutable ledger."

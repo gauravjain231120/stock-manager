@@ -9,7 +9,7 @@ export default async function ReplenishmentPage() {
   const needing = rows.filter((r) => r.needsReorder);
 
   return (
-    <main className="px-6 py-8">
+    <main className="px-4 py-6 sm:px-6 sm:py-8">
       <PageHeader
         title="Replenishment"
         subtitle="What to produce next. Reorder point = avg daily sales × lead time + safety stock (last 30 days of sales)."

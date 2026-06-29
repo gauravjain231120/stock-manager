@@ -20,7 +20,7 @@ export default async function ChannelsPage() {
   const mode = process.env.MARKETPLACE_MODE ?? 'simulate';
 
   return (
-    <main className="px-6 py-8">
+    <main className="px-4 py-6 sm:px-6 sm:py-8">
       <PageHeader
         title="Channels"
         subtitle="Map each SKU to its Amazon / Flipkart / Myntra listing, and push available stock."
