@@ -3,8 +3,9 @@ import { PageHeader, Panel, Table, Th, Td, Tr, StatCard, Badge } from '@/compone
 import { AddPendingForm } from '@/components/AddPendingForm';
 import { ActionButton } from '@/components/ActionButton';
 import { ShipButton } from '@/components/ShipButton';
+import { PlatformFilter } from '@/components/PlatformFilter';
 import { num } from '@/lib/format';
-import { PLATFORM_LABELS, Platform } from '@/lib/constants';
+import { PLATFORMS, PLATFORM_LABELS, Platform } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,14 +20,21 @@ function stockStatus(n: number) {
   return { label: 'Good', tone: 'good' as const, color: 'text-emerald-600' };
 }
 
-export default async function ShipPage() {
+export default async function ShipPage({ searchParams }: { searchParams: Promise<{ platform?: string }> }) {
   const [pending, products] = await Promise.all([listPending(), shipProducts()]);
   const units = pending.reduce((a, p) => a + p.qty, 0);
   // Total queued units per product — a product can appear on >1 row (different platforms),
   // so "After ship" reflects what's left once ALL its queued units ship, not just this row's.
   const queuedBySku = new Map<string, number>();
   for (const p of pending) queuedBySku.set(p.sku, (queuedBySku.get(p.sku) ?? 0) + p.qty);
-  const anyShort = pending.some((p) => (queuedBySku.get(p.sku) ?? 0) > p.onHand);
+
+  // Optional platform filter (?platform=AMAZON). Narrows only the visible queue.
+  const sp = await searchParams;
+  const platform = PLATFORMS.includes(sp.platform as Platform) ? (sp.platform as Platform) : null;
+  const shown = platform ? pending.filter((p) => p.channel === platform) : pending;
+  // "Ship all" ships exactly what's shown — its count/disable follow the filter.
+  const shownUnits = shown.reduce((a, p) => a + p.qty, 0);
+  const shownShort = shown.some((p) => (queuedBySku.get(p.sku) ?? 0) > p.onHand);
 
   return (
     <main className="px-4 py-6 sm:px-6 sm:py-8">
@@ -42,27 +50,31 @@ export default async function ShipPage() {
       </section>
 
       <Panel
-        title={`Queue (${pending.length})`}
+        title={`Queue (${platform ? `${shown.length} of ${pending.length}` : pending.length})`}
         actions={
-          pending.length > 0 ? (
-            <ActionButton
-              label="Ship all"
-              endpoint="/api/pending/ship-all"
-              method="POST"
-              variant="primary"
-              confirmTitle="Ship everything?"
-              confirm={`All ${pending.length} item(s) will be marked shipped and their stock deducted.`}
-              confirmDetails={[{ label: 'Items', value: String(pending.length) }, { label: 'Units', value: String(units) }]}
-              confirmLabel="Ship all"
-              successMessage="All shipped ✓"
-              disabled={anyShort}
-              title={anyShort ? 'Some items are out of stock — produce them or remove them first' : undefined}
-            />
-          ) : null
+          <>
+            <PlatformFilter />
+            {shown.length > 0 ? (
+              <ActionButton
+                label={platform ? `Ship all ${PLATFORM_LABELS[platform]}` : 'Ship all'}
+                endpoint="/api/pending/ship-all"
+                method="POST"
+                body={platform ? { channel: platform } : undefined}
+                variant="primary"
+                confirmTitle="Ship everything?"
+                confirm={`All ${shown.length} item(s)${platform ? ` on ${PLATFORM_LABELS[platform]}` : ''} will be marked shipped and their stock deducted.`}
+                confirmDetails={[{ label: 'Items', value: String(shown.length) }, { label: 'Units', value: String(shownUnits) }]}
+                confirmLabel="Ship all"
+                successMessage="All shipped ✓"
+                disabled={shownShort}
+                title={shownShort ? 'Some items are out of stock — produce them or remove them first' : undefined}
+              />
+            ) : null}
+          </>
         }
       >
-        <Table head={<><Th>Product</Th><Th>Platform</Th><Th right>Stock</Th><Th right>Status</Th><Th right>Qty</Th><Th right>After ship</Th><Th right>Action</Th></>} empty={pending.length === 0}>
-          {pending.map((p) => {
+        <Table head={<><Th>Product</Th><Th>Platform</Th><Th right>Stock</Th><Th right>Status</Th><Th right>Qty</Th><Th right>After ship</Th><Th right>Action</Th></>} empty={shown.length === 0}>
+          {shown.map((p) => {
             const s = stockStatus(p.onHand);
             const after = p.onHand - (queuedBySku.get(p.sku) ?? p.qty);
             return (
@@ -100,6 +112,8 @@ export default async function ShipPage() {
 
       {pending.length === 0 ? (
         <p className="mt-3 px-1 text-xs text-neutral-400">Nothing to pack right now. Add an order above as soon as it comes in. ✨</p>
+      ) : platform && shown.length === 0 ? (
+        <p className="mt-3 px-1 text-xs text-neutral-400">No {PLATFORM_LABELS[platform]} orders in the queue — switch the filter to “All platforms”.</p>
       ) : null}
     </main>
   );

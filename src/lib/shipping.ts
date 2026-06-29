@@ -133,9 +133,9 @@ export async function cancelPending(id: string) {
   return { ok: true };
 }
 
-export async function shipAllPending() {
+export async function shipAllPending(channel?: string) {
   await connectDB();
-  const items = await PendingShipmentModel.find().lean();
+  const items = await PendingShipmentModel.find(channel ? { channel } : {}).lean();
   for (const i of items) await shipPending(String(i._id));
   return { shipped: items.length };
 }

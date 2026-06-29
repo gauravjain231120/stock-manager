@@ -6,6 +6,7 @@ import { Plus } from 'lucide-react';
 import { PLATFORMS, PLATFORM_LABELS, Platform } from '@/lib/constants';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { useToast } from '@/components/ToastProvider';
+import { useConfirm } from '@/components/ConfirmProvider';
 
 interface P { sku: string; name: string; onHand: number; available: number }
 
@@ -14,6 +15,7 @@ const input = 'rounded-lg border border-black/15 bg-transparent px-3 py-2 text-s
 export function AddPendingForm({ products }: { products: P[] }) {
   const router = useRouter();
   const toast = useToast();
+  const ask = useConfirm();
   const [sku, setSku] = useState(products[0]?.sku ?? '');
   const [qty, setQty] = useState('1');
   const [channel, setChannel] = useState<Platform>('AMAZON');
@@ -24,6 +26,21 @@ export function AddPendingForm({ products }: { products: P[] }) {
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+
+    // Confirm the platform before adding — easy to leave it on the wrong one.
+    const ok = await ask({
+      title: 'Add to Ready to Ship?',
+      description: 'Double-check the platform is correct before adding.',
+      details: [
+        { label: 'Product', value: sel?.name ?? sku },
+        { label: 'SKU', value: sku },
+        { label: 'Platform', value: PLATFORM_LABELS[channel] },
+        { label: 'Qty', value: qty },
+      ],
+      confirmLabel: 'Add',
+    });
+    if (!ok) return;
+
     setBusy(true);
     try {
       const res = await fetch('/api/pending', {
