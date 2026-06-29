@@ -40,7 +40,7 @@ export function RecentEntriesTable({ entries }: { entries: Entry[] }) {
   const [msg, setMsg] = useState<string | null>(null);
 
   const filtered = q.trim()
-    ? entries.filter((e) => matchesSearch(`${e.sku} ${TYPE_LABEL[e.type] ?? e.type} ${platformLabel(e.channel)}`, q))
+    ? entries.filter((e) => matchesSearch(`${e.sku} ${TYPE_LABEL[e.type] ?? e.type} ${platformLabel(e.channel)}`, q, e.sku))
     : entries;
 
   function startEdit(e: Entry) {

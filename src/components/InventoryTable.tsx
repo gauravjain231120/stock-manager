@@ -30,7 +30,7 @@ export function InventoryTable({ rows }: { rows: InvRow[] }) {
   const filtered = rows
     .filter((r) => {
       if (cat && r.category !== cat) return false;
-      if (q.trim() && !matchesSearch(`${r.sku} ${r.name} ${r.category}`, q)) return false;
+      if (q.trim() && !matchesSearch(`${r.sku} ${r.name} ${r.category}`, q, r.sku)) return false;
       return true;
     })
     .sort((a, b) => compareVariant(a.sku, b.sku));

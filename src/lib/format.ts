@@ -74,19 +74,34 @@ export function groupVariants<T extends { sku: string; name: string }>(
   return out;
 }
 
+/** True if all of `needle`'s chars appear in `hay` in order (allowing gaps). */
+function isSubsequence(needle: string, hay: string): boolean {
+  let i = 0;
+  for (let j = 0; j < hay.length && i < needle.length; j++) {
+    if (hay[j] === needle[i]) i++;
+  }
+  return i === needle.length;
+}
+
 /**
  * Search match, ignoring case and all punctuation/spaces on BOTH sides. Each
  * typed word must appear (in any order) in the punctuation-free text. So
  * "coordset blue", "coord blue", and "rrc006cofbluxl" all match
  * "RRC-001-CO-A-BLU-L — Co-ord Set Blue-Cross L".
+ *
+ * If `sku` is given, a term also matches when it's a *subsequence* of the SKU —
+ * so a slightly-off SKU like "RR-007-CO-C-RED-S" still finds
+ * "RRC-007-CO-C-RED-S" (the dropped "C"). Matching against the SKU alone keeps
+ * sizes precise (the trailing "-S" won't leak into the product name).
  */
-export function matchesSearch(haystack: string, query: string): boolean {
+export function matchesSearch(haystack: string, query: string, sku?: string): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return true;
   const squish = (s: string) => s.replace(/[^a-z0-9]/g, '');
   const h = squish(haystack.toLowerCase());
+  const skuSq = sku ? squish(sku.toLowerCase()) : '';
   const terms = q.split(/\s+/).map(squish).filter(Boolean);
-  return terms.every((t) => h.includes(t));
+  return terms.every((t) => h.includes(t) || (skuSq.length > 0 && isSubsequence(t, skuSq)));
 }
 
 export function timeAgo(d?: Date | string | null): string {

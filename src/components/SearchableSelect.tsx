@@ -32,7 +32,7 @@ export function SearchableSelect({
 
   const selected = options.find((o) => o.value === value);
   // Word match ("halter blue") or punctuation-free SKU match ("rrc006cofbluxl").
-  const filtered = query.trim() ? options.filter((o) => matchesSearch(o.label, query)) : options;
+  const filtered = query.trim() ? options.filter((o) => matchesSearch(o.label, query, o.value)) : options;
   const activeIdx = Math.min(active, Math.max(0, filtered.length - 1));
 
   useEffect(() => {
