@@ -15,11 +15,21 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  /* Native form controls (select popups, date pickers) follow the theme. */
+  color-scheme: light;
 }
 
 .dark {
   --background: #0a0a0a;
   --foreground: #ededed;
+  color-scheme: dark;
+}
+
+/* The <select> popup list ignores utility classes — give options readable
+   colors in both themes instead of the browser's white-on-white default. */
+select option {
+  background: var(--background);
+  color: var(--foreground);
 }
 
 @theme inline {

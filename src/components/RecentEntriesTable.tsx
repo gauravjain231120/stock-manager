@@ -35,12 +35,19 @@ const ACTION_OPTIONS = [
   { value: 'RETURNED', label: 'Return' },
 ];
 
+const PER_PAGE_OPTIONS = [20, 50, 80, 100, 200, 300];
+
+const pagerBtnCls =
+  'rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/20 dark:hover:bg-white/10';
+
 export function RecentEntriesTable({ entries }: { entries: Entry[] }) {
   const router = useRouter();
   const ask = useConfirm();
   const [q, setQ] = useState('');
   const [fAction, setFAction] = useState('all');
   const [fPlatform, setFPlatform] = useState('all');
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(20);
 
   // per-row edit state
   const [editId, setEditId] = useState<string | null>(null);
@@ -58,6 +65,13 @@ export function RecentEntriesTable({ entries }: { entries: Entry[] }) {
     const hay = `${e.sku} ${p ? `${p.name} ${p.color} ${p.size}` : ''} ${TYPE_LABEL[e.type] ?? e.type} ${platformLabel(e.channel)}`;
     return matchesSearch(hay, q, e.sku);
   });
+
+  // Pagination over the filtered list; `cur` self-clamps when filters shrink it.
+  const pageCount = Math.max(1, Math.ceil(filtered.length / perPage));
+  const cur = Math.min(page, pageCount);
+  const pageRows = filtered.slice((cur - 1) * perPage, cur * perPage);
+  const from = filtered.length === 0 ? 0 : (cur - 1) * perPage + 1;
+  const to = Math.min(cur * perPage, filtered.length);
 
   function startEdit(e: Entry) {
     setEditId(e.id);
@@ -111,13 +125,13 @@ export function RecentEntriesTable({ entries }: { entries: Entry[] }) {
       title={`All entries (${filtered.length}) — edit or delete to fix`}
       actions={
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <select value={fAction} onChange={(e) => setFAction(e.target.value)} aria-label="Filter by action" className={filterCls}>
+          <select value={fAction} onChange={(e) => { setFAction(e.target.value); setPage(1); }} aria-label="Filter by action" className={filterCls}>
             <option value="all">All actions</option>
             {ACTION_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
-          <select value={fPlatform} onChange={(e) => setFPlatform(e.target.value)} aria-label="Filter by platform" className={filterCls}>
+          <select value={fPlatform} onChange={(e) => { setFPlatform(e.target.value); setPage(1); }} aria-label="Filter by platform" className={filterCls}>
             <option value="all">All platforms</option>
             {PLATFORMS.map((p) => (
               <option key={p} value={p}>{PLATFORM_LABELS[p]}</option>
@@ -125,7 +139,7 @@ export function RecentEntriesTable({ entries }: { entries: Entry[] }) {
           </select>
           <input
             value={q}
-            onChange={(e) => setQ(e.target.value)}
+            onChange={(e) => { setQ(e.target.value); setPage(1); }}
             placeholder="Search product, SKU or platform…"
             className="w-48 rounded-lg border border-black/15 bg-transparent px-3 py-1.5 text-sm dark:border-white/20 sm:w-64"
           />
@@ -134,7 +148,7 @@ export function RecentEntriesTable({ entries }: { entries: Entry[] }) {
     >
       {msg ? <div className="px-5 pt-3 text-xs text-red-600">{msg}</div> : null}
       <Table head={<><Th>Date</Th><Th>Action</Th><Th>Product</Th><Th>Platform</Th><Th right>Qty</Th><Th right>Edit / Delete</Th></>} empty={filtered.length === 0}>
-        {filtered.map((e) => {
+        {pageRows.map((e) => {
           const editing = editId === e.id;
           const isShipReturn = e.type === 'SOLD' || e.type === 'RETURNED';
           return (
@@ -209,6 +223,35 @@ export function RecentEntriesTable({ entries }: { entries: Entry[] }) {
           );
         })}
       </Table>
+
+      {filtered.length > 0 ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-black/10 px-5 py-3 dark:border-white/10">
+          <span className="text-sm text-neutral-500">
+            Showing {from}–{to} of {filtered.length}
+          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={perPage}
+              onChange={(e) => { setPerPage(Number(e.target.value)); setPage(1); }}
+              aria-label="Entries per page"
+              className={filterCls}
+            >
+              {PER_PAGE_OPTIONS.map((n) => (
+                <option key={n} value={n}>{n} / page</option>
+              ))}
+            </select>
+            <button onClick={() => setPage(cur - 1)} disabled={cur <= 1} className={pagerBtnCls}>
+              ‹ Prev
+            </button>
+            <span className="text-sm tabular-nums text-neutral-500">
+              Page {cur} of {pageCount}
+            </span>
+            <button onClick={() => setPage(cur + 1)} disabled={cur >= pageCount} className={pagerBtnCls}>
+              Next ›
+            </button>
+          </div>
+        </div>
+      ) : null}
     </Panel>
   );
 }

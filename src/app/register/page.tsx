@@ -15,7 +15,7 @@ function platformLabel(channel?: string | null) {
 export default async function RegisterPage() {
   const [rows, recent, byPlatform, productInfo] = await Promise.all([
     registerTotals(),
-    recentEntries(1000),
+    recentEntries(5000),
     channelBreakdown(),
     productInfoBySku(),
   ]);
