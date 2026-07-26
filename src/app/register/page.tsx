@@ -1,4 +1,4 @@
-import { registerTotals, recentEntries, channelBreakdown } from '@/lib/register';
+import { registerTotals, recentEntries, channelBreakdown, productInfoBySku } from '@/lib/register';
 import { PageHeader, Panel, Table, Th, Td, Tr, StatCard } from '@/components/ui';
 import { RegisterEntryForm } from '@/components/RegisterEntryForm';
 import { RecentEntriesTable } from '@/components/RecentEntriesTable';
@@ -13,7 +13,12 @@ function platformLabel(channel?: string | null) {
 }
 
 export default async function RegisterPage() {
-  const [rows, recent, byPlatform] = await Promise.all([registerTotals(), recentEntries(1000), channelBreakdown()]);
+  const [rows, recent, byPlatform, productInfo] = await Promise.all([
+    registerTotals(),
+    recentEntries(1000),
+    channelBreakdown(),
+    productInfoBySku(),
+  ]);
   const totals = rows.reduce(
     (a, r) => ({
       produced: a.produced + r.produced,
@@ -64,6 +69,7 @@ export default async function RegisterPage() {
             sku: m.sku,
             qty: m.qty,
             channel: m.channel ?? null,
+            product: productInfo.get(m.sku) ?? null,
           }))}
         />
       </div>

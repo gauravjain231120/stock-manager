@@ -15,6 +15,7 @@ export interface Entry {
   sku: string;
   qty: number;
   channel: string | null;
+  product: { name: string; color: string; size: string } | null;
 }
 
 const TYPE_LABEL: Record<string, string> = { PRODUCED: 'Produce', SOLD: 'Ship', RETURNED: 'Return', ADJUSTED: 'Opening' };
@@ -25,11 +26,21 @@ function platformLabel(channel: string | null) {
 }
 
 const inputCls = 'rounded-lg border border-black/15 bg-transparent px-2 py-1 text-sm text-neutral-900 dark:border-white/20 dark:text-white';
+const filterCls = 'rounded-lg border border-black/15 bg-transparent px-3 py-1.5 text-sm text-neutral-900 dark:border-white/20 dark:text-white';
+
+// Action-filter choices — the three real stock actions shown in the log.
+const ACTION_OPTIONS = [
+  { value: 'PRODUCED', label: 'Produce' },
+  { value: 'SOLD', label: 'Ship' },
+  { value: 'RETURNED', label: 'Return' },
+];
 
 export function RecentEntriesTable({ entries }: { entries: Entry[] }) {
   const router = useRouter();
   const ask = useConfirm();
   const [q, setQ] = useState('');
+  const [fAction, setFAction] = useState('all');
+  const [fPlatform, setFPlatform] = useState('all');
 
   // per-row edit state
   const [editId, setEditId] = useState<string | null>(null);
@@ -39,9 +50,14 @@ export function RecentEntriesTable({ entries }: { entries: Entry[] }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  const filtered = q.trim()
-    ? entries.filter((e) => matchesSearch(`${e.sku} ${TYPE_LABEL[e.type] ?? e.type} ${platformLabel(e.channel)}`, q, e.sku))
-    : entries;
+  const filtered = entries.filter((e) => {
+    if (fAction !== 'all' && e.type !== fAction) return false;
+    if (fPlatform !== 'all' && e.channel !== fPlatform) return false;
+    if (!q.trim()) return true;
+    const p = e.product;
+    const hay = `${e.sku} ${p ? `${p.name} ${p.color} ${p.size}` : ''} ${TYPE_LABEL[e.type] ?? e.type} ${platformLabel(e.channel)}`;
+    return matchesSearch(hay, q, e.sku);
+  });
 
   function startEdit(e: Entry) {
     setEditId(e.id);
@@ -94,16 +110,30 @@ export function RecentEntriesTable({ entries }: { entries: Entry[] }) {
     <Panel
       title={`All entries (${filtered.length}) — edit or delete to fix`}
       actions={
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Search SKU, action or platform…"
-          className="w-64 rounded-lg border border-black/15 bg-transparent px-3 py-1.5 text-sm dark:border-white/20"
-        />
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <select value={fAction} onChange={(e) => setFAction(e.target.value)} aria-label="Filter by action" className={filterCls}>
+            <option value="all">All actions</option>
+            {ACTION_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+          <select value={fPlatform} onChange={(e) => setFPlatform(e.target.value)} aria-label="Filter by platform" className={filterCls}>
+            <option value="all">All platforms</option>
+            {PLATFORMS.map((p) => (
+              <option key={p} value={p}>{PLATFORM_LABELS[p]}</option>
+            ))}
+          </select>
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search product, SKU or platform…"
+            className="w-48 rounded-lg border border-black/15 bg-transparent px-3 py-1.5 text-sm dark:border-white/20 sm:w-64"
+          />
+        </div>
       }
     >
       {msg ? <div className="px-5 pt-3 text-xs text-red-600">{msg}</div> : null}
-      <Table head={<><Th>Date</Th><Th>Action</Th><Th>SKU</Th><Th>Platform</Th><Th right>Qty</Th><Th right>Edit / Delete</Th></>} empty={filtered.length === 0}>
+      <Table head={<><Th>Date</Th><Th>Action</Th><Th>Product</Th><Th>Platform</Th><Th right>Qty</Th><Th right>Edit / Delete</Th></>} empty={filtered.length === 0}>
         {filtered.map((e) => {
           const editing = editId === e.id;
           const isShipReturn = e.type === 'SOLD' || e.type === 'RETURNED';
@@ -117,7 +147,20 @@ export function RecentEntriesTable({ entries }: { entries: Entry[] }) {
                 )}
               </Td>
               <Td>{TYPE_LABEL[e.type] ?? e.type}</Td>
-              <Td mono>{e.sku}</Td>
+              <Td>
+                {e.product ? (
+                  <div>
+                    <div className="font-medium">
+                      {e.product.name}
+                      {e.product.color ? ` — ${e.product.color}` : ''}
+                      {e.product.size ? <span className="text-neutral-500"> · {e.product.size}</span> : null}
+                    </div>
+                    <div className="font-mono text-xs text-neutral-500">{e.sku}</div>
+                  </div>
+                ) : (
+                  <span className="font-mono text-xs">{e.sku}</span>
+                )}
+              </Td>
               <Td>
                 {editing && isShipReturn ? (
                   <select className={inputCls} value={eChannel} onChange={(ev) => setEChannel(ev.target.value as Platform)}>

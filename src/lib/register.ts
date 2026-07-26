@@ -241,6 +241,33 @@ export async function getProduceList(): Promise<ProduceRow[]> {
     }));
 }
 
+export interface EntryProductInfo {
+  name: string;
+  color: string;
+  size: string;
+}
+
+/**
+ * sku -> product line name + colour + size, so log entries can show a human
+ * label ("Co-ord Set — Blue-Bandhej · XL") above the raw SKU. Includes inactive
+ * products because old movements may reference them.
+ */
+export async function productInfoBySku(): Promise<Map<string, EntryProductInfo>> {
+  await connectDB();
+  const products = await ProductModel.find({}, { sku: 1, name: 1, category: 1, attributes: 1 }).lean();
+  const out = new Map<string, EntryProductInfo>();
+  for (const p of products) {
+    const attrs: Record<string, string> =
+      p.attributes instanceof Map ? Object.fromEntries(p.attributes) : ((p.attributes as Record<string, string>) ?? {});
+    out.set(p.sku, {
+      name: p.category?.trim() || p.name,
+      color: attrs.color?.trim() ?? '',
+      size: attrs.size?.trim() ?? '',
+    });
+  }
+  return out;
+}
+
 /** All stock entries (produce/ship/return + opening-stock adjustments). */
 export async function recentEntries(limit = 1000) {
   await connectDB();
