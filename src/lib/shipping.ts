@@ -4,13 +4,15 @@ import { ProductModel } from '@/models/Product';
 import { SkuStockModel } from '@/models/SkuStock';
 import { PendingShipmentModel } from '@/models/PendingShipment';
 import { postMovement } from '@/lib/stock';
-import { MovementType, SystemLocation } from '@/lib/constants';
+import { MovementType, SystemLocation, stockSkuFor } from '@/lib/constants';
 
 const MAIN = SystemLocation.MAIN;
 
 export interface PendingRow {
   id: string;
   sku: string;
+  /** The SKU whose physical stock this entry ships (differs for bundles). */
+  stockSku: string;
   name: string;
   qty: number;
   channel: string | null;
@@ -36,7 +38,7 @@ export async function shipProducts(): Promise<ShipProduct[]> {
   ]);
   const stockBy = new Map(stocks.map((s) => [s.sku, s]));
   return products.map((p) => {
-    const st = stockBy.get(p.sku);
+    const st = stockBy.get(stockSkuFor(p.sku));
     const onHand = st?.onHand ?? 0;
     return { sku: p.sku, name: p.name, onHand, available: onHand - (st?.reserved ?? 0) };
   });
@@ -51,8 +53,9 @@ export async function addPending(input: { sku: string; qty: number; channel?: st
   if (!(await ProductModel.exists({ sku }))) throw new Error('Product not found');
 
   const channel = input.channel || undefined;
+  // Reserve on the physical stock SKU (a bundle reserves its component's units).
   await SkuStockModel.updateOne(
-    { sku, locationCode: MAIN },
+    { sku: stockSkuFor(sku), locationCode: MAIN },
     { $inc: { reserved: qty }, $setOnInsert: { onHand: 0, buffer: 0 } },
     { upsert: true },
   );
@@ -71,18 +74,20 @@ export async function listPending(): Promise<PendingRow[]> {
   await connectDB();
   const items = await PendingShipmentModel.find().sort({ createdAt: 1 }).lean();
   const skus = [...new Set(items.map((i) => i.sku))];
+  const stockSkus = [...new Set(items.map((i) => stockSkuFor(i.sku)))];
   const [products, stocks] = await Promise.all([
     ProductModel.find({ sku: { $in: skus } }, { sku: 1, name: 1 }).lean(),
-    SkuStockModel.find({ sku: { $in: skus }, locationCode: MAIN }).lean(),
+    SkuStockModel.find({ sku: { $in: stockSkus }, locationCode: MAIN }).lean(),
   ]);
   const nameBy = new Map(products.map((p) => [p.sku, p.name]));
   const stockBy = new Map(stocks.map((s) => [s.sku, s]));
   return items.map((i) => {
-    const st = stockBy.get(i.sku);
+    const st = stockBy.get(stockSkuFor(i.sku));
     const onHand = st?.onHand ?? 0;
     return {
       id: String(i._id),
       sku: i.sku,
+      stockSku: stockSkuFor(i.sku),
       name: nameBy.get(i.sku) ?? i.sku,
       qty: i.qty,
       channel: i.channel ?? null,
@@ -113,7 +118,7 @@ export async function shipPending(id: string, qty?: number) {
   try {
     await session.withTransaction(async () => {
       await postMovement(session, { sku: p.sku, locationCode: MAIN, qty: -shipQty, type: MovementType.SOLD, channel: p.channel || undefined, refType: 'SHIP' });
-      await SkuStockModel.updateOne({ sku: p.sku, locationCode: MAIN }, { $inc: { reserved: -shipQty } }, { session });
+      await SkuStockModel.updateOne({ sku: stockSkuFor(p.sku), locationCode: MAIN }, { $inc: { reserved: -shipQty } }, { session });
       if (shipQty >= p.qty) await PendingShipmentModel.deleteOne({ _id: p._id }, { session });
       else await PendingShipmentModel.updateOne({ _id: p._id }, { $inc: { qty: -shipQty } }, { session });
     });
@@ -128,7 +133,7 @@ export async function cancelPending(id: string) {
   await connectDB();
   const p = await PendingShipmentModel.findById(id);
   if (!p) return { ok: true };
-  await SkuStockModel.updateOne({ sku: p.sku, locationCode: MAIN }, { $inc: { reserved: -p.qty } });
+  await SkuStockModel.updateOne({ sku: stockSkuFor(p.sku), locationCode: MAIN }, { $inc: { reserved: -p.qty } });
   await PendingShipmentModel.deleteOne({ _id: p._id });
   return { ok: true };
 }

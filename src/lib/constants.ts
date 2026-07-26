@@ -49,6 +49,25 @@ export const PLATFORM_LABELS: Record<Platform, string> = {
   OWN_SITE: 'Own Site',
 };
 
+/**
+ * Bundle products that ship another SKU's physical stock. Keyed by SKU prefix:
+ * a matching SKU keeps its own ledger entries (so its sales stay visible), but
+ * every on-hand / reserved effect lands on the mapped SKU (same colour+size
+ * suffix). RRC-012 "Halter with Palazzos" contains the RRC-002 Halter top —
+ * shipping a set takes one halter from the halter pile.
+ */
+export const BUNDLE_STOCK_PREFIX: Record<string, string> = {
+  'RRC-012-': 'RRC-002-',
+};
+
+/** The SKU whose physical stock a given SKU uses (itself unless it's a bundle). */
+export function stockSkuFor(sku: string): string {
+  for (const [prefix, target] of Object.entries(BUNDLE_STOCK_PREFIX)) {
+    if (sku.startsWith(prefix)) return target + sku.slice(prefix.length);
+  }
+  return sku;
+}
+
 /** Special location codes the system relies on, plus normal warehouse codes. */
 export const SystemLocation = {
   /** Main sellable warehouse stock. */

@@ -24,7 +24,8 @@ export default async function RegisterPage() {
       produced: a.produced + r.produced,
       shipped: a.shipped + r.shipped,
       returned: a.returned + r.returned,
-      inStock: a.inStock + r.inStock,
+      // Bundles share another SKU's physical pool — count that pool only once.
+      inStock: a.inStock + (r.sharedStock ? 0 : r.inStock),
     }),
     { produced: 0, shipped: 0, returned: 0, inStock: 0 },
   );

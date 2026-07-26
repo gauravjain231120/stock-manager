@@ -15,10 +15,11 @@ function platformLabel(c?: string | null) {
 export default async function ShipPage({ searchParams }: { searchParams: Promise<{ platform?: string }> }) {
   const [pending, products] = await Promise.all([listPending(), shipProducts()]);
   const units = pending.reduce((a, p) => a + p.qty, 0);
-  // Total queued units per product — a product can appear on >1 row (different platforms),
-  // so "After ship" reflects what's left once ALL its queued units ship, not just this row's.
+  // Total queued units per PHYSICAL stock pool — a product can appear on >1 row
+  // (different platforms), and a bundle draws from its component's pool, so
+  // "After ship" reflects what's left once ALL queued units of that pool ship.
   const queuedBySku = new Map<string, number>();
-  for (const p of pending) queuedBySku.set(p.sku, (queuedBySku.get(p.sku) ?? 0) + p.qty);
+  for (const p of pending) queuedBySku.set(p.stockSku, (queuedBySku.get(p.stockSku) ?? 0) + p.qty);
 
   // Orders/units waiting per platform, busiest first.
   const perPlatform = new Map<string, { orders: number; units: number }>();
@@ -38,12 +39,13 @@ export default async function ShipPage({ searchParams }: { searchParams: Promise
   const rows = shown.map((p) => ({
     id: p.id,
     sku: p.sku,
+    stockSku: p.stockSku,
     name: p.name,
     qty: p.qty,
     channel: p.channel,
     onHand: p.onHand,
-    after: p.onHand - (queuedBySku.get(p.sku) ?? p.qty),
-    short: (queuedBySku.get(p.sku) ?? 0) > p.onHand,
+    after: p.onHand - (queuedBySku.get(p.stockSku) ?? p.qty),
+    short: (queuedBySku.get(p.stockSku) ?? 0) > p.onHand,
   }));
 
   return (

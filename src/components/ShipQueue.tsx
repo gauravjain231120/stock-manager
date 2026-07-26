@@ -10,6 +10,8 @@ import { PLATFORM_LABELS, Platform } from '@/lib/constants';
 export interface QueueRow {
   id: string;
   sku: string;
+  /** The SKU whose physical stock this entry ships (differs for bundle sets). */
+  stockSku: string;
   name: string;
   qty: number;
   channel: string | null;
@@ -40,12 +42,13 @@ export function ShipQueue({ rows, totalCount, platform }: { rows: QueueRow[]; to
   const selectable = rows.filter((r) => r.onHand >= r.qty && r.qty > 0);
   const sel = rows.filter((r) => selected.has(r.id));
   const selUnits = sel.reduce((a, r) => a + r.qty, 0);
-  // Same SKU picked on several rows can still overrun stock — check per-SKU sums.
+  // The same physical pool picked on several rows (same SKU on two platforms, or
+  // a bundle + its component) can still overrun stock — check per-pool sums.
   const selBySku = new Map<string, { qty: number; onHand: number }>();
   for (const r of sel) {
-    const e = selBySku.get(r.sku) ?? { qty: 0, onHand: r.onHand };
+    const e = selBySku.get(r.stockSku) ?? { qty: 0, onHand: r.onHand };
     e.qty += r.qty;
-    selBySku.set(r.sku, e);
+    selBySku.set(r.stockSku, e);
   }
   const selShort = [...selBySku.values()].some((e) => e.qty > e.onHand);
 
@@ -150,10 +153,19 @@ export function ShipQueue({ rows, totalCount, platform }: { rows: QueueRow[]; to
               <Td>
                 <div>{p.name}</div>
                 <div className="font-mono text-[11px] text-neutral-400">{p.sku}</div>
+                {p.stockSku !== p.sku ? (
+                  <div className="text-[11px] text-amber-500">set — ships 1 Halter top ({p.stockSku})</div>
+                ) : null}
               </Td>
               <Td>{platformLabel(p.channel)}</Td>
               <Td right><span className={`font-semibold ${s.color}`}>{p.onHand}</span></Td>
-              <Td right><Badge tone={s.tone}>{s.label}</Badge></Td>
+              <Td right>
+                {p.after < 0 ? (
+                  <Badge tone="danger">Out of stock (make {-p.after})</Badge>
+                ) : (
+                  <Badge tone={s.tone}>{s.label}</Badge>
+                )}
+              </Td>
               <Td right>{p.qty}</Td>
               <Td right><span className={`font-semibold ${stockStatus(p.after).color}`}>{p.after}</span></Td>
               <Td right>

@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import { connectDB } from '@/lib/db';
-import { MovementType, SystemLocation } from '@/lib/constants';
+import { MovementType, SystemLocation, stockSkuFor } from '@/lib/constants';
 import { StockMovementModel } from '@/models/StockMovement';
 import { SkuStockModel } from '@/models/SkuStock';
 
@@ -51,8 +51,9 @@ export async function postMovement(session: mongoose.ClientSession, input: Movem
   const sku = norm(input.sku);
   const locationCode = norm(input.locationCode);
   const [movement] = await StockMovementModel.create([{ ...input, sku, locationCode }], { session });
+  // Bundles: the ledger row stays on the bundle SKU, the physical units on the component.
   await SkuStockModel.updateOne(
-    { sku, locationCode },
+    { sku: stockSkuFor(sku), locationCode },
     { $inc: { onHand: input.qty } },
     { session, upsert: true },
   );
@@ -104,7 +105,7 @@ export async function sellUnits(args: {
       // get null -> abort the transaction.
       const updated = await SkuStockModel.findOneAndUpdate(
         {
-          sku,
+          sku: stockSkuFor(sku),
           locationCode,
           $expr: { $gte: [{ $subtract: ['$onHand', '$reserved'] }, args.qty] },
         },
@@ -165,14 +166,14 @@ export async function transferStock(args: {
   try {
     await session.withTransaction(async () => {
       const dec = await SkuStockModel.findOneAndUpdate(
-        { sku, locationCode: from, $expr: { $gte: [{ $subtract: ['$onHand', '$reserved'] }, args.qty] } },
+        { sku: stockSkuFor(sku), locationCode: from, $expr: { $gte: [{ $subtract: ['$onHand', '$reserved'] }, args.qty] } },
         { $inc: { onHand: -args.qty } },
         { session, returnDocument: 'after' },
       );
       if (!dec) throw new InsufficientStockError(sku, from, args.qty);
 
       await SkuStockModel.updateOne(
-        { sku, locationCode: to },
+        { sku: stockSkuFor(sku), locationCode: to },
         { $inc: { onHand: args.qty } },
         { session, upsert: true },
       );
@@ -199,7 +200,7 @@ export async function setStock(sku: string, newOnHand: number) {
   await connectDB();
   const s = norm(sku);
   const loc = SystemLocation.MAIN;
-  const cur = await SkuStockModel.findOne({ sku: s, locationCode: loc }).lean();
+  const cur = await SkuStockModel.findOne({ sku: stockSkuFor(s), locationCode: loc }).lean();
   const current = cur?.onHand ?? 0;
   const diff = newOnHand - current;
   if (diff !== 0) {
@@ -219,7 +220,7 @@ export async function setStock(sku: string, newOnHand: number) {
 export async function getStock(sku: string, locationCode: string) {
   await connectDB();
   const doc = await SkuStockModel.findOne({
-    sku: norm(sku),
+    sku: stockSkuFor(norm(sku)),
     locationCode: norm(locationCode),
   }).lean();
   const onHand = doc?.onHand ?? 0;
@@ -251,12 +252,23 @@ export async function reconcileFromLedger() {
   const cache = await SkuStockModel.find().lean();
   const cacheMap = new Map(cache.map((c) => [`${c.sku}|${c.locationCode}`, c.onHand]));
 
-  const rows = ledger.map((l) => {
-    const key = `${l._id.sku}|${l._id.locationCode}`;
+  // Bundle ledger rows live on the bundle SKU but their stock on the component —
+  // fold ledger sums onto the stock SKU before comparing with the cache.
+  const folded = new Map<string, { sku: string; locationCode: string; onHand: number }>();
+  for (const l of ledger) {
+    const sku = stockSkuFor(l._id.sku);
+    const key = `${sku}|${l._id.locationCode}`;
+    const e = folded.get(key) ?? { sku, locationCode: l._id.locationCode, onHand: 0 };
+    e.onHand += l.onHand;
+    folded.set(key, e);
+  }
+
+  const rows = [...folded.values()].map((l) => {
+    const key = `${l.sku}|${l.locationCode}`;
     const cached = cacheMap.get(key) ?? 0;
     return {
-      sku: l._id.sku,
-      locationCode: l._id.locationCode,
+      sku: l.sku,
+      locationCode: l.locationCode,
       ledgerOnHand: l.onHand,
       cachedOnHand: cached,
       inSync: l.onHand === cached,

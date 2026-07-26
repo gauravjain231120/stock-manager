@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import { connectDB } from '@/lib/db';
-import { MovementType, SystemLocation } from '@/lib/constants';
+import { MovementType, SystemLocation, stockSkuFor } from '@/lib/constants';
 import { applyMovement, sellUnits } from '@/lib/stock';
 import { ProductModel } from '@/models/Product';
 import { StockMovementModel } from '@/models/StockMovement';
@@ -93,7 +93,7 @@ export async function editEntry(
       // 1) reverse the old movement
       if (reverseDelta !== 0) {
         const rev = await SkuStockModel.findOneAndUpdate(
-          { sku: mv.sku, locationCode: mv.locationCode, $expr: { $gte: [{ $add: ['$onHand', reverseDelta] }, 0] } },
+          { sku: stockSkuFor(mv.sku), locationCode: mv.locationCode, $expr: { $gte: [{ $add: ['$onHand', reverseDelta] }, 0] } },
           { $inc: { onHand: reverseDelta } },
           { session, returnDocument: 'after' },
         );
@@ -104,14 +104,14 @@ export async function editEntry(
       // 2) apply the new values
       if (isOutbound) {
         const dec = await SkuStockModel.findOneAndUpdate(
-          { sku: mv.sku, locationCode: mv.locationCode, $expr: { $gte: [{ $subtract: ['$onHand', '$reserved'] }, newQty] } },
+          { sku: stockSkuFor(mv.sku), locationCode: mv.locationCode, $expr: { $gte: [{ $subtract: ['$onHand', '$reserved'] }, newQty] } },
           { $inc: { onHand: -newQty } },
           { session, returnDocument: 'after' },
         );
         if (!dec) throw new Error('Cannot edit: not enough stock to ship that quantity.');
       } else {
         await SkuStockModel.updateOne(
-          { sku: mv.sku, locationCode: mv.locationCode },
+          { sku: stockSkuFor(mv.sku), locationCode: mv.locationCode },
           { $inc: { onHand: newQty } },
           { session, upsert: true },
         );
@@ -146,7 +146,7 @@ export async function deleteEntry(movementId: string) {
     await session.withTransaction(async () => {
       if (reverse !== 0) {
         const upd = await SkuStockModel.findOneAndUpdate(
-          { sku: mv.sku, locationCode: mv.locationCode, $expr: { $gte: [{ $add: ['$onHand', reverse] }, 0] } },
+          { sku: stockSkuFor(mv.sku), locationCode: mv.locationCode, $expr: { $gte: [{ $add: ['$onHand', reverse] }, 0] } },
           { $inc: { onHand: reverse } },
           { session, returnDocument: 'after' },
         );
@@ -169,6 +169,8 @@ export interface RegisterRow {
   shipped: number;
   returned: number;
   inStock: number;
+  /** True for bundles: inStock is another SKU's pool, so don't sum it twice. */
+  sharedStock?: boolean;
 }
 
 /** Per-product totals for the three actions + current stock. */
@@ -209,7 +211,8 @@ export async function registerTotals(): Promise<RegisterRow[]> {
       produced: a.produced,
       shipped: a.shipped,
       returned: a.returned,
-      inStock: inStockBySku.get(p.sku) ?? 0,
+      inStock: inStockBySku.get(stockSkuFor(p.sku)) ?? 0,
+      sharedStock: stockSkuFor(p.sku) !== p.sku || undefined,
     };
   });
 }
