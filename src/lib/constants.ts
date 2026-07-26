@@ -68,6 +68,23 @@ export function stockSkuFor(sku: string): string {
   return sku;
 }
 
+/**
+ * Info-only companion stock shown next to a bundle in the ship queue (never
+ * deducted): the palazzo for a RRC-012 set comes from the matching Co-ord Set,
+ * so its count is displayed for reference.
+ */
+const BUNDLE_INFO_PREFIX: Record<string, { prefix: string; label: string }> = {
+  'RRC-012-': { prefix: 'RRC-001-', label: 'Co-ord Set' },
+};
+
+/** Companion SKU + label to display for a bundle SKU, or null for normal SKUs. */
+export function infoStockFor(sku: string): { sku: string; label: string } | null {
+  for (const [from, info] of Object.entries(BUNDLE_INFO_PREFIX)) {
+    if (sku.startsWith(from)) return { sku: info.prefix + sku.slice(from.length), label: info.label };
+  }
+  return null;
+}
+
 /** Special location codes the system relies on, plus normal warehouse codes. */
 export const SystemLocation = {
   /** Main sellable warehouse stock. */

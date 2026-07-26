@@ -4,7 +4,7 @@ import { ProductModel } from '@/models/Product';
 import { SkuStockModel } from '@/models/SkuStock';
 import { PendingShipmentModel } from '@/models/PendingShipment';
 import { postMovement } from '@/lib/stock';
-import { MovementType, SystemLocation, stockSkuFor } from '@/lib/constants';
+import { MovementType, SystemLocation, stockSkuFor, infoStockFor } from '@/lib/constants';
 
 const MAIN = SystemLocation.MAIN;
 
@@ -20,6 +20,8 @@ export interface PendingRow {
   createdAt: string;
   onHand: number;
   available: number;
+  /** Companion stock shown for reference next to bundles (never deducted). */
+  info: { sku: string; label: string; onHand: number } | null;
 }
 
 export interface ShipProduct {
@@ -74,7 +76,8 @@ export async function listPending(): Promise<PendingRow[]> {
   await connectDB();
   const items = await PendingShipmentModel.find().sort({ createdAt: 1 }).lean();
   const skus = [...new Set(items.map((i) => i.sku))];
-  const stockSkus = [...new Set(items.map((i) => stockSkuFor(i.sku)))];
+  const infoSkus = items.map((i) => infoStockFor(i.sku)?.sku).filter((s): s is string => Boolean(s));
+  const stockSkus = [...new Set([...items.map((i) => stockSkuFor(i.sku)), ...infoSkus])];
   const [products, stocks] = await Promise.all([
     ProductModel.find({ sku: { $in: skus } }, { sku: 1, name: 1 }).lean(),
     SkuStockModel.find({ sku: { $in: stockSkus }, locationCode: MAIN }).lean(),
@@ -84,6 +87,7 @@ export async function listPending(): Promise<PendingRow[]> {
   return items.map((i) => {
     const st = stockBy.get(stockSkuFor(i.sku));
     const onHand = st?.onHand ?? 0;
+    const inf = infoStockFor(i.sku);
     return {
       id: String(i._id),
       sku: i.sku,
@@ -95,6 +99,7 @@ export async function listPending(): Promise<PendingRow[]> {
       createdAt: (i.createdAt as unknown as Date).toISOString(),
       onHand,
       available: onHand - (st?.reserved ?? 0),
+      info: inf ? { sku: inf.sku, label: inf.label, onHand: stockBy.get(inf.sku)?.onHand ?? 0 } : null,
     };
   });
 }

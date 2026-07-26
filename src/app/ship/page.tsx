@@ -44,6 +44,7 @@ export default async function ShipPage({ searchParams }: { searchParams: Promise
     qty: p.qty,
     channel: p.channel,
     onHand: p.onHand,
+    info: p.info,
     after: p.onHand - (queuedBySku.get(p.stockSku) ?? p.qty),
     short: (queuedBySku.get(p.stockSku) ?? 0) > p.onHand,
   }));

@@ -20,6 +20,8 @@ export interface QueueRow {
   after: number;
   /** True when this SKU's total queued units exceed stock (blocks Ship all). */
   short: boolean;
+  /** Companion stock shown for reference next to bundles (never deducted). */
+  info: { sku: string; label: string; onHand: number } | null;
 }
 
 function platformLabel(c?: string | null) {
@@ -155,7 +157,10 @@ export function ShipQueue({ rows, totalCount, platform }: { rows: QueueRow[]; to
                 <div>{p.name}</div>
                 <div className="font-mono text-[11px] text-neutral-400">{p.sku}</div>
                 {p.stockSku !== p.sku ? (
-                  <div className="text-[11px] text-amber-500">set — ships 1 Halter top ({p.stockSku})</div>
+                  <div className="text-[11px] text-amber-500">
+                    set — ships 1 Halter top ({p.stockSku})
+                    {p.info ? ` (${p.info.label}: ${p.info.onHand})` : ''}
+                  </div>
                 ) : null}
               </Td>
               <Td>{platformLabel(p.channel)}</Td>
