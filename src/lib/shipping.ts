@@ -133,6 +133,17 @@ export async function cancelPending(id: string) {
   return { ok: true };
 }
 
+/** Pack & ship a chosen set of queue entries (each shipped in full). */
+export async function shipSelectedPending(ids: string[]) {
+  await connectDB();
+  let shipped = 0;
+  for (const id of ids) {
+    await shipPending(id);
+    shipped++;
+  }
+  return { shipped };
+}
+
 export async function shipAllPending(channel?: string) {
   await connectDB();
   const items = await PendingShipmentModel.find(channel ? { channel } : {}).lean();
