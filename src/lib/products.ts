@@ -1,5 +1,5 @@
 import { connectDB } from '@/lib/db';
-import { MovementType, SystemLocation } from '@/lib/constants';
+import { MovementType, SystemLocation, stockSkuFor } from '@/lib/constants';
 import { applyMovement } from '@/lib/stock';
 import { ProductModel } from '@/models/Product';
 import { ProductGroupModel } from '@/models/ProductGroup';
@@ -287,7 +287,8 @@ export async function getProductGroups(): Promise<{ groups: GroupView[]; ungroup
         sku: p.sku,
         size: p.attributes?.get?.('size') ?? (p.attributes as unknown as Record<string, string>)?.size,
         color: p.attributes?.get?.('color') ?? (p.attributes as unknown as Record<string, string>)?.color,
-        onHand: onHandBySku.get(p.sku) ?? 0,
+        // Bundles show their component's pool (e.g. the set shows halter stock).
+        onHand: onHandBySku.get(stockSkuFor(p.sku)) ?? 0,
       }))
       .sort((a, b) => a.sku.localeCompare(b.sku));
     return {

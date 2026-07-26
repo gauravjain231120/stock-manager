@@ -4,6 +4,7 @@ import { SkuStockModel } from '@/models/SkuStock';
 import { ChannelListingModel } from '@/models/ChannelListing';
 import { LocationModel } from '@/models/Location';
 import { movementSummary } from '@/lib/stock';
+import { stockSkuFor } from '@/lib/constants';
 
 export interface InventoryRow {
   sku: string;
@@ -66,7 +67,8 @@ export async function getInventoryOverview(): Promise<InventoryOverview> {
   }
 
   const rows: InventoryRow[] = products.map((p) => {
-    const s = sellableBySku.get(p.sku) ?? { onHand: 0, reserved: 0 };
+    // Bundles show their component's pool (e.g. the set shows halter stock).
+    const s = sellableBySku.get(stockSkuFor(p.sku)) ?? { onHand: 0, reserved: 0 };
     return {
       sku: p.sku,
       name: p.name,
@@ -77,7 +79,8 @@ export async function getInventoryOverview(): Promise<InventoryOverview> {
     };
   });
 
-  const units = rows.reduce((acc, r) => acc + r.onHand, 0);
+  // A bundle's units are the same physical pieces as its component's — count each pool once.
+  const units = rows.reduce((acc, r) => acc + (stockSkuFor(r.sku) === r.sku ? r.onHand : 0), 0);
 
   return { summary, totals: { skus: rows.length, units, damaged }, rows };
 }
