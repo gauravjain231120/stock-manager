@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Panel, Table, Th, Td, Tr, Badge } from '@/components/ui';
 import { ActionButton } from '@/components/ActionButton';
 import { ShipButton } from '@/components/ShipButton';
+import { CancelButton } from '@/components/CancelButton';
 import { PlatformFilter } from '@/components/PlatformFilter';
 import { PLATFORM_LABELS, Platform } from '@/lib/constants';
 
@@ -171,17 +172,7 @@ export function ShipQueue({ rows, totalCount, platform }: { rows: QueueRow[]; to
               <Td right>
                 <span className="inline-flex gap-2">
                   <ShipButton id={p.id} name={p.name} sku={p.sku} qty={p.qty} stock={p.onHand} />
-                  <ActionButton
-                    label="Cancel"
-                    endpoint={`/api/pending/${p.id}`}
-                    method="DELETE"
-                    variant="secondary"
-                    confirmTitle="Remove from queue?"
-                    confirm="The reserved stock is released. No stock is deducted."
-                    confirmDetails={[{ label: 'Product', value: p.sku }, { label: 'Qty', value: String(p.qty) }]}
-                    confirmLabel="Remove"
-                    successMessage="Removed"
-                  />
+                  <CancelButton id={p.id} name={p.name} sku={p.sku} qty={p.qty} />
                 </span>
               </Td>
             </Tr>

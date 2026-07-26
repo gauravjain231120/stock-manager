@@ -128,14 +128,20 @@ export async function shipPending(id: string, qty?: number) {
   return { sku: p.sku, qty: shipQty };
 }
 
-/** Cancel: release the reservation and remove from queue. No stock deducted. */
-export async function cancelPending(id: string) {
+/**
+ * Cancel `qty` units of a queue entry (defaults to the whole entry): release
+ * that many reservations, and remove the entry or just reduce its quantity.
+ * No stock is deducted.
+ */
+export async function cancelPending(id: string, qty?: number) {
   await connectDB();
   const p = await PendingShipmentModel.findById(id);
   if (!p) return { ok: true };
-  await SkuStockModel.updateOne({ sku: stockSkuFor(p.sku), locationCode: MAIN }, { $inc: { reserved: -p.qty } });
-  await PendingShipmentModel.deleteOne({ _id: p._id });
-  return { ok: true };
+  const cancelQty = qty && qty > 0 ? Math.min(Math.floor(qty), p.qty) : p.qty;
+  await SkuStockModel.updateOne({ sku: stockSkuFor(p.sku), locationCode: MAIN }, { $inc: { reserved: -cancelQty } });
+  if (cancelQty >= p.qty) await PendingShipmentModel.deleteOne({ _id: p._id });
+  else await PendingShipmentModel.updateOne({ _id: p._id }, { $inc: { qty: -cancelQty } });
+  return { ok: true, cancelled: cancelQty };
 }
 
 /** Pack & ship a chosen set of queue entries (each shipped in full). */
