@@ -8,8 +8,9 @@ const TOKEN = process.env.AUTH_TOKEN ?? 'rangrooh-stock-authed-9c4458';
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // Public routes (login screen + its API).
-  if (pathname === '/login' || pathname === '/api/login' || pathname === '/api/logout') {
+  // Public routes (login screen + its API). /api/backup guards itself with
+  // CRON_SECRET / the auth cookie so Vercel Cron can reach it.
+  if (pathname === '/login' || pathname === '/api/login' || pathname === '/api/logout' || pathname === '/api/backup') {
     return NextResponse.next();
   }
 
