@@ -6,6 +6,7 @@ import { PendingShipmentModel } from '@/models/PendingShipment';
 import { StockMovementModel } from '@/models/StockMovement';
 import { postMovement } from '@/lib/stock';
 import { MovementType, SystemLocation, stockSkuFor, infoStockFor } from '@/lib/constants';
+import { dayKey } from '@/lib/format';
 
 const MAIN = SystemLocation.MAIN;
 
@@ -291,6 +292,8 @@ export interface ShippedStats {
   last30Units: number;
   tracked: number;
   untracked: number;
+  /** Today's date in India time (YYYY-MM-DD), for the day picker's default. */
+  today: string;
 }
 
 /** Headline numbers for the Shipped page, counted over every shipment ever. */
@@ -322,6 +325,7 @@ export async function shippedStats(): Promise<ShippedStats> {
     last30Units: agg?.last30Units ?? 0,
     tracked,
     untracked: shipments - tracked,
+    today: dayKey(new Date()),
   };
 }
 

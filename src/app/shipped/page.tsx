@@ -1,6 +1,7 @@
 import { listShipped, shippedStats } from '@/lib/shipping';
 import { PageHeader, StatCard } from '@/components/ui';
 import { ShippedTable } from '@/components/ShippedTable';
+import { ShippedDayPanel } from '@/components/ShippedDayPanel';
 import { num } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
@@ -18,6 +19,10 @@ export default async function ShippedPage() {
         <StatCard label="Last 30 days" value={num(stats.last30Units)} hint={`${stats.last30Shipments} shipments`} />
         <StatCard label="With tracking" value={num(stats.tracked)} hint={`${stats.untracked} without`} />
       </section>
+
+      <div className="mb-6">
+        <ShippedDayPanel rows={rows} today={stats.today} />
+      </div>
 
       <ShippedTable rows={rows} />
     </main>
