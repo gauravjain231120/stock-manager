@@ -115,6 +115,52 @@ export async function receiveReturn(id: string, condition: ReturnCondition, note
   return { sku: rec.sku, qty: rec.qty, condition };
 }
 
+/**
+ * Fix the details of a parcel that hasn't arrived yet — wrong tracking number,
+ * wrong size picked, and so on. Nothing has touched stock at this point, so every
+ * field is safe to change. Received parcels are locked.
+ */
+export async function updateExpectedReturn(
+  id: string,
+  changes: { trackingId?: string; sku?: string; channel?: string; orderId?: string; qty?: number; date?: Date },
+) {
+  await connectDB();
+  const rec = await ReturnShipmentModel.findById(id);
+  if (!rec) throw new Error('Return not found');
+  if (rec.status === 'RECEIVED') throw new Error('Already received — it cannot be edited');
+
+  if (changes.trackingId !== undefined) {
+    const trackingId = normTracking(changes.trackingId);
+    if (!trackingId) throw new Error('Tracking ID is required');
+    if (trackingId !== rec.trackingId) {
+      const clash = await ReturnShipmentModel.exists({ trackingId, _id: { $ne: rec._id } });
+      if (clash) throw new Error(`Tracking ${trackingId} is already in the list`);
+      rec.trackingId = trackingId;
+    }
+  }
+
+  if (changes.sku !== undefined) {
+    const sku = changes.sku.trim().toUpperCase();
+    if (!(await ProductModel.exists({ sku }))) throw new Error('Product not found');
+    rec.sku = sku;
+  }
+
+  if (changes.qty !== undefined) {
+    const qty = Math.floor(changes.qty);
+    if (!(qty >= 1)) throw new Error('Quantity must be at least 1');
+    rec.qty = qty;
+  }
+
+  if (changes.channel !== undefined) {
+    rec.channel = PLATFORMS.includes(changes.channel as Platform) ? (changes.channel as Platform) : undefined;
+  }
+  if (changes.orderId !== undefined) rec.orderId = changes.orderId.trim() || undefined;
+  if (changes.date !== undefined) rec.initiatedAt = changes.date;
+
+  await rec.save();
+  return { id: String(rec._id), trackingId: rec.trackingId };
+}
+
 /** Remove an expected return added by mistake. Received ones can't be deleted. */
 export async function deleteExpectedReturn(id: string) {
   await connectDB();

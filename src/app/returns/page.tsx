@@ -15,6 +15,7 @@ export default async function ReturnsPage() {
     ProductModel.find({ active: true }, { sku: 1, name: 1 }).sort({ sku: 1 }).lean(),
   ]);
 
+  const productOptions = products.map((p) => ({ sku: p.sku, name: p.name }));
   const expected = rows.filter((r) => r.status === 'EXPECTED');
   const received = rows.filter((r) => r.status === 'RECEIVED');
   const overdue = expected.filter((r) => r.overdue).length;
@@ -39,10 +40,10 @@ export default async function ReturnsPage() {
       </section>
 
       <div className="mb-6">
-        <AddReturnForm products={products.map((p) => ({ sku: p.sku, name: p.name }))} />
+        <AddReturnForm products={productOptions} />
       </div>
 
-      <ReturnLists expected={expected} received={received} />
+      <ReturnLists expected={expected} received={received} products={productOptions} />
     </main>
   );
 }

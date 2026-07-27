@@ -1,4 +1,4 @@
-import { receiveReturn, deleteExpectedReturn, ReturnCondition } from '@/lib/returnShipments';
+import { receiveReturn, deleteExpectedReturn, updateExpectedReturn, ReturnCondition } from '@/lib/returnShipments';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,6 +14,25 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   }
   try {
     const res = await receiveReturn(id, condition, typeof body?.note === 'string' ? body.note : undefined);
+    return Response.json({ ok: true, ...res });
+  } catch (err) {
+    return Response.json({ error: err instanceof Error ? err.message : String(err) }, { status: 400 });
+  }
+}
+
+/** PATCH /api/return-shipments/[id] -> fix the details of a parcel still on its way. */
+export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const { id } = await ctx.params;
+  const body = await req.json().catch(() => ({}));
+  try {
+    const res = await updateExpectedReturn(id, {
+      trackingId: typeof body?.trackingId === 'string' ? body.trackingId : undefined,
+      sku: typeof body?.sku === 'string' ? body.sku : undefined,
+      channel: typeof body?.channel === 'string' ? body.channel : undefined,
+      orderId: typeof body?.orderId === 'string' ? body.orderId : undefined,
+      qty: typeof body?.qty === 'number' ? body.qty : undefined,
+      date: typeof body?.date === 'string' && body.date ? new Date(body.date) : undefined,
+    });
     return Response.json({ ok: true, ...res });
   } catch (err) {
     return Response.json({ error: err instanceof Error ? err.message : String(err) }, { status: 400 });

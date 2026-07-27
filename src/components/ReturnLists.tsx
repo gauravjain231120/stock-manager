@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Panel, Table, Th, Td, Tr, Badge } from '@/components/ui';
 import { ActionButton } from '@/components/ActionButton';
+import { EditReturnButton } from '@/components/EditReturnButton';
 import { dateOnly, matchesSearch } from '@/lib/format';
 import { PLATFORM_LABELS, Platform } from '@/lib/constants';
 import type { ReturnRow } from '@/lib/returnShipments';
@@ -26,7 +27,15 @@ function ProductCell({ r }: { r: ReturnRow }) {
 }
 
 /** The two return lists: parcels still coming, and ones already scanned in. */
-export function ReturnLists({ expected, received }: { expected: ReturnRow[]; received: ReturnRow[] }) {
+export function ReturnLists({
+  expected,
+  received,
+  products,
+}: {
+  expected: ReturnRow[];
+  received: ReturnRow[];
+  products: { sku: string; name: string }[];
+}) {
   const [q, setQ] = useState('');
 
   const match = (r: ReturnRow) =>
@@ -48,7 +57,7 @@ export function ReturnLists({ expected, received }: { expected: ReturnRow[]; rec
         }
       >
         <Table
-          head={<><Th>Started</Th><Th>Tracking</Th><Th>Product</Th><Th>Platform</Th><Th right>Qty</Th><Th right>Waiting</Th><Th right>Remove</Th></>}
+          head={<><Th>Started</Th><Th>Tracking</Th><Th>Product</Th><Th>Platform</Th><Th right>Qty</Th><Th right>Waiting</Th><Th right>Edit / Remove</Th></>}
           empty={exp.length === 0}
         >
           {exp.map((r) => (
@@ -66,17 +75,20 @@ export function ReturnLists({ expected, received }: { expected: ReturnRow[]; rec
                 )}
               </Td>
               <Td right>
-                <ActionButton
-                  label="Remove"
-                  endpoint={`/api/return-shipments/${r.id}`}
-                  method="DELETE"
-                  variant="secondary"
-                  confirmTitle="Remove this return?"
-                  confirm="It was added by mistake — nothing happens to stock."
-                  confirmDetails={[{ label: 'Tracking', value: r.trackingId }, { label: 'Product', value: r.sku }]}
-                  confirmLabel="Remove"
-                  successMessage="Removed"
-                />
+                <span className="inline-flex gap-2">
+                  <EditReturnButton row={r} products={products} />
+                  <ActionButton
+                    label="Remove"
+                    endpoint={`/api/return-shipments/${r.id}`}
+                    method="DELETE"
+                    variant="secondary"
+                    confirmTitle="Remove this return?"
+                    confirm="It was added by mistake — nothing happens to stock."
+                    confirmDetails={[{ label: 'Tracking', value: r.trackingId }, { label: 'Product', value: r.sku }]}
+                    confirmLabel="Remove"
+                    successMessage="Removed"
+                  />
+                </span>
               </Td>
             </Tr>
           ))}
