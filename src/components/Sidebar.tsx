@@ -3,12 +3,13 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { ClipboardList, Truck, Shirt, Boxes, Factory, LogOut, Menu, X } from 'lucide-react';
+import { ClipboardList, Truck, Undo2, Shirt, Boxes, Factory, LogOut, Menu, X } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
 
 const NAV = [
   { href: '/register', label: 'Stock Log', Icon: ClipboardList },
   { href: '/ship', label: 'Ready to Ship', Icon: Truck },
+  { href: '/returns', label: 'Returns', Icon: Undo2 },
   { href: '/products', label: 'Products', Icon: Shirt },
   { href: '/inventory', label: 'Inventory', Icon: Boxes },
   { href: '/produce', label: 'Produce', Icon: Factory },
@@ -18,14 +19,19 @@ export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [toPack, setToPack] = useState<number | null>(null);
+  const [incoming, setIncoming] = useState<number | null>(null);
   const [open, setOpen] = useState(false);
 
-  // Live count for the "Ready to Ship" badge; refreshes when the page changes.
+  // Live counts for the "Ready to Ship" and "Returns" badges; refresh on navigation.
   useEffect(() => {
     let on = true;
     fetch('/api/pending')
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (on && d) setToPack(d.count ?? 0); })
+      .catch(() => {});
+    fetch('/api/return-shipments')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (on && d) setIncoming(d.count ?? 0); })
       .catch(() => {});
     return () => { on = false; };
   }, [pathname]);
@@ -85,8 +91,10 @@ export function Sidebar() {
               >
                 <Icon size={18} className="shrink-0" />
                 <span className="flex-1">{label}</span>
-                {href === '/ship' && toPack ? (
-                  <span className={`rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${active ? 'bg-white/20 text-white' : 'bg-brand-600 text-white'}`}>{toPack}</span>
+                {(href === '/ship' && toPack) || (href === '/returns' && incoming) ? (
+                  <span className={`rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${active ? 'bg-white/20 text-white' : 'bg-brand-600 text-white'}`}>
+                    {href === '/ship' ? toPack : incoming}
+                  </span>
                 ) : null}
               </Link>
             );
