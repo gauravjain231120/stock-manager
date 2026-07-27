@@ -189,7 +189,7 @@ export function ShipQueue({
               <Td right><span className={`font-semibold ${stockStatus(p.after).color}`}>{p.after}</span></Td>
               <Td right>
                 <span className="inline-flex gap-2">
-                  <ShipButton id={p.id} name={p.name} sku={p.sku} qty={p.qty} stock={p.onHand} />
+                  <ShipButton id={p.id} name={p.name} sku={p.sku} qty={p.qty} stock={p.onHand} orderId={p.orderId} />
                   <EditPendingButton row={p} products={products} />
                   <CancelButton id={p.id} name={p.name} sku={p.sku} qty={p.qty} />
                 </span>

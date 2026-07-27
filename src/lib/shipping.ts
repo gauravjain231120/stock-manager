@@ -121,12 +121,18 @@ export async function pendingCount(): Promise<number> {
  * deduct stock, release that many reservations, and remove the entry (or reduce
  * its qty if only part was shipped).
  */
-export async function shipPending(id: string, qty?: number, trackingId?: string) {
+export async function shipPending(id: string, qty?: number, trackingId?: string, orderId?: string) {
   await connectDB();
   const p = await PendingShipmentModel.findById(id);
   if (!p) throw new Error('Item not found');
   const shipQty = qty && qty > 0 ? Math.min(Math.floor(qty), p.qty) : p.qty;
   const tracking = trackingId?.trim().toUpperCase().replace(/[^A-Z0-9]/g, '') || undefined;
+  // An order number typed at packing time wins, and sticks to whatever is left
+  // on the row when only part of it ships.
+  const order = orderId?.trim() || p.orderId || undefined;
+  if (orderId?.trim() && orderId.trim() !== p.orderId) {
+    await PendingShipmentModel.updateOne({ _id: p._id }, { $set: { orderId: orderId.trim() } });
+  }
   const session = await mongoose.startSession();
   try {
     await session.withTransaction(async () => {
@@ -138,7 +144,7 @@ export async function shipPending(id: string, qty?: number, trackingId?: string)
         channel: p.channel || undefined,
         refType: 'SHIP',
         trackingId: tracking,
-        orderId: p.orderId || undefined,
+        orderId: order,
       });
       await SkuStockModel.updateOne({ sku: stockSkuFor(p.sku), locationCode: MAIN }, { $inc: { reserved: -shipQty } }, { session });
       if (shipQty >= p.qty) await PendingShipmentModel.deleteOne({ _id: p._id }, { session });

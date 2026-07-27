@@ -6,13 +6,28 @@ import { Minus, Plus, ScanLine } from 'lucide-react';
 import { useToast } from '@/components/ToastProvider';
 
 /** Ship button that opens a "how many?" picker (with confirm) before shipping. */
-export function ShipButton({ id, name, sku, qty, stock }: { id: string; name: string; sku: string; qty: number; stock: number }) {
+export function ShipButton({
+  id,
+  name,
+  sku,
+  qty,
+  stock,
+  orderId,
+}: {
+  id: string;
+  name: string;
+  sku: string;
+  qty: number;
+  stock: number;
+  orderId?: string | null;
+}) {
   const router = useRouter();
   const toast = useToast();
   const maxShip = Math.min(qty, stock); // can't ship more than ordered or more than in stock
   const [open, setOpen] = useState(false);
   const [n, setN] = useState(maxShip);
   const [tracking, setTracking] = useState('');
+  const [order, setOrder] = useState(orderId ?? '');
   const [busy, setBusy] = useState(false);
 
   const clamp = (v: number) => Math.max(1, Math.min(v, maxShip));
@@ -24,7 +39,7 @@ export function ShipButton({ id, name, sku, qty, stock }: { id: string; name: st
       const res = await fetch(`/api/pending/${id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ qty: sendQty, trackingId: tracking.trim() || undefined }),
+        body: JSON.stringify({ qty: sendQty, trackingId: tracking.trim() || undefined, orderId: order.trim() || undefined }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) toast.error(data?.error || 'Failed to ship');
@@ -41,7 +56,7 @@ export function ShipButton({ id, name, sku, qty, stock }: { id: string; name: st
   return (
     <>
       <button
-        onClick={() => { setN(maxShip); setTracking(''); setOpen(true); }}
+        onClick={() => { setN(maxShip); setTracking(''); setOrder(orderId ?? ''); setOpen(true); }}
         disabled={maxShip <= 0}
         title={maxShip <= 0 ? 'Out of stock — produce it first' : undefined}
         className="rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40"
@@ -78,6 +93,17 @@ export function ShipButton({ id, name, sku, qty, stock }: { id: string; name: st
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); ship(); } }}
                 autoFocus
                 placeholder="Tracking / AWB…"
+                className="rounded-lg border border-black/15 bg-transparent px-3 py-2 font-mono text-sm text-neutral-900 dark:border-white/20 dark:text-white"
+              />
+            </label>
+
+            <label className="mt-3 flex flex-col gap-1 text-xs text-neutral-500">
+              <span>Order no. <span className="text-neutral-400">(optional)</span></span>
+              <input
+                value={order}
+                onChange={(e) => setOrder(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); ship(); } }}
+                placeholder="405-1234567…"
                 className="rounded-lg border border-black/15 bg-transparent px-3 py-2 font-mono text-sm text-neutral-900 dark:border-white/20 dark:text-white"
               />
             </label>
