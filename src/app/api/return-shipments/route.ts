@@ -21,6 +21,7 @@ export async function POST(req: Request) {
       channel: typeof body?.channel === 'string' ? body.channel : undefined,
       orderId: typeof body?.orderId === 'string' ? body.orderId : undefined,
       qty: typeof body?.qty === 'number' ? body.qty : undefined,
+      date: typeof body?.date === 'string' && body.date ? new Date(body.date) : undefined,
     });
     return Response.json({ ok: true, ...res });
   } catch (err) {

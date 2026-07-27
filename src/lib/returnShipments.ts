@@ -39,6 +39,8 @@ export async function addExpectedReturn(input: {
   channel?: string;
   orderId?: string;
   qty?: number;
+  /** When the customer started the return — defaults to now. Drives the waiting count. */
+  date?: Date;
 }) {
   await connectDB();
   const trackingId = normTracking(input.trackingId);
@@ -58,6 +60,7 @@ export async function addExpectedReturn(input: {
     channel,
     orderId: input.orderId?.trim() || undefined,
     qty,
+    initiatedAt: input.date ?? new Date(),
   });
   return { id: String(doc._id), trackingId };
 }
