@@ -5,6 +5,7 @@ import { Panel, Table, Th, Td, Tr, Badge } from '@/components/ui';
 import { ActionButton } from '@/components/ActionButton';
 import { ShipButton } from '@/components/ShipButton';
 import { CancelButton } from '@/components/CancelButton';
+import { EditPendingButton } from '@/components/EditPendingButton';
 import { PlatformFilter } from '@/components/PlatformFilter';
 import { PLATFORM_LABELS, Platform } from '@/lib/constants';
 
@@ -22,6 +23,7 @@ export interface QueueRow {
   short: boolean;
   /** Companion stock shown for reference next to bundles (never deducted). */
   info: { sku: string; label: string; onHand: number } | null;
+  orderId: string | null;
 }
 
 function platformLabel(c?: string | null) {
@@ -38,7 +40,17 @@ function stockStatus(n: number) {
 const checkboxCls = 'size-4 accent-brand-600 disabled:cursor-not-allowed disabled:opacity-40';
 
 /** The Ready-to-Ship queue: filterable table with per-row Ship/Cancel, multi-select, and Ship all. */
-export function ShipQueue({ rows, totalCount, platform }: { rows: QueueRow[]; totalCount: number; platform: Platform | null }) {
+export function ShipQueue({
+  rows,
+  totalCount,
+  platform,
+  products,
+}: {
+  rows: QueueRow[];
+  totalCount: number;
+  platform: Platform | null;
+  products: { sku: string; name: string }[];
+}) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   // Rows that can be ticked: enough stock to ship the entry in full.
@@ -177,6 +189,7 @@ export function ShipQueue({ rows, totalCount, platform }: { rows: QueueRow[]; to
               <Td right>
                 <span className="inline-flex gap-2">
                   <ShipButton id={p.id} name={p.name} sku={p.sku} qty={p.qty} stock={p.onHand} />
+                  <EditPendingButton row={p} products={products} />
                   <CancelButton id={p.id} name={p.name} sku={p.sku} qty={p.qty} />
                 </span>
               </Td>

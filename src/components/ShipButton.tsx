@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Minus, Plus } from 'lucide-react';
+import { Minus, Plus, ScanLine } from 'lucide-react';
 import { useToast } from '@/components/ToastProvider';
 
 /** Ship button that opens a "how many?" picker (with confirm) before shipping. */
@@ -12,6 +12,7 @@ export function ShipButton({ id, name, sku, qty, stock }: { id: string; name: st
   const maxShip = Math.min(qty, stock); // can't ship more than ordered or more than in stock
   const [open, setOpen] = useState(false);
   const [n, setN] = useState(maxShip);
+  const [tracking, setTracking] = useState('');
   const [busy, setBusy] = useState(false);
 
   const clamp = (v: number) => Math.max(1, Math.min(v, maxShip));
@@ -23,7 +24,7 @@ export function ShipButton({ id, name, sku, qty, stock }: { id: string; name: st
       const res = await fetch(`/api/pending/${id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ qty: sendQty }),
+        body: JSON.stringify({ qty: sendQty, trackingId: tracking.trim() || undefined }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) toast.error(data?.error || 'Failed to ship');
@@ -40,7 +41,7 @@ export function ShipButton({ id, name, sku, qty, stock }: { id: string; name: st
   return (
     <>
       <button
-        onClick={() => { setN(maxShip); setOpen(true); }}
+        onClick={() => { setN(maxShip); setTracking(''); setOpen(true); }}
         disabled={maxShip <= 0}
         title={maxShip <= 0 ? 'Out of stock — produce it first' : undefined}
         className="rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40"
@@ -68,6 +69,18 @@ export function ShipButton({ id, name, sku, qty, stock }: { id: string; name: st
               <button type="button" onClick={() => setN((v) => clamp(v + 1))} className="rounded-lg border border-black/15 p-1.5 hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"><Plus size={16} /></button>
               <span className="text-xs text-neutral-400">of {qty} ordered · {stock} in stock</span>
             </div>
+
+            <label className="mt-4 flex flex-col gap-1 text-xs text-neutral-500">
+              <span className="flex items-center gap-1.5"><ScanLine size={13} /> Scan the shipping label <span className="text-neutral-400">(optional)</span></span>
+              <input
+                value={tracking}
+                onChange={(e) => setTracking(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); ship(); } }}
+                autoFocus
+                placeholder="Tracking / AWB…"
+                className="rounded-lg border border-black/15 bg-transparent px-3 py-2 font-mono text-sm text-neutral-900 dark:border-white/20 dark:text-white"
+              />
+            </label>
 
             <div className="mt-5 flex justify-end gap-2">
               <button onClick={() => setOpen(false)} className="rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">Cancel</button>

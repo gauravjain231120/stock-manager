@@ -45,6 +45,7 @@ export default async function ShipPage({ searchParams }: { searchParams: Promise
     channel: p.channel,
     onHand: p.onHand,
     info: p.info,
+    orderId: p.orderId,
     after: p.onHand - (queuedBySku.get(p.stockSku) ?? p.qty),
     short: (queuedBySku.get(p.stockSku) ?? 0) > p.onHand,
   }));
@@ -70,7 +71,12 @@ export default async function ShipPage({ searchParams }: { searchParams: Promise
         ))}
       </section>
 
-      <ShipQueue rows={rows} totalCount={pending.length} platform={platform} />
+      <ShipQueue
+        rows={rows}
+        totalCount={pending.length}
+        platform={platform}
+        products={products.map((p) => ({ sku: p.sku, name: p.name }))}
+      />
 
       {pending.length === 0 ? (
         <p className="mt-3 px-1 text-xs text-neutral-400">Nothing to pack right now. Add an order above as soon as it comes in. ✨</p>

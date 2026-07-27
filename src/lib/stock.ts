@@ -34,6 +34,10 @@ export interface MovementInput {
   refType?: string;
   refId?: string;
   note?: string;
+  /** Courier tracking / AWB for shipments packed from the queue. */
+  trackingId?: string;
+  /** Marketplace order number, carried over from the ship queue. */
+  orderId?: string;
 }
 
 function norm(s: string) {

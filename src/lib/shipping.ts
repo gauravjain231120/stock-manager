@@ -3,6 +3,7 @@ import { connectDB } from '@/lib/db';
 import { ProductModel } from '@/models/Product';
 import { SkuStockModel } from '@/models/SkuStock';
 import { PendingShipmentModel } from '@/models/PendingShipment';
+import { StockMovementModel } from '@/models/StockMovement';
 import { postMovement } from '@/lib/stock';
 import { MovementType, SystemLocation, stockSkuFor, infoStockFor } from '@/lib/constants';
 
@@ -114,15 +115,25 @@ export async function pendingCount(): Promise<number> {
  * deduct stock, release that many reservations, and remove the entry (or reduce
  * its qty if only part was shipped).
  */
-export async function shipPending(id: string, qty?: number) {
+export async function shipPending(id: string, qty?: number, trackingId?: string) {
   await connectDB();
   const p = await PendingShipmentModel.findById(id);
   if (!p) throw new Error('Item not found');
   const shipQty = qty && qty > 0 ? Math.min(Math.floor(qty), p.qty) : p.qty;
+  const tracking = trackingId?.trim().toUpperCase().replace(/[^A-Z0-9]/g, '') || undefined;
   const session = await mongoose.startSession();
   try {
     await session.withTransaction(async () => {
-      await postMovement(session, { sku: p.sku, locationCode: MAIN, qty: -shipQty, type: MovementType.SOLD, channel: p.channel || undefined, refType: 'SHIP' });
+      await postMovement(session, {
+        sku: p.sku,
+        locationCode: MAIN,
+        qty: -shipQty,
+        type: MovementType.SOLD,
+        channel: p.channel || undefined,
+        refType: 'SHIP',
+        trackingId: tracking,
+        orderId: p.orderId || undefined,
+      });
       await SkuStockModel.updateOne({ sku: stockSkuFor(p.sku), locationCode: MAIN }, { $inc: { reserved: -shipQty } }, { session });
       if (shipQty >= p.qty) await PendingShipmentModel.deleteOne({ _id: p._id }, { session });
       else await PendingShipmentModel.updateOne({ _id: p._id }, { $inc: { qty: -shipQty } }, { session });
@@ -131,6 +142,59 @@ export async function shipPending(id: string, qty?: number) {
     await session.endSession();
   }
   return { sku: p.sku, qty: shipQty };
+}
+
+/**
+ * Fix a queued order before it ships: swap the product, platform, order number or
+ * quantity. Reservations follow the change so the "available" figure stays right.
+ */
+export async function editPending(
+  id: string,
+  changes: { sku?: string; qty?: number; channel?: string; orderId?: string },
+) {
+  await connectDB();
+  const p = await PendingShipmentModel.findById(id);
+  if (!p) throw new Error('Item not found');
+
+  const oldSku = p.sku;
+  const oldQty = p.qty;
+
+  if (changes.sku !== undefined) {
+    const sku = changes.sku.trim().toUpperCase();
+    if (!(await ProductModel.exists({ sku }))) throw new Error('Product not found');
+    p.sku = sku;
+  }
+  if (changes.qty !== undefined) {
+    const qty = Math.floor(changes.qty);
+    if (!(qty >= 1)) throw new Error('Quantity must be at least 1');
+    p.qty = qty;
+  }
+  if (changes.channel !== undefined) p.channel = changes.channel || undefined;
+  if (changes.orderId !== undefined) p.orderId = changes.orderId.trim() || undefined;
+
+  // Move the reservation: release everything held on the old pool, hold the new.
+  const oldPool = stockSkuFor(oldSku);
+  const newPool = stockSkuFor(p.sku);
+  if (oldPool === newPool) {
+    const delta = p.qty - oldQty;
+    if (delta !== 0) {
+      await SkuStockModel.updateOne(
+        { sku: newPool, locationCode: MAIN },
+        { $inc: { reserved: delta }, $setOnInsert: { onHand: 0, buffer: 0 } },
+        { upsert: true },
+      );
+    }
+  } else {
+    await SkuStockModel.updateOne({ sku: oldPool, locationCode: MAIN }, { $inc: { reserved: -oldQty } });
+    await SkuStockModel.updateOne(
+      { sku: newPool, locationCode: MAIN },
+      { $inc: { reserved: p.qty }, $setOnInsert: { onHand: 0, buffer: 0 } },
+      { upsert: true },
+    );
+  }
+
+  await p.save();
+  return { id: String(p._id), sku: p.sku, qty: p.qty };
 }
 
 /**
@@ -158,6 +222,95 @@ export async function shipSelectedPending(ids: string[]) {
     shipped++;
   }
   return { shipped };
+}
+
+export interface ShippedRow {
+  id: string;
+  shippedAt: string;
+  sku: string;
+  name: string;
+  color: string;
+  size: string;
+  qty: number;
+  channel: string | null;
+  trackingId: string | null;
+  orderId: string | null;
+}
+
+/** Everything that has shipped, newest first — the Shipped page. */
+export async function listShipped(limit = 2000): Promise<ShippedRow[]> {
+  await connectDB();
+  const movements = await StockMovementModel.find({ type: MovementType.SOLD })
+    .sort({ createdAt: -1 })
+    .limit(limit)
+    .lean();
+
+  const skus = [...new Set(movements.map((m) => m.sku))];
+  const products = await ProductModel.find({ sku: { $in: skus } }, { sku: 1, name: 1, category: 1, attributes: 1 }).lean();
+  const infoBy = new Map(
+    products.map((p) => {
+      const attrs: Record<string, string> =
+        p.attributes instanceof Map ? Object.fromEntries(p.attributes) : ((p.attributes as Record<string, string>) ?? {});
+      return [p.sku, { name: p.category?.trim() || p.name, color: attrs.color?.trim() ?? '', size: attrs.size?.trim() ?? '' }];
+    }),
+  );
+
+  return movements.map((m) => {
+    const info = infoBy.get(m.sku);
+    return {
+      id: String(m._id),
+      shippedAt: (m.createdAt as unknown as Date).toISOString(),
+      sku: m.sku,
+      name: info?.name ?? m.sku,
+      color: info?.color ?? '',
+      size: info?.size ?? '',
+      qty: Math.abs(m.qty),
+      channel: m.channel ?? null,
+      trackingId: m.trackingId ?? null,
+      orderId: m.orderId ?? null,
+    };
+  });
+}
+
+export interface ShippedStats {
+  shipments: number;
+  units: number;
+  last30Shipments: number;
+  last30Units: number;
+  tracked: number;
+  untracked: number;
+}
+
+/** Headline numbers for the Shipped page, counted over every shipment ever. */
+export async function shippedStats(): Promise<ShippedStats> {
+  await connectDB();
+  const since = new Date(Date.now() - 30 * 86_400_000);
+  const [agg] = await StockMovementModel.aggregate<{
+    shipments: number; units: number; last30Shipments: number; last30Units: number; tracked: number;
+  }>([
+    { $match: { type: MovementType.SOLD } },
+    {
+      $group: {
+        _id: null,
+        shipments: { $sum: 1 },
+        units: { $sum: { $abs: '$qty' } },
+        last30Shipments: { $sum: { $cond: [{ $gte: ['$createdAt', since] }, 1, 0] } },
+        last30Units: { $sum: { $cond: [{ $gte: ['$createdAt', since] }, { $abs: '$qty' }, 0] } },
+        tracked: { $sum: { $cond: [{ $ifNull: ['$trackingId', false] }, 1, 0] } },
+      },
+    },
+  ]);
+
+  const shipments = agg?.shipments ?? 0;
+  const tracked = agg?.tracked ?? 0;
+  return {
+    shipments,
+    units: agg?.units ?? 0,
+    last30Shipments: agg?.last30Shipments ?? 0,
+    last30Units: agg?.last30Units ?? 0,
+    tracked,
+    untracked: shipments - tracked,
+  };
 }
 
 export async function shipAllPending(channel?: string) {

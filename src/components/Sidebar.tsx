@@ -3,12 +3,13 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { ClipboardList, Truck, Undo2, Shirt, Boxes, Factory, LogOut, Menu, X } from 'lucide-react';
+import { ClipboardList, Truck, PackageCheck, Undo2, Shirt, Boxes, Factory, LogOut, Menu, X } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
 
 const NAV = [
   { href: '/register', label: 'Stock Log', Icon: ClipboardList },
   { href: '/ship', label: 'Ready to Ship', Icon: Truck },
+  { href: '/shipped', label: 'Shipped', Icon: PackageCheck },
   { href: '/returns', label: 'Returns', Icon: Undo2 },
   { href: '/products', label: 'Products', Icon: Shirt },
   { href: '/inventory', label: 'Inventory', Icon: Boxes },
@@ -77,7 +78,8 @@ export function Sidebar() {
 
         <nav className="flex flex-col gap-1">
           {NAV.map(({ href, label, Icon }) => {
-            const active = pathname.startsWith(href);
+            // Exact match (or a sub-path) so /shipped doesn't also light up /ship.
+            const active = pathname === href || pathname.startsWith(`${href}/`);
             return (
               <Link
                 key={href}

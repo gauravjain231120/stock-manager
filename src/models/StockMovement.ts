@@ -23,6 +23,10 @@ const StockMovementSchema = new Schema(
     refType: { type: String, trim: true },
     refId: { type: String, trim: true },
     note: { type: String, trim: true },
+    // Courier tracking / AWB scanned when the parcel was packed, and the
+    // marketplace order number — both carried over from the ship queue.
+    trackingId: { type: String, trim: true, uppercase: true },
+    orderId: { type: String, trim: true },
   },
   { timestamps: { createdAt: true, updatedAt: false } },
 );
