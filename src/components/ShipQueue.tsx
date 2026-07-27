@@ -168,6 +168,7 @@ export function ShipQueue({
               <Td>
                 <div>{p.name}</div>
                 <div className="font-mono text-[11px] text-neutral-400">{p.sku}</div>
+                {p.orderId ? <div className="text-[11px] text-neutral-400">Order {p.orderId}</div> : null}
                 {p.stockSku !== p.sku ? (
                   <div className="text-[11px] text-amber-500">
                     set — ships 1 Halter top ({p.stockSku})

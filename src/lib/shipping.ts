@@ -62,14 +62,20 @@ export async function addPending(input: { sku: string; qty: number; channel?: st
     { $inc: { reserved: qty }, $setOnInsert: { onHand: 0, buffer: 0 } },
     { upsert: true },
   );
-  // Same product (+ platform) already queued -> add to its quantity.
-  const existing = await PendingShipmentModel.findOne({ sku, ...(channel ? { channel } : {}) });
+  // Same product (+ platform) already queued -> add to its quantity. Orders that
+  // carry their own order number stay on their own row so it isn't lost.
+  const orderId = input.orderId?.trim() || undefined;
+  const existing = await PendingShipmentModel.findOne({
+    sku,
+    ...(channel ? { channel } : {}),
+    ...(orderId ? { orderId } : { orderId: { $in: [null, ''] } }),
+  });
   if (existing) {
     existing.qty += qty;
     await existing.save();
     return { id: String(existing._id) };
   }
-  const doc = await PendingShipmentModel.create({ sku, qty, channel });
+  const doc = await PendingShipmentModel.create({ sku, qty, channel, orderId });
   return { id: String(doc._id) };
 }
 
