@@ -4,6 +4,7 @@ import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { Panel, Badge } from '@/components/ui';
+import { ActionButton } from '@/components/ActionButton';
 import { useToast } from '@/components/ToastProvider';
 import { dateOnly } from '@/lib/format';
 import { PLATFORMS, PLATFORM_LABELS, Platform } from '@/lib/constants';
@@ -14,6 +15,16 @@ const input = 'rounded-lg border border-black/15 bg-transparent px-3 py-2 text-s
 function platformLabel(c: string | null) {
   if (!c) return 'No platform';
   return PLATFORM_LABELS[c as Platform] ?? c;
+}
+
+/** Spells out what the server dropped: numbers already on another report, or too long. */
+function skipNote(data: { duplicates?: { trackingId: string; where: string }[]; skipped?: string[] }) {
+  const parts: string[] = [];
+  const d = data.duplicates?.length ?? 0;
+  const s = data.skipped?.length ?? 0;
+  if (d) parts.push(`${d} already on another report (${data.duplicates![0].trackingId}…)`);
+  if (s) parts.push(`${s} too long`);
+  return parts.length ? ` — skipped ${parts.join(', ')}` : '';
 }
 
 /**
@@ -55,11 +66,7 @@ export function ReturnReports({ reports, today }: { reports: ReportView[]; today
       const data = await res.json().catch(() => ({}));
       if (!res.ok) toast.error(data?.error || 'Could not save');
       else {
-        toast.success(
-          data.skipped?.length
-            ? `Saved ${data.total} — skipped ${data.skipped.length} too-long number(s)`
-            : `Report updated — ${data.total} tracking numbers ✓`,
-        );
+        toast.success(`Report updated — ${data.total} tracking numbers ✓${skipNote(data)}`);
         setEditId(null);
         router.refresh();
       }
@@ -82,11 +89,7 @@ export function ReturnReports({ reports, today }: { reports: ReportView[]; today
       const data = await res.json().catch(() => ({}));
       if (!res.ok) toast.error(data?.error || 'Could not save');
       else {
-        toast.success(
-          data.skipped?.length
-            ? `Saved ${data.added} — skipped ${data.skipped.length} too-long number(s)`
-            : `Saved ${data.added} tracking numbers ✓`,
-        );
+        toast.success(`Saved ${data.added} tracking number${data.added === 1 ? '' : 's'} ✓${skipNote(data)}`);
         setText('');
         setOpen(false);
         router.refresh();
@@ -210,13 +213,27 @@ export function ReturnReports({ reports, today }: { reports: ReportView[]; today
                   </div>
                 ) : isOpen ? (
                   <div className="px-5 pb-4">
-                    <div className="mb-3 flex justify-end">
+                    <div className="mb-3 flex justify-end gap-2">
                       <button
                         onClick={() => startEdit(r)}
                         className="rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
                       >
                         Edit report
                       </button>
+                      <ActionButton
+                        label="Delete report"
+                        endpoint={`/api/return-reports/${r.id}`}
+                        method="DELETE"
+                        variant="danger"
+                        confirmTitle="Delete this report?"
+                        confirm="The tracking list is removed. Returns already logged are not affected."
+                        confirmDetails={[
+                          { label: 'Report', value: `${platformLabel(r.platform)} · ${dateOnly(r.reportDate)}` },
+                          { label: 'Tracking numbers', value: String(r.total) },
+                        ]}
+                        confirmLabel="Delete"
+                        successMessage="Report deleted"
+                      />
                     </div>
                     <ul className="flex flex-col gap-1.5">
                       {r.lines.map((l) => (

@@ -37,18 +37,50 @@ export interface ReportView {
  * Numbers are normalised the same way as scans, blanks and duplicates dropped,
  * and anything longer than the tracking limit is reported back as skipped.
  */
+/**
+ * Tracking numbers already saved on another report. A number belongs to exactly
+ * one report, so these are dropped rather than duplicated.
+ * `exceptId` lets a report keep its own numbers while being edited.
+ */
+async function findDuplicates(codes: string[], exceptId?: string) {
+  const clash = await ReturnReportModel.find(
+    { 'items.trackingId': { $in: codes }, ...(exceptId ? { _id: { $ne: exceptId } } : {}) },
+    { platform: 1, reportDate: 1, items: 1 },
+  ).lean();
+
+  const dupes = new Map<string, string>(); // trackingId -> where it already lives
+  for (const rep of clash) {
+    const where = `${rep.platform ?? 'report'} ${(rep.reportDate as unknown as Date).toISOString().slice(0, 10)}`;
+    for (const it of rep.items) {
+      if (codes.includes(it.trackingId)) dupes.set(it.trackingId, where);
+    }
+  }
+  return dupes;
+}
+
 export async function createReturnReport(input: { platform?: string; date?: Date; text: string }) {
   await connectDB();
   const { codes, skipped } = parseTrackingList(input.text);
   if (codes.length === 0) throw new Error('No usable tracking numbers found — paste one per line.');
 
+  const dupes = await findDuplicates(codes);
+  const fresh = codes.filter((c) => !dupes.has(c));
+  if (fresh.length === 0) {
+    throw new Error(`Every one of those tracking numbers is already on another report (e.g. ${[...dupes.values()][0]}).`);
+  }
+
   const platform = PLATFORMS.includes(input.platform as Platform) ? (input.platform as Platform) : undefined;
   const doc = await ReturnReportModel.create({
     platform,
     reportDate: input.date ?? new Date(),
-    items: codes.map((trackingId) => ({ trackingId })),
+    items: fresh.map((trackingId) => ({ trackingId })),
   });
-  return { id: String(doc._id), added: codes.length, skipped };
+  return {
+    id: String(doc._id),
+    added: fresh.length,
+    skipped,
+    duplicates: [...dupes.entries()].map(([trackingId, where]) => ({ trackingId, where })),
+  };
 }
 
 /** Every saved report, newest first, with each line matched against real returns. */
@@ -143,17 +175,27 @@ export async function updateReturnReport(
   let skipped: string[] = [];
   let total = rep.items.length;
 
+  let duplicates: { trackingId: string; where: string }[] = [];
   if (changes.text !== undefined) {
     const parsed = parseTrackingList(changes.text);
     if (parsed.codes.length === 0) throw new Error('No usable tracking numbers found — paste one per line.');
+
+    // A number already on a DIFFERENT report can't be added here.
+    const dupes = await findDuplicates(parsed.codes, id);
+    const fresh = parsed.codes.filter((c) => !dupes.has(c));
+    if (fresh.length === 0) {
+      throw new Error(`Every one of those tracking numbers is already on another report (e.g. ${[...dupes.values()][0]}).`);
+    }
+    duplicates = [...dupes.entries()].map(([trackingId, where]) => ({ trackingId, where }));
+
     const before = new Map(rep.items.map((i) => [i.trackingId, i]));
-    set.items = parsed.codes.map((trackingId) => ({
+    set.items = fresh.map((trackingId) => ({
       trackingId,
       settled: before.get(trackingId)?.settled ?? false,
       note: before.get(trackingId)?.note ?? undefined,
     }));
     skipped = parsed.skipped;
-    total = parsed.codes.length;
+    total = fresh.length;
   }
   if (changes.platform !== undefined && PLATFORMS.includes(changes.platform as Platform)) {
     set.platform = changes.platform;
@@ -161,7 +203,7 @@ export async function updateReturnReport(
   if (changes.date !== undefined) set.reportDate = changes.date;
 
   if (Object.keys(set).length > 0) await ReturnReportModel.updateOne({ _id: id }, { $set: set });
-  return { ok: true, total, skipped };
+  return { ok: true, total, skipped, duplicates };
 }
 
 /** Mark a never-arrived parcel as claimed/written off (or put it back to outstanding). */
