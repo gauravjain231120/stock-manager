@@ -8,6 +8,8 @@ const Patch = z.object({
   qty: z.number().int().positive().optional(),
   channel: z.enum(PLATFORMS).nullable().optional(),
   date: z.string().optional(),
+  trackingId: z.string().optional(),
+  orderId: z.string().optional(),
 });
 
 /** PATCH /api/register/[id] -> edit a Stock Log entry (quantity / platform / date). */
@@ -22,6 +24,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       qty: parsed.data.qty,
       channel: parsed.data.channel,
       date: parsed.data.date ? new Date(parsed.data.date) : undefined,
+      trackingId: parsed.data.trackingId,
+      orderId: parsed.data.orderId,
     });
     return Response.json({ ok: true });
   } catch (err) {

@@ -4,7 +4,7 @@ import { ProductModel } from '@/models/Product';
 import { SkuStockModel } from '@/models/SkuStock';
 import { PendingShipmentModel } from '@/models/PendingShipment';
 import { postMovement } from '@/lib/stock';
-import { MovementType, SystemLocation, stockSkuFor, infoStockFor } from '@/lib/constants';
+import { MovementType, SystemLocation, stockSkuFor, infoStockFor, cleanTracking } from '@/lib/constants';
 
 const MAIN = SystemLocation.MAIN;
 
@@ -125,7 +125,7 @@ export async function shipPending(id: string, qty?: number, trackingId?: string,
   const p = await PendingShipmentModel.findById(id);
   if (!p) throw new Error('Item not found');
   const shipQty = qty && qty > 0 ? Math.min(Math.floor(qty), p.qty) : p.qty;
-  const tracking = trackingId?.trim().toUpperCase().replace(/[^A-Z0-9]/g, '') || undefined;
+  const tracking = cleanTracking(trackingId);
   // An order number typed at packing time wins, and sticks to whatever is left
   // on the row when only part of it ships.
   const order = orderId?.trim() || p.orderId || undefined;

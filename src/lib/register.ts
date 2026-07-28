@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import { connectDB } from '@/lib/db';
-import { MovementType, SystemLocation, stockSkuFor } from '@/lib/constants';
+import { MovementType, SystemLocation, stockSkuFor, cleanTracking } from '@/lib/constants';
 import { applyMovement, sellUnits } from '@/lib/stock';
 import { ProductModel } from '@/models/Product';
 import { StockMovementModel } from '@/models/StockMovement';
@@ -42,7 +42,7 @@ export async function recordEntry(
   const s = sku.trim().toUpperCase();
   const loc = SystemLocation.MAIN;
   // Same normalising as the ship queue, so a scan and a typed number match.
-  const tracking = trackingId?.trim().toUpperCase().replace(/[^A-Z0-9]/g, '') || undefined;
+  const tracking = cleanTracking(trackingId);
 
   let movementId: mongoose.Types.ObjectId | undefined;
   switch (action) {
@@ -74,7 +74,7 @@ export async function recordEntry(
  */
 export async function editEntry(
   id: string,
-  changes: { qty?: number; channel?: string | null; date?: Date },
+  changes: { qty?: number; channel?: string | null; date?: Date; trackingId?: string; orderId?: string },
 ) {
   await connectDB();
   const mv = await StockMovementModel.findById(id).lean();
@@ -87,6 +87,9 @@ export async function editEntry(
   if (newQty <= 0) throw new Error('Quantity must be greater than 0');
   const newChannel = hasPlatform ? changes.channel ?? mv.channel ?? undefined : undefined;
   const newDate = changes.date ?? (mv.createdAt as unknown as Date);
+  // The row is rebuilt below, so anything not being changed must be carried over.
+  const newTracking = changes.trackingId !== undefined ? cleanTracking(changes.trackingId) : mv.trackingId ?? undefined;
+  const newOrderId = changes.orderId !== undefined ? changes.orderId.trim() || undefined : mv.orderId ?? undefined;
   const reverseDelta = -mv.qty; // undo the old stock effect
   const newSignedQty = isOutbound ? -newQty : newQty;
 
@@ -122,7 +125,18 @@ export async function editEntry(
 
       // timestamps:false so our explicit createdAt (the chosen date) is kept.
       await StockMovementModel.create(
-        [{ sku: mv.sku, locationCode: mv.locationCode, qty: newSignedQty, type: mv.type, channel: newChannel, refType: mv.refType, createdAt: newDate }],
+        [{
+          sku: mv.sku,
+          locationCode: mv.locationCode,
+          qty: newSignedQty,
+          type: mv.type,
+          channel: newChannel,
+          refType: mv.refType,
+          trackingId: newTracking,
+          orderId: newOrderId,
+          note: mv.note ?? undefined,
+          createdAt: newDate,
+        }],
         { session, timestamps: false },
       );
     });

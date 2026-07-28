@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Panel, Table, Th, Td, Tr } from '@/components/ui';
 import { dateOnly, dayKey, matchesSearch } from '@/lib/format';
 import { PLATFORMS, PLATFORM_LABELS, Platform } from '@/lib/constants';
+import { EditMovementButton } from '@/components/EditMovementButton';
 import type { MovementRow } from '@/lib/movements';
 
 const filterCls = 'rounded-lg border border-black/15 bg-transparent px-3 py-1.5 text-sm text-neutral-900 dark:border-white/20 dark:text-white';
@@ -90,7 +91,7 @@ export function MovementTable({ rows, title, dateLabel }: { rows: MovementRow[];
       }
     >
       <Table
-        head={<><Th>{dateLabel}</Th><Th>Product</Th><Th>Tracking</Th><Th>Order no.</Th><Th>Platform</Th><Th right>Qty</Th></>}
+        head={<><Th>{dateLabel}</Th><Th>Product</Th><Th>Tracking</Th><Th>Order no.</Th><Th>Platform</Th><Th right>Qty</Th><Th right>Edit</Th></>}
         empty={filtered.length === 0}
       >
         {pageRows.map((r) => (
@@ -110,6 +111,7 @@ export function MovementTable({ rows, title, dateLabel }: { rows: MovementRow[];
             <Td>{r.orderId ? <span className="font-mono text-xs">{r.orderId}</span> : <span className="text-xs text-neutral-400">—</span>}</Td>
             <Td>{platformLabel(r.channel)}</Td>
             <Td right>{r.qty}</Td>
+            <Td right><EditMovementButton row={r} title={dateLabel === 'Returned' ? 'return' : 'shipment'} /></Td>
           </Tr>
         ))}
       </Table>

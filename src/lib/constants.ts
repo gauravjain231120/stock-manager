@@ -85,6 +85,27 @@ export function infoStockFor(sku: string): { sku: string; label: string } | null
   return null;
 }
 
+/**
+ * Courier tracking / AWB numbers. Scanners sometimes read a long barcode that
+ * isn't the tracking number at all, so anything longer than this is rejected
+ * rather than stored. Real AWBs are 10–16 characters.
+ */
+export const MAX_TRACKING_LEN = 20;
+
+/** Strip spaces and punctuation and upper-case, so a scan and a typed number match. */
+export function normalizeTracking(input?: string | null): string | undefined {
+  return input?.trim().toUpperCase().replace(/[^A-Z0-9]/g, '') || undefined;
+}
+
+/** Normalise and reject over-long codes. Throws with a message meant for the user. */
+export function cleanTracking(input?: string | null): string | undefined {
+  const v = normalizeTracking(input);
+  if (v && v.length > MAX_TRACKING_LEN) {
+    throw new Error(`That tracking number is ${v.length} characters — it can be at most ${MAX_TRACKING_LEN}. Please scan again.`);
+  }
+  return v;
+}
+
 /** Special location codes the system relies on, plus normal warehouse codes. */
 export const SystemLocation = {
   /** Main sellable warehouse stock. */

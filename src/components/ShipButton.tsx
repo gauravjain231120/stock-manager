@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Minus, Plus, ScanLine } from 'lucide-react';
 import { useToast } from '@/components/ToastProvider';
+import { MAX_TRACKING_LEN, normalizeTracking } from '@/lib/constants';
 
 /** Ship button that opens a "how many?" picker (with confirm) before shipping. */
 export function ShipButton({
@@ -31,8 +32,11 @@ export function ShipButton({
   const [busy, setBusy] = useState(false);
 
   const clamp = (v: number) => Math.max(1, Math.min(v, maxShip));
+  const trackingLen = (normalizeTracking(tracking) ?? '').length;
+  const trackingTooLong = trackingLen > MAX_TRACKING_LEN;
 
   async function ship() {
+    if (trackingTooLong) return;
     const sendQty = clamp(n);
     setBusy(true);
     try {
@@ -86,15 +90,23 @@ export function ShipButton({
             </div>
 
             <label className="mt-4 flex flex-col gap-1 text-xs text-neutral-500">
-              <span className="flex items-center gap-1.5"><ScanLine size={13} /> Scan the shipping label <span className="text-neutral-400">(optional)</span></span>
+              <span className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5"><ScanLine size={13} /> Scan the shipping label <span className="text-neutral-400">(optional)</span></span>
+                {trackingLen > 0 ? <span className={trackingTooLong ? 'text-red-500' : 'text-neutral-400'}>{trackingLen}/{MAX_TRACKING_LEN}</span> : null}
+              </span>
               <input
                 value={tracking}
                 onChange={(e) => setTracking(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); ship(); } }}
                 autoFocus
                 placeholder="Tracking / AWB…"
-                className="rounded-lg border border-black/15 bg-transparent px-3 py-2 font-mono text-sm text-neutral-900 dark:border-white/20 dark:text-white"
+                className={`rounded-lg border bg-transparent px-3 py-2 font-mono text-sm text-neutral-900 dark:text-white ${
+                  trackingTooLong ? 'border-red-500' : 'border-black/15 dark:border-white/20'
+                }`}
               />
+              {trackingTooLong ? (
+                <span className="text-red-500">Too long — at most {MAX_TRACKING_LEN} characters. Scan again.</span>
+              ) : null}
             </label>
 
             <label className="mt-3 flex flex-col gap-1 text-xs text-neutral-500">
@@ -110,7 +122,7 @@ export function ShipButton({
 
             <div className="mt-5 flex justify-end gap-2">
               <button onClick={() => setOpen(false)} className="rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">Cancel</button>
-              <button onClick={ship} disabled={busy} className="rounded-lg bg-brand-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">{busy ? 'Shipping…' : `Ship ${clamp(n)}`}</button>
+              <button onClick={ship} disabled={busy || trackingTooLong} className="rounded-lg bg-brand-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">{busy ? 'Shipping…' : `Ship ${clamp(n)}`}</button>
             </div>
           </div>
         </div>

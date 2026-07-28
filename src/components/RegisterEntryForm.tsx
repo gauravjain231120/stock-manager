@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, Truck, Undo2, ScanLine } from 'lucide-react';
-import { PLATFORMS, PLATFORM_LABELS, Platform } from '@/lib/constants';
+import { PLATFORMS, PLATFORM_LABELS, Platform, MAX_TRACKING_LEN, normalizeTracking } from '@/lib/constants';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { useConfirm } from '@/components/ConfirmProvider';
 import { useToast } from '@/components/ToastProvider';
@@ -47,6 +47,8 @@ export function RegisterEntryForm({ products }: { products: { sku: string; name:
 
   const needsPlatform = action === 'SHIP' || action === 'RETURN';
   const selectedStock = products.find((p) => p.sku === sku)?.inStock ?? 0;
+  const trackingLen = (normalizeTracking(tracking) ?? '').length;
+  const trackingTooLong = trackingLen > MAX_TRACKING_LEN;
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -78,6 +80,7 @@ export function RegisterEntryForm({ products }: { products: { sku: string; name:
   }
 
   async function save() {
+    if (trackingTooLong) return;
     const actionLabel = ACTIONS.find((a) => a.key === action)?.label ?? action;
     setBusy(true);
     setErr(null);
@@ -195,22 +198,30 @@ export function RegisterEntryForm({ products }: { products: { sku: string; name:
             </div>
 
             <label className="mt-4 flex flex-col gap-1 text-xs text-neutral-500">
-              <span className="flex items-center gap-1.5"><ScanLine size={13} /> Tracking / AWB <span className="text-neutral-400">(optional)</span></span>
+              <span className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5"><ScanLine size={13} /> Tracking / AWB <span className="text-neutral-400">(optional)</span></span>
+                {trackingLen > 0 ? <span className={trackingTooLong ? 'text-red-500' : 'text-neutral-400'}>{trackingLen}/{MAX_TRACKING_LEN}</span> : null}
+              </span>
               <input
                 value={tracking}
                 onChange={(e) => setTracking(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); save(); } }}
                 autoFocus
                 placeholder="Scan or type the number…"
-                className="rounded-lg border border-black/15 bg-transparent px-3 py-2.5 font-mono text-sm text-neutral-900 dark:border-white/20 dark:text-white"
+                className={`rounded-lg border bg-transparent px-3 py-2.5 font-mono text-sm text-neutral-900 dark:text-white ${
+                  trackingTooLong ? 'border-red-500' : 'border-black/15 dark:border-white/20'
+                }`}
               />
+              {trackingTooLong ? (
+                <span className="text-red-500">Too long — at most {MAX_TRACKING_LEN} characters. Scan again.</span>
+              ) : null}
             </label>
 
             <div className="mt-5 flex justify-end gap-2">
               <button type="button" onClick={() => setScanOpen(false)} className="rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">
                 Cancel
               </button>
-              <button type="button" onClick={save} disabled={busy} className="rounded-lg bg-amber-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50">
+              <button type="button" onClick={save} disabled={busy || trackingTooLong} className="rounded-lg bg-amber-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50">
                 {busy ? 'Saving…' : 'Save return'}
               </button>
             </div>
