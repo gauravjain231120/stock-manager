@@ -68,9 +68,12 @@ export async function recordEntry(
 }
 
 /**
- * Edit a Stock Log entry: change its quantity, platform, and/or date. Done by
- * atomically reversing the old stock effect and applying the new one, so the
- * count stays correct. Refuses if it would make stock negative.
+ * Edit a Stock Log entry: quantity, platform, date, tracking or order number.
+ *
+ * The row is updated in place and only the DIFFERENCE in quantity is applied to
+ * stock. Editing just a tracking number touches no stock at all, and a quantity
+ * change is refused only when the difference itself can't be applied — not when
+ * the original units happen to have been shipped since.
  */
 export async function editEntry(
   id: string,
@@ -85,58 +88,36 @@ export async function editEntry(
 
   const newQty = changes.qty != null ? changes.qty : Math.abs(mv.qty);
   if (newQty <= 0) throw new Error('Quantity must be greater than 0');
-  const newChannel = hasPlatform ? changes.channel ?? mv.channel ?? undefined : undefined;
-  const newDate = changes.date ?? (mv.createdAt as unknown as Date);
-  // The row is rebuilt below, so anything not being changed must be carried over.
-  const newTracking = changes.trackingId !== undefined ? cleanTracking(changes.trackingId) : mv.trackingId ?? undefined;
-  const newOrderId = changes.orderId !== undefined ? changes.orderId.trim() || undefined : mv.orderId ?? undefined;
-  const reverseDelta = -mv.qty; // undo the old stock effect
   const newSignedQty = isOutbound ? -newQty : newQty;
+  const delta = newSignedQty - mv.qty; // the only stock movement this edit causes
+
+  // Fields left out of `changes` keep their current value; an empty string clears.
+  const fields: Record<string, unknown> = {
+    channel: hasPlatform ? changes.channel ?? mv.channel ?? undefined : undefined,
+    trackingId: changes.trackingId !== undefined ? cleanTracking(changes.trackingId) : mv.trackingId ?? undefined,
+    orderId: changes.orderId !== undefined ? changes.orderId.trim() || undefined : mv.orderId ?? undefined,
+  };
+  const set: Record<string, unknown> = { qty: newSignedQty, createdAt: changes.date ?? (mv.createdAt as unknown as Date) };
+  const unset: Record<string, string> = {};
+  for (const [key, value] of Object.entries(fields)) {
+    if (value === undefined) unset[key] = '';
+    else set[key] = value;
+  }
 
   const session = await mongoose.startSession();
   try {
     await session.withTransaction(async () => {
-      // 1) reverse the old movement
-      if (reverseDelta !== 0) {
-        const rev = await SkuStockModel.findOneAndUpdate(
-          { sku: stockSkuFor(mv.sku), locationCode: mv.locationCode, $expr: { $gte: [{ $add: ['$onHand', reverseDelta] }, 0] } },
-          { $inc: { onHand: reverseDelta } },
+      if (delta !== 0) {
+        const upd = await SkuStockModel.findOneAndUpdate(
+          { sku: stockSkuFor(mv.sku), locationCode: mv.locationCode, $expr: { $gte: [{ $add: ['$onHand', delta] }, 0] } },
+          { $inc: { onHand: delta } },
           { session, returnDocument: 'after' },
         );
-        if (!rev) throw new Error('Cannot edit: those units have already been shipped (stock would go negative).');
+        if (!upd) throw new Error('Cannot change the quantity — there is not enough stock for that.');
       }
-      await StockMovementModel.deleteOne({ _id: mv._id }, { session });
-
-      // 2) apply the new values
-      if (isOutbound) {
-        const dec = await SkuStockModel.findOneAndUpdate(
-          { sku: stockSkuFor(mv.sku), locationCode: mv.locationCode, $expr: { $gte: [{ $subtract: ['$onHand', '$reserved'] }, newQty] } },
-          { $inc: { onHand: -newQty } },
-          { session, returnDocument: 'after' },
-        );
-        if (!dec) throw new Error('Cannot edit: not enough stock to ship that quantity.');
-      } else {
-        await SkuStockModel.updateOne(
-          { sku: stockSkuFor(mv.sku), locationCode: mv.locationCode },
-          { $inc: { onHand: newQty } },
-          { session, upsert: true },
-        );
-      }
-
-      // timestamps:false so our explicit createdAt (the chosen date) is kept.
-      await StockMovementModel.create(
-        [{
-          sku: mv.sku,
-          locationCode: mv.locationCode,
-          qty: newSignedQty,
-          type: mv.type,
-          channel: newChannel,
-          refType: mv.refType,
-          trackingId: newTracking,
-          orderId: newOrderId,
-          note: mv.note ?? undefined,
-          createdAt: newDate,
-        }],
+      await StockMovementModel.updateOne(
+        { _id: mv._id },
+        Object.keys(unset).length > 0 ? { $set: set, $unset: unset } : { $set: set },
         { session, timestamps: false },
       );
     });
