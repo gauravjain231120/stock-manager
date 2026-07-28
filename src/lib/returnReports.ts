@@ -7,6 +7,14 @@ import { StockMovementModel } from '@/models/StockMovement';
 /** Below this length a partial match would be meaningless, so only exact counts. */
 const MIN_PARTIAL_LEN = 8;
 
+/** True for MongoDB's duplicate-key error, raised by the unique tracking index. */
+function isDuplicateKey(err: unknown): boolean {
+  return Boolean(err && typeof err === 'object' && 'code' in err && (err as { code: number }).code === 11000);
+}
+
+const DUPLICATE_MESSAGE =
+  'One of those tracking numbers is already on another report. Each number can only be saved once.';
+
 export interface ReportLine {
   trackingId: string;
   received: boolean;
@@ -70,11 +78,17 @@ export async function createReturnReport(input: { platform?: string; date?: Date
   }
 
   const platform = PLATFORMS.includes(input.platform as Platform) ? (input.platform as Platform) : undefined;
-  const doc = await ReturnReportModel.create({
-    platform,
-    reportDate: input.date ?? new Date(),
-    items: fresh.map((trackingId) => ({ trackingId })),
-  });
+  let doc;
+  try {
+    doc = await ReturnReportModel.create({
+      platform,
+      reportDate: input.date ?? new Date(),
+      items: fresh.map((trackingId) => ({ trackingId })),
+    });
+  } catch (err) {
+    if (isDuplicateKey(err)) throw new Error(DUPLICATE_MESSAGE);
+    throw err;
+  }
   return {
     id: String(doc._id),
     added: fresh.length,
@@ -202,7 +216,14 @@ export async function updateReturnReport(
   }
   if (changes.date !== undefined) set.reportDate = changes.date;
 
-  if (Object.keys(set).length > 0) await ReturnReportModel.updateOne({ _id: id }, { $set: set });
+  if (Object.keys(set).length > 0) {
+    try {
+      await ReturnReportModel.updateOne({ _id: id }, { $set: set });
+    } catch (err) {
+      if (isDuplicateKey(err)) throw new Error(DUPLICATE_MESSAGE);
+      throw err;
+    }
+  }
   return { ok: true, total, skipped, duplicates };
 }
 

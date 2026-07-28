@@ -31,6 +31,9 @@ const ReturnReportSchema = new Schema(
 );
 
 ReturnReportSchema.index({ reportDate: -1 });
+// A tracking number belongs to exactly one report — enforced by the database, so
+// no import script or code path can slip a duplicate in.
+ReturnReportSchema.index({ 'items.trackingId': 1 }, { unique: true });
 
 export type ReturnReport = InferSchemaType<typeof ReturnReportSchema>;
 
