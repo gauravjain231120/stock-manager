@@ -39,24 +39,16 @@ export interface ReportView {
  */
 export async function createReturnReport(input: { platform?: string; date?: Date; text: string }) {
   await connectDB();
-  const seen = new Set<string>();
-  const skipped: string[] = [];
-  for (const raw of input.text.split(/[\s,;]+/)) {
-    if (!raw.trim()) continue;
-    const v = normalizeTracking(raw);
-    if (!v) continue;
-    if (v.length > MAX_TRACKING_LEN) { skipped.push(raw.trim()); continue; }
-    seen.add(v);
-  }
-  if (seen.size === 0) throw new Error('No usable tracking numbers found — paste one per line.');
+  const { codes, skipped } = parseTrackingList(input.text);
+  if (codes.length === 0) throw new Error('No usable tracking numbers found — paste one per line.');
 
   const platform = PLATFORMS.includes(input.platform as Platform) ? (input.platform as Platform) : undefined;
   const doc = await ReturnReportModel.create({
     platform,
     reportDate: input.date ?? new Date(),
-    items: [...seen].map((trackingId) => ({ trackingId })),
+    items: codes.map((trackingId) => ({ trackingId })),
   });
-  return { id: String(doc._id), added: seen.size, skipped };
+  return { id: String(doc._id), added: codes.length, skipped };
 }
 
 /** Every saved report, newest first, with each line matched against real returns. */
@@ -119,6 +111,57 @@ export async function listReturnReports(): Promise<ReportView[]> {
       lines,
     };
   });
+}
+
+/** Split pasted text into clean, unique tracking numbers, flagging over-long ones. */
+function parseTrackingList(text: string): { codes: string[]; skipped: string[] } {
+  const seen = new Set<string>();
+  const skipped: string[] = [];
+  for (const raw of text.split(/[\s,;]+/)) {
+    if (!raw.trim()) continue;
+    const v = normalizeTracking(raw);
+    if (!v) continue;
+    if (v.length > MAX_TRACKING_LEN) { skipped.push(raw.trim()); continue; }
+    seen.add(v);
+  }
+  return { codes: [...seen], skipped };
+}
+
+/**
+ * Rewrite a report — add numbers, fix a mistyped one, drop a line, or change the
+ * platform/date. Lines already marked claimed keep that flag if they survive.
+ */
+export async function updateReturnReport(
+  id: string,
+  changes: { platform?: string; date?: Date; text?: string },
+) {
+  await connectDB();
+  const rep = await ReturnReportModel.findById(id).lean();
+  if (!rep) throw new Error('Report not found');
+
+  const set: Record<string, unknown> = {};
+  let skipped: string[] = [];
+  let total = rep.items.length;
+
+  if (changes.text !== undefined) {
+    const parsed = parseTrackingList(changes.text);
+    if (parsed.codes.length === 0) throw new Error('No usable tracking numbers found — paste one per line.');
+    const before = new Map(rep.items.map((i) => [i.trackingId, i]));
+    set.items = parsed.codes.map((trackingId) => ({
+      trackingId,
+      settled: before.get(trackingId)?.settled ?? false,
+      note: before.get(trackingId)?.note ?? undefined,
+    }));
+    skipped = parsed.skipped;
+    total = parsed.codes.length;
+  }
+  if (changes.platform !== undefined && PLATFORMS.includes(changes.platform as Platform)) {
+    set.platform = changes.platform;
+  }
+  if (changes.date !== undefined) set.reportDate = changes.date;
+
+  if (Object.keys(set).length > 0) await ReturnReportModel.updateOne({ _id: id }, { $set: set });
+  return { ok: true, total, skipped };
 }
 
 /** Mark a never-arrived parcel as claimed/written off (or put it back to outstanding). */

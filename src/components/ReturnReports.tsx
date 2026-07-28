@@ -31,6 +31,43 @@ export function ReturnReports({ reports, today }: { reports: ReportView[]; today
   const [busy, setBusy] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(reports[0]?.id ?? null);
 
+  // Editing an existing report: its id plus the working copy of its fields.
+  const [editId, setEditId] = useState<string | null>(null);
+  const [eText, setEText] = useState('');
+  const [ePlatform, setEPlatform] = useState<Platform>('MYNTRA');
+  const [eDate, setEDate] = useState('');
+
+  function startEdit(r: ReportView) {
+    setEditId(r.id);
+    setEText(r.lines.map((l) => l.trackingId).join('\n'));
+    setEPlatform((r.platform as Platform) ?? 'MYNTRA');
+    setEDate(r.reportDate.slice(0, 10));
+  }
+
+  async function saveEdit(id: string) {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/return-reports/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: eText, platform: ePlatform, date: eDate }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) toast.error(data?.error || 'Could not save');
+      else {
+        toast.success(
+          data.skipped?.length
+            ? `Saved ${data.total} — skipped ${data.skipped.length} too-long number(s)`
+            : `Report updated — ${data.total} tracking numbers ✓`,
+        );
+        setEditId(null);
+        router.refresh();
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const typedCount = new Set(text.split(/[\s,;]+/).map((s) => s.trim()).filter(Boolean)).size;
 
   async function save(e: FormEvent) {
@@ -143,8 +180,44 @@ export function ReturnReports({ reports, today }: { reports: ReportView[]; today
                   </span>
                 </button>
 
-                {isOpen ? (
+                {isOpen && editId === r.id ? (
+                  <div className="border-t border-black/10 px-5 py-4 dark:border-white/10">
+                    <div className="flex flex-wrap items-end gap-3">
+                      <label className="flex flex-col gap-1 text-xs text-neutral-500">
+                        Platform
+                        <select className={input} value={ePlatform} onChange={(e) => setEPlatform(e.target.value as Platform)}>
+                          {PLATFORMS.map((p) => <option key={p} value={p}>{PLATFORM_LABELS[p]}</option>)}
+                        </select>
+                      </label>
+                      <label className="flex flex-col gap-1 text-xs text-neutral-500">
+                        Report date
+                        <input className={input} type="date" max={today} value={eDate} onChange={(e) => setEDate(e.target.value)} />
+                      </label>
+                    </div>
+                    <label className="mt-3 flex flex-col gap-1 text-xs text-neutral-500">
+                      Add, correct or remove tracking numbers — one per line
+                      <textarea value={eText} onChange={(e) => setEText(e.target.value)} rows={8} className={`${input} font-mono`} />
+                    </label>
+                    <p className="mt-2 text-[11px] text-neutral-400">Lines you already marked claimed stay claimed if they&apos;re still in the list.</p>
+                    <div className="mt-3 flex justify-end gap-2">
+                      <button onClick={() => setEditId(null)} className="rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">
+                        Cancel
+                      </button>
+                      <button onClick={() => saveEdit(r.id)} disabled={busy} className="rounded-lg bg-brand-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">
+                        {busy ? 'Saving…' : 'Save report'}
+                      </button>
+                    </div>
+                  </div>
+                ) : isOpen ? (
                   <div className="px-5 pb-4">
+                    <div className="mb-3 flex justify-end">
+                      <button
+                        onClick={() => startEdit(r)}
+                        className="rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+                      >
+                        Edit report
+                      </button>
+                    </div>
                     <ul className="flex flex-col gap-1.5">
                       {r.lines.map((l) => (
                         <li

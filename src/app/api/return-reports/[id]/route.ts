@@ -1,16 +1,27 @@
-import { deleteReturnReport, setReportItemSettled } from '@/lib/returnReports';
+import { deleteReturnReport, setReportItemSettled, updateReturnReport } from '@/lib/returnReports';
 
 export const dynamic = 'force-dynamic';
 
-/** PATCH /api/return-reports/[id] { trackingId, settled } -> mark a line claimed/outstanding. */
+/**
+ * PATCH /api/return-reports/[id]
+ *   { text, platform?, date? }      -> rewrite the tracking list / details
+ *   { trackingId, settled }         -> mark one line claimed or outstanding
+ */
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
   const body = await req.json().catch(() => ({}));
-  if (typeof body?.trackingId !== 'string') {
-    return Response.json({ error: 'Which line?' }, { status: 400 });
-  }
   try {
-    return Response.json(await setReportItemSettled(id, body.trackingId, Boolean(body.settled)));
+    if (typeof body?.text === 'string') {
+      return Response.json(await updateReturnReport(id, {
+        text: body.text,
+        platform: typeof body?.platform === 'string' ? body.platform : undefined,
+        date: typeof body?.date === 'string' && body.date ? new Date(body.date) : undefined,
+      }));
+    }
+    if (typeof body?.trackingId === 'string') {
+      return Response.json(await setReportItemSettled(id, body.trackingId, Boolean(body.settled)));
+    }
+    return Response.json({ error: 'Nothing to change' }, { status: 400 });
   } catch (err) {
     return Response.json({ error: err instanceof Error ? err.message : String(err) }, { status: 400 });
   }
