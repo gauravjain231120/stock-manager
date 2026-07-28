@@ -5,6 +5,7 @@ import { PageHeader, StatCard } from '@/components/ui';
 import { MovementTable } from '@/components/MovementTable';
 import { MovementDayPanel } from '@/components/MovementDayPanel';
 import { ReturnReports } from '@/components/ReturnReports';
+import { ReturnSearch } from '@/components/ReturnSearch';
 import { num } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
@@ -31,6 +32,10 @@ export default async function ReturnsPage() {
   return (
     <main className="px-4 py-6 sm:px-6 sm:py-8">
       <PageHeader title="Returns" subtitle="Everything that has come back, with its tracking number. Log a return from the Stock Log." />
+
+      <div className="mb-6">
+        <ReturnSearch rows={rows} reports={reports} />
+      </div>
 
       <section className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
         <StatCard label="Returns" value={num(stats.count)} />
