@@ -4,7 +4,6 @@ import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { Panel, Badge } from '@/components/ui';
-import { ActionButton } from '@/components/ActionButton';
 import { useToast } from '@/components/ToastProvider';
 import { dateOnly } from '@/lib/format';
 import { PLATFORMS, PLATFORM_LABELS, Platform } from '@/lib/constants';
@@ -146,18 +145,6 @@ export function ReturnReports({ reports, today }: { reports: ReportView[]; today
 
                 {isOpen ? (
                   <div className="px-5 pb-4">
-                    <div className="mb-3 flex justify-end">
-                      <ActionButton
-                        label="Delete report"
-                        endpoint={`/api/return-reports/${r.id}`}
-                        method="DELETE"
-                        variant="secondary"
-                        confirmTitle="Delete this report?"
-                        confirm="The tracking list is removed. Returns already logged are not affected."
-                        confirmLabel="Delete"
-                        successMessage="Report deleted"
-                      />
-                    </div>
                     <ul className="flex flex-col gap-1.5">
                       {r.lines.map((l) => (
                         <li
