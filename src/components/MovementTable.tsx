@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Panel, Table, Th, Td, Tr } from '@/components/ui';
 import { dateOnly, dayKey, matchesSearch } from '@/lib/format';
 import { PLATFORMS, PLATFORM_LABELS, Platform } from '@/lib/constants';
-import type { ShippedRow } from '@/lib/shipping';
+import type { MovementRow } from '@/lib/movements';
 
 const filterCls = 'rounded-lg border border-black/15 bg-transparent px-3 py-1.5 text-sm text-neutral-900 dark:border-white/20 dark:text-white';
 const pagerBtnCls =
@@ -16,8 +16,13 @@ function platformLabel(c: string | null) {
   return PLATFORM_LABELS[c as Platform] ?? c;
 }
 
-/** Everything that has gone out, with its tracking number — searchable and paged. */
-export function ShippedTable({ rows }: { rows: ShippedRow[] }) {
+/**
+ * The full history of one kind of movement (shipments or returns) — searchable,
+ * filterable by platform and date range, and paged.
+ *
+ * `title` names the list, `dateLabel` names the first column ("Shipped"/"Returned").
+ */
+export function MovementTable({ rows, title, dateLabel }: { rows: MovementRow[]; title: string; dateLabel: string }) {
   const [q, setQ] = useState('');
   const [fPlatform, setFPlatform] = useState('all');
   const [onlyUntracked, setOnlyUntracked] = useState(false);
@@ -31,7 +36,7 @@ export function ShippedTable({ rows }: { rows: ShippedRow[] }) {
     if (onlyUntracked && r.trackingId) return false;
     // Compare India-time calendar days, so a date means the day you'd see on screen.
     if (fromDate || toDate) {
-      const day = dayKey(r.shippedAt);
+      const day = dayKey(r.at);
       if (fromDate && day < fromDate) return false;
       if (toDate && day > toDate) return false;
     }
@@ -48,7 +53,7 @@ export function ShippedTable({ rows }: { rows: ShippedRow[] }) {
 
   return (
     <Panel
-      title={`Shipped (${filtered.length})`}
+      title={`${title} (${filtered.length})`}
       actions={
         <div className="flex flex-wrap items-center justify-end gap-2">
           <label className="flex items-center gap-1.5 text-sm text-neutral-500">
@@ -85,12 +90,12 @@ export function ShippedTable({ rows }: { rows: ShippedRow[] }) {
       }
     >
       <Table
-        head={<><Th>Shipped</Th><Th>Product</Th><Th>Tracking</Th><Th>Order no.</Th><Th>Platform</Th><Th right>Qty</Th></>}
+        head={<><Th>{dateLabel}</Th><Th>Product</Th><Th>Tracking</Th><Th>Order no.</Th><Th>Platform</Th><Th right>Qty</Th></>}
         empty={filtered.length === 0}
       >
         {pageRows.map((r) => (
           <Tr key={r.id}>
-            <Td>{dateOnly(r.shippedAt)}</Td>
+            <Td>{dateOnly(r.at)}</Td>
             <Td>
               <div className="font-medium">
                 {r.name}
@@ -100,11 +105,7 @@ export function ShippedTable({ rows }: { rows: ShippedRow[] }) {
               <div className="font-mono text-[11px] text-neutral-500">{r.sku}</div>
             </Td>
             <Td>
-              {r.trackingId ? (
-                <span className="font-mono text-xs">{r.trackingId}</span>
-              ) : (
-                <span className="text-xs text-neutral-400">—</span>
-              )}
+              {r.trackingId ? <span className="font-mono text-xs">{r.trackingId}</span> : <span className="text-xs text-neutral-400">—</span>}
             </Td>
             <Td>{r.orderId ? <span className="font-mono text-xs">{r.orderId}</span> : <span className="text-xs text-neutral-400">—</span>}</Td>
             <Td>{platformLabel(r.channel)}</Td>

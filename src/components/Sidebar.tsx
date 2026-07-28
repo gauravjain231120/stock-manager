@@ -20,19 +20,14 @@ export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [toPack, setToPack] = useState<number | null>(null);
-  const [incoming, setIncoming] = useState<number | null>(null);
   const [open, setOpen] = useState(false);
 
-  // Live counts for the "Ready to Ship" and "Returns" badges; refresh on navigation.
+  // Live count for the "Ready to Ship" badge; refreshes when the page changes.
   useEffect(() => {
     let on = true;
     fetch('/api/pending')
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (on && d) setToPack(d.count ?? 0); })
-      .catch(() => {});
-    fetch('/api/return-shipments')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (on && d) setIncoming(d.count ?? 0); })
       .catch(() => {});
     return () => { on = false; };
   }, [pathname]);
@@ -93,10 +88,8 @@ export function Sidebar() {
               >
                 <Icon size={18} className="shrink-0" />
                 <span className="flex-1">{label}</span>
-                {(href === '/ship' && toPack) || (href === '/returns' && incoming) ? (
-                  <span className={`rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${active ? 'bg-white/20 text-white' : 'bg-brand-600 text-white'}`}>
-                    {href === '/ship' ? toPack : incoming}
-                  </span>
+                {href === '/ship' && toPack ? (
+                  <span className={`rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${active ? 'bg-white/20 text-white' : 'bg-brand-600 text-white'}`}>{toPack}</span>
                 ) : null}
               </Link>
             );

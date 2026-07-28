@@ -3,10 +3,8 @@ import { connectDB } from '@/lib/db';
 import { ProductModel } from '@/models/Product';
 import { SkuStockModel } from '@/models/SkuStock';
 import { PendingShipmentModel } from '@/models/PendingShipment';
-import { StockMovementModel } from '@/models/StockMovement';
 import { postMovement } from '@/lib/stock';
 import { MovementType, SystemLocation, stockSkuFor, infoStockFor } from '@/lib/constants';
-import { dayKey } from '@/lib/format';
 
 const MAIN = SystemLocation.MAIN;
 
@@ -240,98 +238,6 @@ export async function shipSelectedPending(ids: string[]) {
     shipped++;
   }
   return { shipped };
-}
-
-export interface ShippedRow {
-  id: string;
-  shippedAt: string;
-  sku: string;
-  name: string;
-  color: string;
-  size: string;
-  qty: number;
-  channel: string | null;
-  trackingId: string | null;
-  orderId: string | null;
-}
-
-/** Everything that has shipped, newest first — the Shipped page. */
-export async function listShipped(limit = 2000): Promise<ShippedRow[]> {
-  await connectDB();
-  const movements = await StockMovementModel.find({ type: MovementType.SOLD })
-    .sort({ createdAt: -1 })
-    .limit(limit)
-    .lean();
-
-  const skus = [...new Set(movements.map((m) => m.sku))];
-  const products = await ProductModel.find({ sku: { $in: skus } }, { sku: 1, name: 1, category: 1, attributes: 1 }).lean();
-  const infoBy = new Map(
-    products.map((p) => {
-      const attrs: Record<string, string> =
-        p.attributes instanceof Map ? Object.fromEntries(p.attributes) : ((p.attributes as Record<string, string>) ?? {});
-      return [p.sku, { name: p.category?.trim() || p.name, color: attrs.color?.trim() ?? '', size: attrs.size?.trim() ?? '' }];
-    }),
-  );
-
-  return movements.map((m) => {
-    const info = infoBy.get(m.sku);
-    return {
-      id: String(m._id),
-      shippedAt: (m.createdAt as unknown as Date).toISOString(),
-      sku: m.sku,
-      name: info?.name ?? m.sku,
-      color: info?.color ?? '',
-      size: info?.size ?? '',
-      qty: Math.abs(m.qty),
-      channel: m.channel ?? null,
-      trackingId: m.trackingId ?? null,
-      orderId: m.orderId ?? null,
-    };
-  });
-}
-
-export interface ShippedStats {
-  shipments: number;
-  units: number;
-  last30Shipments: number;
-  last30Units: number;
-  tracked: number;
-  untracked: number;
-  /** Today's date in India time (YYYY-MM-DD), for the day picker's default. */
-  today: string;
-}
-
-/** Headline numbers for the Shipped page, counted over every shipment ever. */
-export async function shippedStats(): Promise<ShippedStats> {
-  await connectDB();
-  const since = new Date(Date.now() - 30 * 86_400_000);
-  const [agg] = await StockMovementModel.aggregate<{
-    shipments: number; units: number; last30Shipments: number; last30Units: number; tracked: number;
-  }>([
-    { $match: { type: MovementType.SOLD } },
-    {
-      $group: {
-        _id: null,
-        shipments: { $sum: 1 },
-        units: { $sum: { $abs: '$qty' } },
-        last30Shipments: { $sum: { $cond: [{ $gte: ['$createdAt', since] }, 1, 0] } },
-        last30Units: { $sum: { $cond: [{ $gte: ['$createdAt', since] }, { $abs: '$qty' }, 0] } },
-        tracked: { $sum: { $cond: [{ $ifNull: ['$trackingId', false] }, 1, 0] } },
-      },
-    },
-  ]);
-
-  const shipments = agg?.shipments ?? 0;
-  const tracked = agg?.tracked ?? 0;
-  return {
-    shipments,
-    units: agg?.units ?? 0,
-    last30Shipments: agg?.last30Shipments ?? 0,
-    last30Units: agg?.last30Units ?? 0,
-    tracked,
-    untracked: shipments - tracked,
-    today: dayKey(new Date()),
-  };
 }
 
 export async function shipAllPending(channel?: string) {

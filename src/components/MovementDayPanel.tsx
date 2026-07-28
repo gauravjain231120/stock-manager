@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Panel } from '@/components/ui';
 import { dayKey, num } from '@/lib/format';
 import { PLATFORM_LABELS, Platform } from '@/lib/constants';
-import type { ShippedRow } from '@/lib/shipping';
+import type { MovementRow } from '@/lib/movements';
 
 const inputCls = 'rounded-lg border border-black/15 bg-transparent px-3 py-1.5 text-sm text-neutral-900 dark:border-white/20 dark:text-white';
 const btnCls = 'rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium hover:bg-black/5 disabled:opacity-40 dark:border-white/20 dark:hover:bg-white/10';
@@ -23,29 +23,40 @@ function shiftDay(day: string, delta: number): string {
 }
 
 /**
- * "What went out on this day" — pick a date, see the platform-wise counts.
+ * "What happened on this day" — pick a date, see the platform-wise counts.
  * `today` comes from the server already pinned to India time, so the default
  * matches whatever the rest of the page shows.
  */
-export function ShippedDayPanel({ rows, today }: { rows: ShippedRow[]; today: string }) {
+export function MovementDayPanel({
+  rows,
+  today,
+  title,
+  verb,
+}: {
+  rows: MovementRow[];
+  today: string;
+  title: string;
+  /** Past-tense word for the empty state, e.g. "shipped" or "returned". */
+  verb: string;
+}) {
   const [day, setDay] = useState(today);
 
-  const dayRows = day ? rows.filter((r) => dayKey(r.shippedAt) === day) : [];
+  const dayRows = day ? rows.filter((r) => dayKey(r.at) === day) : [];
   const units = dayRows.reduce((a, r) => a + r.qty, 0);
 
-  const byPlatform = new Map<string, { units: number; shipments: number }>();
+  const byPlatform = new Map<string, { units: number; count: number }>();
   for (const r of dayRows) {
     const key = r.channel ?? '';
-    const e = byPlatform.get(key) ?? { units: 0, shipments: 0 };
+    const e = byPlatform.get(key) ?? { units: 0, count: 0 };
     e.units += r.qty;
-    e.shipments += 1;
+    e.count += 1;
     byPlatform.set(key, e);
   }
   const platforms = [...byPlatform.entries()].sort((a, b) => b[1].units - a[1].units);
 
   return (
     <Panel
-      title="Shipped on a day"
+      title={title}
       actions={
         <div className="flex flex-wrap items-center justify-end gap-2">
           <button onClick={() => setDay(shiftDay(day, -1))} disabled={!day} className={btnCls} aria-label="Previous day">‹</button>
@@ -65,14 +76,14 @@ export function ShippedDayPanel({ rows, today }: { rows: ShippedRow[]; today: st
       <div className="px-5 py-4">
         {dayRows.length === 0 ? (
           <p className="text-sm text-neutral-400">
-            Nothing shipped on {day}{day === today ? ' yet' : ''}.
+            Nothing {verb} on {day}{day === today ? ' yet' : ''}.
           </p>
         ) : (
           <>
             <div className="flex flex-wrap items-baseline gap-2">
               <span className="text-3xl font-semibold tabular-nums">{num(units)}</span>
               <span className="text-sm text-neutral-500">
-                unit{units === 1 ? '' : 's'} in {dayRows.length} shipment{dayRows.length === 1 ? '' : 's'}
+                unit{units === 1 ? '' : 's'} in {dayRows.length} entr{dayRows.length === 1 ? 'y' : 'ies'}
                 {day === today ? ' today' : ` on ${day}`}
               </span>
             </div>
@@ -82,7 +93,7 @@ export function ShippedDayPanel({ rows, today }: { rows: ShippedRow[]; today: st
                 <div key={channel || 'none'} className="rounded-lg border border-black/10 px-4 py-3 dark:border-white/10">
                   <div className="text-sm text-neutral-500">{platformLabel(channel || null)}</div>
                   <div className="mt-0.5 text-2xl font-semibold tabular-nums">{num(s.units)}</div>
-                  <div className="text-xs text-neutral-400">{s.shipments} shipment{s.shipments === 1 ? '' : 's'}</div>
+                  <div className="text-xs text-neutral-400">{s.count} entr{s.count === 1 ? 'y' : 'ies'}</div>
                 </div>
               ))}
             </div>
