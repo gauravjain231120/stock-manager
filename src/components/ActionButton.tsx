@@ -30,6 +30,7 @@ export function ActionButton({
   successMessage = 'Done ✓',
   disabled = false,
   title,
+  undoEndpoint,
 }: {
   label: string;
   endpoint: string;
@@ -45,12 +46,36 @@ export function ActionButton({
   successMessage?: string;
   disabled?: boolean;
   title?: string;
+  /**
+   * Where to POST the `undo` payload the endpoint returned, to put things back.
+   * When set and the response carries `undo`, the toast offers an Undo button.
+   */
+  undoEndpoint?: string;
 }) {
   const router = useRouter();
   const ask = useConfirm();
   const toast = useToast();
   const [pending, startTransition] = useTransition();
   const [busy, setBusy] = useState(false);
+
+  async function runUndo(payload: unknown) {
+    if (!undoEndpoint) return;
+    try {
+      const res = await fetch(undoEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) toast.error(data?.error || 'Could not undo');
+      else {
+        toast.success('Restored ✓');
+        startTransition(() => router.refresh());
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not undo');
+    }
+  }
 
   async function run() {
     if (confirm || confirmTitle || confirmDetails) {
@@ -74,7 +99,8 @@ export function ActionButton({
       if (!res.ok) {
         toast.error(data?.error || `Error ${res.status}`);
       } else {
-        toast.success(successMessage);
+        const undo = undoEndpoint && data?.undo ? { label: 'Undo', onClick: () => runUndo(data.undo) } : undefined;
+        toast.success(successMessage, undo ? { action: undo } : undefined);
         startTransition(() => router.refresh());
       }
     } catch (e) {

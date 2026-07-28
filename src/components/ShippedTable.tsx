@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Panel, Table, Th, Td, Tr } from '@/components/ui';
-import { dateOnly, matchesSearch } from '@/lib/format';
+import { dateOnly, dayKey, matchesSearch } from '@/lib/format';
 import { PLATFORMS, PLATFORM_LABELS, Platform } from '@/lib/constants';
 import type { ShippedRow } from '@/lib/shipping';
 
@@ -21,12 +21,20 @@ export function ShippedTable({ rows }: { rows: ShippedRow[] }) {
   const [q, setQ] = useState('');
   const [fPlatform, setFPlatform] = useState('all');
   const [onlyUntracked, setOnlyUntracked] = useState(false);
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(20);
 
   const filtered = rows.filter((r) => {
     if (fPlatform !== 'all' && r.channel !== fPlatform) return false;
     if (onlyUntracked && r.trackingId) return false;
+    // Compare India-time calendar days, so a date means the day you'd see on screen.
+    if (fromDate || toDate) {
+      const day = dayKey(r.shippedAt);
+      if (fromDate && day < fromDate) return false;
+      if (toDate && day > toDate) return false;
+    }
     if (!q.trim()) return true;
     const hay = `${r.sku} ${r.name} ${r.color} ${r.size} ${r.trackingId ?? ''} ${r.orderId ?? ''} ${platformLabel(r.channel)}`;
     return matchesSearch(hay, q, r.sku);
@@ -43,6 +51,17 @@ export function ShippedTable({ rows }: { rows: ShippedRow[] }) {
       title={`Shipped (${filtered.length})`}
       actions={
         <div className="flex flex-wrap items-center justify-end gap-2">
+          <label className="flex items-center gap-1.5 text-sm text-neutral-500">
+            From
+            <input type="date" value={fromDate} onChange={(e) => { setFromDate(e.target.value); setPage(1); }} className={filterCls} />
+          </label>
+          <label className="flex items-center gap-1.5 text-sm text-neutral-500">
+            To
+            <input type="date" value={toDate} onChange={(e) => { setToDate(e.target.value); setPage(1); }} className={filterCls} />
+          </label>
+          {fromDate || toDate ? (
+            <button onClick={() => { setFromDate(''); setToDate(''); setPage(1); }} className={pagerBtnCls}>Clear dates</button>
+          ) : null}
           <label className="flex items-center gap-1.5 text-sm text-neutral-500">
             <input
               type="checkbox"

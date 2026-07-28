@@ -218,7 +218,8 @@ export function RecentEntriesTable({ entries }: { entries: Entry[] }) {
                         ...(e.channel ? [{ label: 'Platform', value: platformLabel(e.channel) }] : []),
                       ]}
                       confirmLabel="Delete"
-                      successMessage="undone ✓"
+                      successMessage="Deleted"
+                      undoEndpoint="/api/register/restore"
                     />
                   </span>
                 )}

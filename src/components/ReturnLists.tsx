@@ -87,6 +87,7 @@ export function ReturnLists({
                     confirmDetails={[{ label: 'Tracking', value: r.trackingId }, { label: 'Product', value: r.sku }]}
                     confirmLabel="Remove"
                     successMessage="Removed"
+                    undoEndpoint="/api/return-shipments"
                   />
                 </span>
               </Td>

@@ -15,6 +15,25 @@ export function CancelButton({ id, name, sku, qty }: { id: string; name: string;
 
   const clamp = (v: number) => Math.max(1, Math.min(v, qty));
 
+  /** Put the cancelled units back in the queue (re-reserves the stock). */
+  async function undo(payload: unknown) {
+    try {
+      const res = await fetch('/api/pending', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) toast.error(data?.error || 'Could not undo');
+      else {
+        toast.success('Back in the queue ✓');
+        router.refresh();
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not undo');
+    }
+  }
+
   async function cancel() {
     const sendQty = clamp(n);
     setBusy(true);
@@ -27,7 +46,10 @@ export function CancelButton({ id, name, sku, qty }: { id: string; name: string;
       const data = await res.json().catch(() => ({}));
       if (!res.ok) toast.error(data?.error || 'Failed to remove');
       else {
-        toast.success(sendQty >= qty ? 'Removed' : `Removed ${sendQty} ✓`);
+        toast.success(
+          sendQty >= qty ? 'Removed' : `Removed ${sendQty} ✓`,
+          data?.undo ? { action: { label: 'Undo', onClick: () => undo(data.undo) } } : undefined,
+        );
         setOpen(false);
         router.refresh();
       }

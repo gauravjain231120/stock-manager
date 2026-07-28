@@ -33,8 +33,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
   try {
-    await deleteEntry(id);
-    return Response.json({ ok: true });
+    const res = await deleteEntry(id);
+    return Response.json({ ok: true, ...res });
   } catch (err) {
     return Response.json({ error: err instanceof Error ? err.message : String(err) }, { status: 400 });
   }

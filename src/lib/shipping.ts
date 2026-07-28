@@ -223,7 +223,12 @@ export async function cancelPending(id: string, qty?: number) {
   await SkuStockModel.updateOne({ sku: stockSkuFor(p.sku), locationCode: MAIN }, { $inc: { reserved: -cancelQty } });
   if (cancelQty >= p.qty) await PendingShipmentModel.deleteOne({ _id: p._id });
   else await PendingShipmentModel.updateOne({ _id: p._id }, { $inc: { qty: -cancelQty } });
-  return { ok: true, cancelled: cancelQty };
+  return {
+    ok: true,
+    cancelled: cancelQty,
+    // Re-queueing these values puts the order back exactly as it was (Undo).
+    undo: { sku: p.sku, qty: cancelQty, channel: p.channel ?? undefined, orderId: p.orderId ?? undefined },
+  };
 }
 
 /** Pack & ship a chosen set of queue entries (each shipped in full). */

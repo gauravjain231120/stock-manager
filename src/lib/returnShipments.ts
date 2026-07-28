@@ -168,7 +168,18 @@ export async function deleteExpectedReturn(id: string) {
   if (!rec) return { ok: true };
   if (rec.status === 'RECEIVED') throw new Error('Already received — it cannot be removed');
   await ReturnShipmentModel.deleteOne({ _id: rec._id });
-  return { ok: true };
+  return {
+    ok: true,
+    // Re-adding these values puts the expected return back as it was (Undo).
+    undo: {
+      trackingId: rec.trackingId,
+      sku: rec.sku,
+      channel: rec.channel ?? undefined,
+      orderId: rec.orderId ?? undefined,
+      qty: rec.qty,
+      date: (rec.initiatedAt as unknown as Date).toISOString(),
+    },
+  };
 }
 
 export async function listReturnShipments(limit = 500): Promise<ReturnRow[]> {

@@ -162,6 +162,85 @@ export async function deleteEntry(movementId: string) {
   } finally {
     await session.endSession();
   }
+
+  // Everything needed to put this entry back if the user hits Undo.
+  return {
+    undo: {
+      sku: mv.sku,
+      locationCode: mv.locationCode,
+      qty: mv.qty,
+      type: mv.type,
+      channel: mv.channel ?? undefined,
+      refType: mv.refType ?? undefined,
+      trackingId: mv.trackingId ?? undefined,
+      orderId: mv.orderId ?? undefined,
+      note: mv.note ?? undefined,
+      createdAt: (mv.createdAt as unknown as Date).toISOString(),
+    },
+  };
+}
+
+export interface EntrySnapshot {
+  sku: string;
+  locationCode: string;
+  qty: number;
+  type: string;
+  channel?: string;
+  refType?: string;
+  trackingId?: string;
+  orderId?: string;
+  note?: string;
+  createdAt: string;
+}
+
+/** Put a deleted Stock Log entry back, exactly as it was (the Undo button). */
+export async function restoreEntry(snap: EntrySnapshot) {
+  await connectDB();
+  if (!EDITABLE_TYPES.includes(snap.type)) throw new Error('This entry cannot be restored');
+  const createdAt = new Date(snap.createdAt);
+
+  const session = await mongoose.startSession();
+  try {
+    await session.withTransaction(async () => {
+      const pool = stockSkuFor(snap.sku);
+      if (snap.qty > 0) {
+        // Putting units back can never go negative, so upsert is safe here.
+        await SkuStockModel.updateOne(
+          { sku: pool, locationCode: snap.locationCode },
+          { $inc: { onHand: snap.qty } },
+          { session, upsert: true },
+        );
+      } else if (snap.qty < 0) {
+        // Re-applying a Ship must not drive stock below zero. ($expr can't be
+        // combined with upsert, and the row exists if it was shipped from.)
+        const upd = await SkuStockModel.findOneAndUpdate(
+          { sku: pool, locationCode: snap.locationCode, $expr: { $gte: [{ $add: ['$onHand', snap.qty] }, 0] } },
+          { $inc: { onHand: snap.qty } },
+          { session, returnDocument: 'after' },
+        );
+        if (!upd) throw new Error('Cannot undo: not enough stock to put that shipment back.');
+      }
+      // timestamps:false so the entry keeps its original date.
+      await StockMovementModel.create(
+        [{
+          sku: snap.sku,
+          locationCode: snap.locationCode,
+          qty: snap.qty,
+          type: snap.type as MovementType,
+          channel: snap.channel,
+          refType: snap.refType,
+          trackingId: snap.trackingId,
+          orderId: snap.orderId,
+          note: snap.note,
+          createdAt,
+        }],
+        { session, timestamps: false },
+      );
+    });
+  } finally {
+    await session.endSession();
+  }
+  return { ok: true };
 }
 
 export interface RegisterRow {
