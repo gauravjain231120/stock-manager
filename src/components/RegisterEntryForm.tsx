@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Truck, Undo2 } from 'lucide-react';
+import { Plus, Truck, Undo2, ScanLine } from 'lucide-react';
 import { PLATFORMS, PLATFORM_LABELS, Platform } from '@/lib/constants';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { useConfirm } from '@/components/ConfirmProvider';
@@ -37,6 +37,8 @@ export function RegisterEntryForm({ products }: { products: { sku: string; name:
   const [date, setDate] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [tracking, setTracking] = useState('');
+  const [scanOpen, setScanOpen] = useState(false);
 
   // Default the date to today on the client (after mount, to avoid an SSR
   // hydration mismatch since the server doesn't know the user's timezone).
@@ -48,6 +50,14 @@ export function RegisterEntryForm({ products }: { products: { sku: string; name:
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+
+    // Returns come back with a courier label — ask for it (scannable) instead of
+    // the plain confirm box, so the tracking number is captured at the same time.
+    if (action === 'RETURN') {
+      setTracking('');
+      setScanOpen(true);
+      return;
+    }
 
     const actionLabel = ACTIONS.find((a) => a.key === action)?.label ?? action;
     const productName = products.find((p) => p.sku === sku)?.name;
@@ -64,6 +74,11 @@ export function RegisterEntryForm({ products }: { products: { sku: string; name:
     });
     if (!ok) return;
 
+    await save();
+  }
+
+  async function save() {
+    const actionLabel = ACTIONS.find((a) => a.key === action)?.label ?? action;
     setBusy(true);
     setErr(null);
     try {
@@ -79,6 +94,7 @@ export function RegisterEntryForm({ products }: { products: { sku: string; name:
           qty: Number(qty),
           channel: needsPlatform ? channel : undefined,
           date: date && date !== today ? date : undefined,
+          trackingId: tracking.trim() || undefined,
         }),
       });
       const data = await res.json();
@@ -88,6 +104,8 @@ export function RegisterEntryForm({ products }: { products: { sku: string; name:
       } else {
         toast.success(`${actionLabel} saved ✓`);
         setQty('');
+        setTracking('');
+        setScanOpen(false);
         router.refresh();
       }
     } catch (e) {
@@ -162,6 +180,43 @@ export function RegisterEntryForm({ products }: { products: { sku: string; name:
           <input className={input} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
         </label>
       </div>
+
+      {scanOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setScanOpen(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-sm rounded-xl border border-black/10 bg-white p-5 text-left shadow-xl dark:border-white/10 dark:bg-neutral-900">
+            <h3 className="text-base font-semibold">Return — scan the label</h3>
+
+            <div className="mt-3 rounded-lg bg-black/5 p-3 dark:bg-white/5">
+              <div className="font-medium">{products.find((p) => p.sku === sku)?.name ?? sku}</div>
+              <div className="font-mono text-xs text-neutral-500">{sku}</div>
+              <div className="mt-1 text-xs text-neutral-500">
+                {PLATFORM_LABELS[channel]} · {qty || 0} unit{Number(qty) === 1 ? '' : 's'} · {date && date !== todayStr() ? date : 'today'}
+              </div>
+            </div>
+
+            <label className="mt-4 flex flex-col gap-1 text-xs text-neutral-500">
+              <span className="flex items-center gap-1.5"><ScanLine size={13} /> Tracking / AWB <span className="text-neutral-400">(optional)</span></span>
+              <input
+                value={tracking}
+                onChange={(e) => setTracking(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); save(); } }}
+                autoFocus
+                placeholder="Scan or type the number…"
+                className="rounded-lg border border-black/15 bg-transparent px-3 py-2.5 font-mono text-sm text-neutral-900 dark:border-white/20 dark:text-white"
+              />
+            </label>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" onClick={() => setScanOpen(false)} className="rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">
+                Cancel
+              </button>
+              <button type="button" onClick={save} disabled={busy} className="rounded-lg bg-amber-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50">
+                {busy ? 'Saving…' : 'Save return'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </form>
   );
 }

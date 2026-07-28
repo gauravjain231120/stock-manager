@@ -95,6 +95,7 @@ export async function sellUnits(args: {
   refType?: string;
   refId?: string;
   note?: string;
+  trackingId?: string;
 }) {
   if (args.qty <= 0) throw new Error('sellUnits qty must be positive');
   await connectDB();
@@ -132,6 +133,7 @@ export async function sellUnits(args: {
             refType: args.refType,
             refId: args.refId,
             note: args.note,
+            trackingId: args.trackingId,
           },
         ],
         { session },

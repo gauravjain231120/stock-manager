@@ -12,6 +12,7 @@ const Body = z
     qty: z.number().int().positive(),
     channel: z.enum(PLATFORMS).optional(),
     date: z.string().optional(),
+    trackingId: z.string().optional(),
   })
   .refine((d) => d.action === 'PRODUCE' || !!d.channel, {
     message: 'Please choose a platform for Ship / Return',
@@ -26,7 +27,7 @@ export async function POST(request: Request) {
   }
   try {
     const date = parsed.data.date ? new Date(parsed.data.date) : undefined;
-    await recordEntry(parsed.data.sku, parsed.data.action as RegisterAction, parsed.data.qty, parsed.data.channel, date);
+    await recordEntry(parsed.data.sku, parsed.data.action as RegisterAction, parsed.data.qty, parsed.data.channel, date, parsed.data.trackingId);
     return Response.json({ ok: true });
   } catch (err) {
     const status = err instanceof InsufficientStockError ? 409 : 400;

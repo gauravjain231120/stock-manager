@@ -16,6 +16,7 @@ export interface Entry {
   qty: number;
   channel: string | null;
   product: { name: string; color: string; size: string } | null;
+  trackingId: string | null;
 }
 
 const TYPE_LABEL: Record<string, string> = { PRODUCED: 'Produce', SOLD: 'Ship', RETURNED: 'Return', ADJUSTED: 'Opening' };
@@ -62,7 +63,7 @@ export function RecentEntriesTable({ entries }: { entries: Entry[] }) {
     if (fPlatform !== 'all' && e.channel !== fPlatform) return false;
     if (!q.trim()) return true;
     const p = e.product;
-    const hay = `${e.sku} ${p ? `${p.name} ${p.color} ${p.size}` : ''} ${TYPE_LABEL[e.type] ?? e.type} ${platformLabel(e.channel)}`;
+    const hay = `${e.sku} ${p ? `${p.name} ${p.color} ${p.size}` : ''} ${TYPE_LABEL[e.type] ?? e.type} ${platformLabel(e.channel)} ${e.trackingId ?? ''}`;
     return matchesSearch(hay, q, e.sku);
   });
 
@@ -174,6 +175,9 @@ export function RecentEntriesTable({ entries }: { entries: Entry[] }) {
                 ) : (
                   <span className="font-mono text-xs">{e.sku}</span>
                 )}
+                {e.trackingId ? (
+                  <div className="font-mono text-[11px] text-neutral-400">#{e.trackingId}</div>
+                ) : null}
               </Td>
               <Td>
                 {editing && isShipReturn ? (

@@ -36,10 +36,13 @@ export async function recordEntry(
   qty: number,
   channel?: string,
   date?: Date,
+  trackingId?: string,
 ) {
   if (qty <= 0) throw new Error('Quantity must be greater than 0');
   const s = sku.trim().toUpperCase();
   const loc = SystemLocation.MAIN;
+  // Same normalising as the ship queue, so a scan and a typed number match.
+  const tracking = trackingId?.trim().toUpperCase().replace(/[^A-Z0-9]/g, '') || undefined;
 
   let movementId: mongoose.Types.ObjectId | undefined;
   switch (action) {
@@ -47,10 +50,10 @@ export async function recordEntry(
       movementId = await applyMovement({ sku: s, locationCode: loc, qty, type: MovementType.PRODUCED, refType: 'REGISTER' });
       break;
     case 'RETURN':
-      movementId = await applyMovement({ sku: s, locationCode: loc, qty, type: MovementType.RETURNED, channel, refType: 'REGISTER' });
+      movementId = await applyMovement({ sku: s, locationCode: loc, qty, type: MovementType.RETURNED, channel, refType: 'REGISTER', trackingId: tracking });
       break;
     case 'SHIP':
-      movementId = await sellUnits({ sku: s, locationCode: loc, qty, channel, refType: 'REGISTER' });
+      movementId = await sellUnits({ sku: s, locationCode: loc, qty, channel, refType: 'REGISTER', trackingId: tracking });
       break;
     default:
       throw new Error(`Unknown action ${action}`);
