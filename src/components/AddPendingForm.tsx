@@ -7,8 +7,10 @@ import { PLATFORMS, PLATFORM_LABELS, Platform } from '@/lib/constants';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { useToast } from '@/components/ToastProvider';
 import { useConfirm } from '@/components/ConfirmProvider';
+import { dateOnly } from '@/lib/format';
 
 interface P { sku: string; name: string; onHand: number; available: number }
+interface Use { where: 'QUEUE' | 'SHIPPED'; sku: string; name: string; qty: number; at: string | null }
 
 const input = 'rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm text-neutral-900 dark:border-white/20 dark:text-white';
 
@@ -21,6 +23,7 @@ export function AddPendingForm({ products }: { products: P[] }) {
   const [channel, setChannel] = useState<Platform>('AMAZON');
   const [orderId, setOrderId] = useState('');
   const [busy, setBusy] = useState(false);
+  const [checking, setChecking] = useState(false);
 
   const sel = products.find((p) => p.sku === sku);
   const avail = sel?.available ?? 0;
@@ -28,18 +31,44 @@ export function AddPendingForm({ products }: { products: P[] }) {
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
 
+    // Warn if this order number is already queued or has already shipped — one
+    // order can legitimately hold two different products, so it's not a block.
+    let dupes: Use[] = [];
+    if (orderId.trim()) {
+      setChecking(true);
+      try {
+        const res = await fetch(`/api/pending/check?orderId=${encodeURIComponent(orderId.trim())}`);
+        const data = await res.json().catch(() => ({}));
+        dupes = Array.isArray(data?.uses) ? data.uses : [];
+      } catch {
+        // A failed check shouldn't stop the order being added.
+      } finally {
+        setChecking(false);
+      }
+    }
+    const sameProduct = dupes.filter((d) => d.sku === sku);
+
     // Confirm the platform before adding — easy to leave it on the wrong one.
     const ok = await ask({
-      title: 'Add to Ready to Ship?',
-      description: 'Double-check the platform is correct before adding.',
+      title: dupes.length ? 'This order number is already used' : 'Add to Ready to Ship?',
+      description: dupes.length
+        ? sameProduct.length
+          ? `Order ${orderId.trim()} already has this exact product ${sameProduct[0].where === 'SHIPPED' ? 'shipped' : 'in the queue'}. Adding it again may ship a duplicate.`
+          : `Order ${orderId.trim()} is already used for another product. That's fine if the order has more than one item.`
+        : 'Double-check the platform is correct before adding.',
+      tone: sameProduct.length ? 'danger' : 'default',
       details: [
         { label: 'Product', value: sel?.name ?? sku },
         { label: 'SKU', value: sku },
         { label: 'Platform', value: PLATFORM_LABELS[channel] },
         { label: 'Qty', value: qty },
         ...(orderId.trim() ? [{ label: 'Order no.', value: orderId.trim() }] : []),
+        ...dupes.map((d) => ({
+          label: d.where === 'SHIPPED' ? 'Already shipped' : 'Already queued',
+          value: `${d.qty} × ${d.name}${d.at ? ` on ${dateOnly(d.at)}` : ''}`,
+        })),
       ],
-      confirmLabel: 'Add',
+      confirmLabel: dupes.length ? 'Add anyway' : 'Add',
     });
     if (!ok) return;
 
@@ -97,10 +126,10 @@ export function AddPendingForm({ products }: { products: P[] }) {
           <input className={`${input} w-36`} value={orderId} onChange={(e) => setOrderId(e.target.value)} placeholder="405-123…" />
         </label>
         <button
-          disabled={busy || !sku || !qty}
+          disabled={busy || checking || !sku || !qty}
           className="flex items-center justify-center gap-1.5 rounded-lg bg-brand-600 px-5 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
         >
-          <Plus size={15} /> {busy ? 'Adding…' : 'Add'}
+          <Plus size={15} /> {checking ? 'Checking…' : busy ? 'Adding…' : 'Add'}
         </button>
       </div>
       {avail <= 0 && sku ? (

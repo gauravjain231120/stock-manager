@@ -3,6 +3,7 @@ import { connectDB } from '@/lib/db';
 import { ProductModel } from '@/models/Product';
 import { SkuStockModel } from '@/models/SkuStock';
 import { PendingShipmentModel } from '@/models/PendingShipment';
+import { StockMovementModel } from '@/models/StockMovement';
 import { postMovement } from '@/lib/stock';
 import { MovementType, SystemLocation, stockSkuFor, infoStockFor, cleanTracking } from '@/lib/constants';
 
@@ -108,6 +109,53 @@ export async function listPending(): Promise<PendingRow[]> {
       info: inf ? { sku: inf.sku, label: inf.label, onHand: stockBy.get(inf.sku)?.onHand ?? 0 } : null,
     };
   });
+}
+
+export interface OrderIdUse {
+  where: 'QUEUE' | 'SHIPPED';
+  sku: string;
+  name: string;
+  qty: number;
+  channel: string | null;
+  at: string | null;
+}
+
+/**
+ * Where an order number is already used — so the add form can warn before the
+ * same order is queued or shipped twice. One order legitimately covering two
+ * different products is common, so this warns rather than blocks.
+ */
+export async function findOrderIdUses(orderId: string): Promise<OrderIdUse[]> {
+  await connectDB();
+  const id = orderId.trim();
+  if (!id) return [];
+
+  const [queued, shipped] = await Promise.all([
+    PendingShipmentModel.find({ orderId: id }).lean(),
+    StockMovementModel.find({ orderId: id, type: MovementType.SOLD }).sort({ createdAt: -1 }).lean(),
+  ]);
+  const skus = [...new Set([...queued, ...shipped].map((r) => r.sku))];
+  const products = await ProductModel.find({ sku: { $in: skus } }, { sku: 1, name: 1 }).lean();
+  const nameBy = new Map(products.map((p) => [p.sku, p.name]));
+
+  return [
+    ...queued.map((q) => ({
+      where: 'QUEUE' as const,
+      sku: q.sku,
+      name: nameBy.get(q.sku) ?? q.sku,
+      qty: q.qty,
+      channel: q.channel ?? null,
+      at: null,
+    })),
+    ...shipped.map((s) => ({
+      where: 'SHIPPED' as const,
+      sku: s.sku,
+      name: nameBy.get(s.sku) ?? s.sku,
+      qty: Math.abs(s.qty),
+      channel: s.channel ?? null,
+      at: (s.createdAt as unknown as Date).toISOString(),
+    })),
+  ];
 }
 
 export async function pendingCount(): Promise<number> {
