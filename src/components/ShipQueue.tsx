@@ -24,6 +24,7 @@ export interface QueueRow {
   /** Companion stock shown for reference next to bundles (never deducted). */
   info: { sku: string; label: string; onHand: number } | null;
   orderId: string | null;
+  trackingId: string | null;
 }
 
 function platformLabel(c?: string | null) {
@@ -169,6 +170,7 @@ export function ShipQueue({
                 <div>{p.name}</div>
                 <div className="font-mono text-[11px] text-neutral-400">{p.sku}</div>
                 {p.orderId ? <div className="text-[11px] text-neutral-400">Order {p.orderId}</div> : null}
+                {p.trackingId ? <div className="font-mono text-[11px] text-emerald-600">#{p.trackingId}</div> : null}
                 {p.stockSku !== p.sku ? (
                   <div className="text-[11px] text-amber-500">
                     set — ships 1 Halter top ({p.stockSku})
@@ -189,7 +191,7 @@ export function ShipQueue({
               <Td right><span className={`font-semibold ${stockStatus(p.after).color}`}>{p.after}</span></Td>
               <Td right>
                 <span className="inline-flex gap-2">
-                  <ShipButton id={p.id} name={p.name} sku={p.sku} qty={p.qty} stock={p.onHand} orderId={p.orderId} />
+                  <ShipButton id={p.id} name={p.name} sku={p.sku} qty={p.qty} stock={p.onHand} orderId={p.orderId} trackingId={p.trackingId} />
                   <EditPendingButton row={p} products={products} />
                   <CancelButton id={p.id} name={p.name} sku={p.sku} qty={p.qty} />
                 </span>

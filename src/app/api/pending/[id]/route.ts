@@ -27,6 +27,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       qty: typeof body?.qty === 'number' ? body.qty : undefined,
       channel: typeof body?.channel === 'string' ? body.channel : undefined,
       orderId: typeof body?.orderId === 'string' ? body.orderId : undefined,
+      trackingId: typeof body?.trackingId === 'string' ? body.trackingId : undefined,
     });
     return Response.json({ ok: true, ...res });
   } catch (err) {

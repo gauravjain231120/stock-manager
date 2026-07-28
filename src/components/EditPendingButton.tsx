@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { PLATFORMS, PLATFORM_LABELS, Platform } from '@/lib/constants';
+import { PLATFORMS, PLATFORM_LABELS, Platform, MAX_TRACKING_LEN, normalizeTracking } from '@/lib/constants';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { useToast } from '@/components/ToastProvider';
 
@@ -13,7 +13,7 @@ export function EditPendingButton({
   row,
   products,
 }: {
-  row: { id: string; sku: string; qty: number; channel: string | null; orderId: string | null };
+  row: { id: string; sku: string; qty: number; channel: string | null; orderId: string | null; trackingId: string | null };
   products: { sku: string; name: string }[];
 }) {
   const router = useRouter();
@@ -25,23 +25,29 @@ export function EditPendingButton({
   const [channel, setChannel] = useState<Platform>((row.channel as Platform) ?? 'AMAZON');
   const [qty, setQty] = useState(String(row.qty));
   const [orderId, setOrderId] = useState(row.orderId ?? '');
+  const [tracking, setTracking] = useState(row.trackingId ?? '');
+
+  const trackingLen = (normalizeTracking(tracking) ?? '').length;
+  const trackingTooLong = trackingLen > MAX_TRACKING_LEN;
 
   function start() {
     setSku(row.sku);
     setChannel((row.channel as Platform) ?? 'AMAZON');
     setQty(String(row.qty));
     setOrderId(row.orderId ?? '');
+    setTracking(row.trackingId ?? '');
     setOpen(true);
   }
 
   async function save(e: FormEvent) {
     e.preventDefault();
+    if (trackingTooLong) return;
     setBusy(true);
     try {
       const res = await fetch(`/api/pending/${row.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sku, channel, qty: Number(qty), orderId }),
+        body: JSON.stringify({ sku, channel, qty: Number(qty), orderId, trackingId: tracking }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) toast.error(data?.error || 'Failed to save');
@@ -100,13 +106,28 @@ export function EditPendingButton({
                 Order no.
                 <input className={input} value={orderId} onChange={(e) => setOrderId(e.target.value)} placeholder="optional" />
               </label>
+              <label className="flex flex-col gap-1 text-xs text-neutral-500">
+                <span className="flex items-center justify-between">
+                  <span>Tracking / AWB</span>
+                  {trackingLen > 0 ? <span className={trackingTooLong ? 'text-red-500' : 'text-neutral-400'}>{trackingLen}/{MAX_TRACKING_LEN}</span> : null}
+                </span>
+                <input
+                  className={`${input} font-mono`}
+                  value={tracking}
+                  onChange={(e) => setTracking(e.target.value)}
+                  placeholder="scan or type — optional"
+                />
+                {trackingTooLong ? (
+                  <span className="text-red-500">Too long — at most {MAX_TRACKING_LEN} characters.</span>
+                ) : null}
+              </label>
             </div>
 
             <div className="mt-5 flex justify-end gap-2">
               <button type="button" onClick={() => setOpen(false)} className="rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">
                 Cancel
               </button>
-              <button disabled={busy || !sku} className="rounded-lg bg-brand-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">
+              <button disabled={busy || !sku || trackingTooLong} className="rounded-lg bg-brand-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">
                 {busy ? 'Saving…' : 'Save'}
               </button>
             </div>

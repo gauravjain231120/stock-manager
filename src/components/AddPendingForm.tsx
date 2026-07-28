@@ -3,7 +3,7 @@
 import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus } from 'lucide-react';
-import { PLATFORMS, PLATFORM_LABELS, Platform } from '@/lib/constants';
+import { PLATFORMS, PLATFORM_LABELS, Platform, MAX_TRACKING_LEN, normalizeTracking } from '@/lib/constants';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { useToast } from '@/components/ToastProvider';
 import { useConfirm } from '@/components/ConfirmProvider';
@@ -22,8 +22,12 @@ export function AddPendingForm({ products }: { products: P[] }) {
   const [qty, setQty] = useState('1');
   const [channel, setChannel] = useState<Platform>('AMAZON');
   const [orderId, setOrderId] = useState('');
+  const [tracking, setTracking] = useState('');
   const [busy, setBusy] = useState(false);
   const [checking, setChecking] = useState(false);
+
+  const trackingLen = (normalizeTracking(tracking) ?? '').length;
+  const trackingTooLong = trackingLen > MAX_TRACKING_LEN;
 
   const sel = products.find((p) => p.sku === sku);
   const avail = sel?.available ?? 0;
@@ -77,7 +81,7 @@ export function AddPendingForm({ products }: { products: P[] }) {
       const res = await fetch('/api/pending', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sku, qty: Number(qty), channel, orderId: orderId.trim() || undefined }),
+        body: JSON.stringify({ sku, qty: Number(qty), channel, orderId: orderId.trim() || undefined, trackingId: tracking.trim() || undefined }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) toast.error(data?.error || 'Failed to add');
@@ -85,6 +89,7 @@ export function AddPendingForm({ products }: { products: P[] }) {
         toast.success('Added to Ready to Ship ✓');
         setQty('1');
         setOrderId('');
+        setTracking('');
         router.refresh();
       }
     } finally {
@@ -112,6 +117,15 @@ export function AddPendingForm({ products }: { products: P[] }) {
           />
         </label>
         <label className="flex flex-col gap-1 text-xs text-neutral-500">
+          Tracking <span className="text-[10px] text-neutral-400">optional</span>
+          <input
+            className={`${input} w-40 font-mono ${trackingTooLong ? 'border-red-500' : ''}`}
+            value={tracking}
+            onChange={(e) => setTracking(e.target.value)}
+            placeholder="scan / AWB…"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-neutral-500">
           Qty
           <input className={`${input} w-20`} type="number" min={1} value={qty} onChange={(e) => setQty(e.target.value)} required />
         </label>
@@ -126,7 +140,7 @@ export function AddPendingForm({ products }: { products: P[] }) {
           <input className={`${input} w-36`} value={orderId} onChange={(e) => setOrderId(e.target.value)} placeholder="405-123…" />
         </label>
         <button
-          disabled={busy || checking || !sku || !qty}
+          disabled={busy || checking || !sku || !qty || trackingTooLong}
           className="flex items-center justify-center gap-1.5 rounded-lg bg-brand-600 px-5 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
         >
           <Plus size={15} /> {checking ? 'Checking…' : busy ? 'Adding…' : 'Add'}

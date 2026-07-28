@@ -10,6 +10,9 @@ const PendingShipmentSchema = new Schema(
     qty: { type: Number, required: true, min: 1 },
     channel: { type: String, trim: true }, // platform (AMAZON / FLIPKART / MYNTRA / OWN_SITE)
     orderId: { type: String, trim: true },
+    // Courier tracking / AWB, filled in as soon as the label exists — so packing
+    // is just "check the number, hit Ship".
+    trackingId: { type: String, trim: true, uppercase: true },
     buyer: { type: String, trim: true },
   },
   { timestamps: true },

@@ -14,6 +14,7 @@ export function ShipButton({
   qty,
   stock,
   orderId,
+  trackingId,
 }: {
   id: string;
   name: string;
@@ -21,13 +22,15 @@ export function ShipButton({
   qty: number;
   stock: number;
   orderId?: string | null;
+  /** Already saved on the queue row — pre-filled so packing is just "hit Ship". */
+  trackingId?: string | null;
 }) {
   const router = useRouter();
   const toast = useToast();
   const maxShip = Math.min(qty, stock); // can't ship more than ordered or more than in stock
   const [open, setOpen] = useState(false);
   const [n, setN] = useState(maxShip);
-  const [tracking, setTracking] = useState('');
+  const [tracking, setTracking] = useState(trackingId ?? '');
   const [order, setOrder] = useState(orderId ?? '');
   const [busy, setBusy] = useState(false);
 
@@ -60,7 +63,7 @@ export function ShipButton({
   return (
     <>
       <button
-        onClick={() => { setN(maxShip); setTracking(''); setOrder(orderId ?? ''); setOpen(true); }}
+        onClick={() => { setN(maxShip); setTracking(trackingId ?? ''); setOrder(orderId ?? ''); setOpen(true); }}
         disabled={maxShip <= 0}
         title={maxShip <= 0 ? 'Out of stock — produce it first' : undefined}
         className="rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40"
@@ -91,7 +94,11 @@ export function ShipButton({
 
             <label className="mt-4 flex flex-col gap-1 text-xs text-neutral-500">
               <span className="flex items-center justify-between">
-                <span className="flex items-center gap-1.5"><ScanLine size={13} /> Scan the shipping label <span className="text-neutral-400">(optional)</span></span>
+                <span className="flex items-center gap-1.5">
+                  <ScanLine size={13} />
+                  {trackingId ? 'Tracking (already saved — check and ship)' : 'Scan the shipping label'}
+                  {trackingId ? null : <span className="text-neutral-400">(optional)</span>}
+                </span>
                 {trackingLen > 0 ? <span className={trackingTooLong ? 'text-red-500' : 'text-neutral-400'}>{trackingLen}/{MAX_TRACKING_LEN}</span> : null}
               </span>
               <input

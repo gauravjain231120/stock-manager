@@ -46,6 +46,7 @@ export default async function ShipPage({ searchParams }: { searchParams: Promise
     onHand: p.onHand,
     info: p.info,
     orderId: p.orderId,
+    trackingId: p.trackingId,
     after: p.onHand - (queuedBySku.get(p.stockSku) ?? p.qty),
     short: (queuedBySku.get(p.stockSku) ?? 0) > p.onHand,
   }));

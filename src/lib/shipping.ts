@@ -18,6 +18,7 @@ export interface PendingRow {
   qty: number;
   channel: string | null;
   orderId: string | null;
+  trackingId: string | null;
   createdAt: string;
   onHand: number;
   available: number;
@@ -48,7 +49,7 @@ export async function shipProducts(): Promise<ShipProduct[]> {
 }
 
 /** Add an order to the queue and RESERVE its stock (does not deduct on-hand yet). */
-export async function addPending(input: { sku: string; qty: number; channel?: string; orderId?: string }) {
+export async function addPending(input: { sku: string; qty: number; channel?: string; orderId?: string; trackingId?: string }) {
   await connectDB();
   const sku = input.sku.trim().toUpperCase();
   const qty = Math.floor(input.qty);
@@ -75,7 +76,7 @@ export async function addPending(input: { sku: string; qty: number; channel?: st
     await existing.save();
     return { id: String(existing._id) };
   }
-  const doc = await PendingShipmentModel.create({ sku, qty, channel, orderId });
+  const doc = await PendingShipmentModel.create({ sku, qty, channel, orderId, trackingId: cleanTracking(input.trackingId) });
   return { id: String(doc._id) };
 }
 
@@ -103,6 +104,7 @@ export async function listPending(): Promise<PendingRow[]> {
       qty: i.qty,
       channel: i.channel ?? null,
       orderId: i.orderId ?? null,
+      trackingId: i.trackingId ?? null,
       createdAt: (i.createdAt as unknown as Date).toISOString(),
       onHand,
       available: onHand - (st?.reserved ?? 0),
@@ -173,7 +175,11 @@ export async function shipPending(id: string, qty?: number, trackingId?: string,
   const p = await PendingShipmentModel.findById(id);
   if (!p) throw new Error('Item not found');
   const shipQty = qty && qty > 0 ? Math.min(Math.floor(qty), p.qty) : p.qty;
-  const tracking = cleanTracking(trackingId);
+  // A number typed at packing time wins; otherwise use whatever was saved on the row.
+  const tracking = cleanTracking(trackingId) ?? p.trackingId ?? undefined;
+  if (trackingId?.trim() && tracking !== p.trackingId) {
+    await PendingShipmentModel.updateOne({ _id: p._id }, { $set: { trackingId: tracking } });
+  }
   // An order number typed at packing time wins, and sticks to whatever is left
   // on the row when only part of it ships.
   const order = orderId?.trim() || p.orderId || undefined;
@@ -209,7 +215,7 @@ export async function shipPending(id: string, qty?: number, trackingId?: string,
  */
 export async function editPending(
   id: string,
-  changes: { sku?: string; qty?: number; channel?: string; orderId?: string },
+  changes: { sku?: string; qty?: number; channel?: string; orderId?: string; trackingId?: string },
 ) {
   await connectDB();
   const p = await PendingShipmentModel.findById(id);
@@ -230,6 +236,7 @@ export async function editPending(
   }
   if (changes.channel !== undefined) p.channel = changes.channel || undefined;
   if (changes.orderId !== undefined) p.orderId = changes.orderId.trim() || undefined;
+  if (changes.trackingId !== undefined) p.trackingId = cleanTracking(changes.trackingId);
 
   // Move the reservation: release everything held on the old pool, hold the new.
   const oldPool = stockSkuFor(oldSku);
