@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Plus, CheckCircle2, AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react';
 import { Panel, Badge } from '@/components/ui';
 import { ActionButton } from '@/components/ActionButton';
 import { useToast } from '@/components/ToastProvider';
@@ -36,6 +36,8 @@ export function ReturnReports({ reports, today }: { reports: ReportView[]; today
   const router = useRouter();
   const toast = useToast();
   const [open, setOpen] = useState(false);
+  // The whole section starts collapsed — it's a reference list, not daily work.
+  const [showSection, setShowSection] = useState(false);
   const [platform, setPlatform] = useState<Platform>('MYNTRA');
   const [date, setDate] = useState(today);
   const [text, setText] = useState('');
@@ -112,18 +114,40 @@ export function ReturnReports({ reports, today }: { reports: ReportView[]; today
     }
   }
 
+  const totalMissing = reports.reduce((a, r) => a + r.missing, 0);
+  const totalLines = reports.reduce((a, r) => a + r.total, 0);
+
   return (
     <Panel
       title="Return reports — what the platform sent vs what arrived"
       actions={
-        <button
-          onClick={() => { setDate(today); setOpen((v) => !v); }}
-          className="flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700"
-        >
-          <Plus size={15} /> {open ? 'Close' : 'Add report'}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {!showSection ? (
+            <span className="text-sm text-neutral-500">
+              {reports.length} report{reports.length === 1 ? '' : 's'} · {totalLines} tracking number{totalLines === 1 ? '' : 's'}
+              {totalMissing > 0 ? <span className="text-red-500"> · {totalMissing} not received</span> : null}
+            </span>
+          ) : null}
+          <button
+            onClick={() => setShowSection((v) => !v)}
+            className="flex items-center gap-1 rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+          >
+            {showSection ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+            {showSection ? 'Hide' : 'Show details'}
+          </button>
+          {showSection ? (
+            <button
+              onClick={() => { setDate(today); setOpen((v) => !v); }}
+              className="flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700"
+            >
+              <Plus size={15} /> {open ? 'Close' : 'Add report'}
+            </button>
+          ) : null}
+        </div>
       }
     >
+      {!showSection ? null : (
+        <>
       {open ? (
         <form onSubmit={save} className="border-b border-black/10 px-5 py-4 dark:border-white/10">
           <div className="flex flex-wrap items-end gap-3">
@@ -273,6 +297,8 @@ export function ReturnReports({ reports, today }: { reports: ReportView[]; today
             );
           })}
         </div>
+      )}
+        </>
       )}
     </Panel>
   );

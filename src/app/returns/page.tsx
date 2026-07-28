@@ -1,6 +1,6 @@
 import { listMovementRows, movementStats } from '@/lib/movements';
 import { listReturnReports } from '@/lib/returnReports';
-import { MovementType } from '@/lib/constants';
+import { MovementType, PLATFORM_LABELS, Platform } from '@/lib/constants';
 import { PageHeader, StatCard } from '@/components/ui';
 import { MovementTable } from '@/components/MovementTable';
 import { MovementDayPanel } from '@/components/MovementDayPanel';
@@ -17,6 +17,17 @@ export default async function ReturnsPage() {
   ]);
   const outstanding = reports.reduce((a, r) => a + r.missing, 0);
 
+  // Returned units per platform, busiest first.
+  const perPlatform = new Map<string, { units: number; count: number }>();
+  for (const r of rows) {
+    const key = r.channel ?? '';
+    const e = perPlatform.get(key) ?? { units: 0, count: 0 };
+    e.units += r.qty;
+    e.count += 1;
+    perPlatform.set(key, e);
+  }
+  const platformStats = [...perPlatform.entries()].sort((a, b) => b[1].units - a[1].units);
+
   return (
     <main className="px-4 py-6 sm:px-6 sm:py-8">
       <PageHeader title="Returns" subtitle="Everything that has come back, with its tracking number. Log a return from the Stock Log." />
@@ -32,6 +43,19 @@ export default async function ReturnsPage() {
           hint="on platform reports"
         />
       </section>
+
+      {platformStats.length > 0 ? (
+        <section className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+          {platformStats.map(([channel, s]) => (
+            <StatCard
+              key={channel || 'none'}
+              label={channel ? PLATFORM_LABELS[channel as Platform] ?? channel : 'No platform'}
+              value={num(s.units)}
+              hint={`${s.count} return${s.count === 1 ? '' : 's'}`}
+            />
+          ))}
+        </section>
+      ) : null}
 
       <div className="mb-6">
         <MovementDayPanel rows={rows} today={stats.today} title="Returned on a day" verb="returned" />
