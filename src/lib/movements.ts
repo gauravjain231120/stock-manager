@@ -16,6 +16,8 @@ export interface MovementRow {
   channel: string | null;
   trackingId: string | null;
   orderId: string | null;
+  /** Returns only: what came back (GOOD / USED / WRONG). */
+  condition: string | null;
 }
 
 export interface MovementStats {
@@ -57,6 +59,7 @@ export async function listMovementRows(type: MovementType, limit = 2000): Promis
       channel: m.channel ?? null,
       trackingId: m.trackingId ?? null,
       orderId: m.orderId ?? null,
+      condition: m.condition ?? null,
     };
   });
 }

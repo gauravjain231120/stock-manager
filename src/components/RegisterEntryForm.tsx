@@ -3,7 +3,10 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, Truck, Undo2, ScanLine } from 'lucide-react';
-import { PLATFORMS, PLATFORM_LABELS, Platform, MAX_TRACKING_LEN, normalizeTracking } from '@/lib/constants';
+import {
+  PLATFORMS, PLATFORM_LABELS, Platform, MAX_TRACKING_LEN, normalizeTracking,
+  RETURN_CONDITIONS, RETURN_CONDITION_LABELS, RETURN_CONDITION_HINTS, ReturnCondition,
+} from '@/lib/constants';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { useConfirm } from '@/components/ConfirmProvider';
 import { useToast } from '@/components/ToastProvider';
@@ -39,6 +42,7 @@ export function RegisterEntryForm({ products }: { products: { sku: string; name:
   const [err, setErr] = useState<string | null>(null);
   const [tracking, setTracking] = useState('');
   const [scanOpen, setScanOpen] = useState(false);
+  const [condition, setCondition] = useState<ReturnCondition>('GOOD');
 
   // Default the date to today on the client (after mount, to avoid an SSR
   // hydration mismatch since the server doesn't know the user's timezone).
@@ -57,6 +61,7 @@ export function RegisterEntryForm({ products }: { products: { sku: string; name:
     // the plain confirm box, so the tracking number is captured at the same time.
     if (action === 'RETURN') {
       setTracking('');
+      setCondition('GOOD');
       setScanOpen(true);
       return;
     }
@@ -98,6 +103,7 @@ export function RegisterEntryForm({ products }: { products: { sku: string; name:
           channel: needsPlatform ? channel : undefined,
           date: date && date !== today ? date : undefined,
           trackingId: tracking.trim() || undefined,
+          condition: action === 'RETURN' ? condition : undefined,
         }),
       });
       const data = await res.json();
@@ -197,6 +203,29 @@ export function RegisterEntryForm({ products }: { products: { sku: string; name:
               </div>
             </div>
 
+            <div className="mt-4">
+              <div className="text-xs text-neutral-500">What came back?</div>
+              <div className="mt-1.5 flex flex-col gap-1.5">
+                {RETURN_CONDITIONS.map((k) => (
+                  <button
+                    type="button"
+                    key={k}
+                    onClick={() => setCondition(k)}
+                    className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                      condition === k
+                        ? k === 'GOOD' ? 'bg-emerald-600 text-white' : k === 'USED' ? 'bg-amber-600 text-white' : 'bg-red-600 text-white'
+                        : 'border border-black/15 text-neutral-600 hover:bg-black/5 dark:border-white/20 dark:text-neutral-300 dark:hover:bg-white/10'
+                    }`}
+                  >
+                    {RETURN_CONDITION_LABELS[k]}
+                    <span className={`ml-auto text-xs font-normal ${condition === k ? 'opacity-80' : 'text-neutral-400'}`}>
+                      {RETURN_CONDITION_HINTS[k]}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <label className="mt-4 flex flex-col gap-1 text-xs text-neutral-500">
               <span className="flex items-center justify-between">
                 <span className="flex items-center gap-1.5"><ScanLine size={13} /> Tracking / AWB <span className="text-neutral-400">(optional)</span></span>
@@ -221,7 +250,9 @@ export function RegisterEntryForm({ products }: { products: { sku: string; name:
               <button type="button" onClick={() => setScanOpen(false)} className="rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">
                 Cancel
               </button>
-              <button type="button" onClick={save} disabled={busy || trackingTooLong} className="rounded-lg bg-amber-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50">
+              <button type="button" onClick={save} disabled={busy || trackingTooLong} className={`rounded-lg px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50 ${
+                condition === 'GOOD' ? 'bg-emerald-600 hover:bg-emerald-700' : condition === 'USED' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-red-600 hover:bg-red-700'
+              }`}>
                 {busy ? 'Saving…' : 'Save return'}
               </button>
             </div>

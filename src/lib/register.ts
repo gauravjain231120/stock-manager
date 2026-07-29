@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import { connectDB } from '@/lib/db';
-import { MovementType, SystemLocation, stockSkuFor, cleanTracking } from '@/lib/constants';
+import { MovementType, SystemLocation, stockSkuFor, cleanTracking, ReturnCondition } from '@/lib/constants';
 import { applyMovement, sellUnits } from '@/lib/stock';
 import { ProductModel } from '@/models/Product';
 import { StockMovementModel } from '@/models/StockMovement';
@@ -37,6 +37,7 @@ export async function recordEntry(
   channel?: string,
   date?: Date,
   trackingId?: string,
+  condition?: ReturnCondition,
 ) {
   if (qty <= 0) throw new Error('Quantity must be greater than 0');
   const s = sku.trim().toUpperCase();
@@ -49,9 +50,22 @@ export async function recordEntry(
     case 'PRODUCE':
       movementId = await applyMovement({ sku: s, locationCode: loc, qty, type: MovementType.PRODUCED, refType: 'REGISTER' });
       break;
-    case 'RETURN':
-      movementId = await applyMovement({ sku: s, locationCode: loc, qty, type: MovementType.RETURNED, channel, refType: 'REGISTER', trackingId: tracking });
+    case 'RETURN': {
+      // Only a good return goes back on the shelf; used and wrong-item parcels
+      // are parked in DAMAGED so they can never be sold by accident.
+      const cond: ReturnCondition = condition ?? 'GOOD';
+      movementId = await applyMovement({
+        sku: s,
+        locationCode: cond === 'GOOD' ? loc : SystemLocation.DAMAGED,
+        qty,
+        type: MovementType.RETURNED,
+        channel,
+        refType: 'REGISTER',
+        trackingId: tracking,
+        condition: cond,
+      });
       break;
+    }
     case 'SHIP':
       movementId = await sellUnits({ sku: s, locationCode: loc, qty, channel, refType: 'REGISTER', trackingId: tracking });
       break;

@@ -1,5 +1,5 @@
 import mongoose, { Schema, InferSchemaType, Model } from 'mongoose';
-import { MOVEMENT_TYPES } from '@/lib/constants';
+import { MOVEMENT_TYPES, RETURN_CONDITIONS } from '@/lib/constants';
 
 /**
  * The immutable ledger — the heart of the whole system. Every change to stock is
@@ -27,6 +27,8 @@ const StockMovementSchema = new Schema(
     // marketplace order number — both carried over from the ship queue.
     trackingId: { type: String, trim: true, uppercase: true },
     orderId: { type: String, trim: true },
+    // For RETURNED rows: what actually came back (GOOD / USED / WRONG).
+    condition: { type: String, enum: [...RETURN_CONDITIONS, null], default: null },
   },
   { timestamps: { createdAt: true, updatedAt: false } },
 );

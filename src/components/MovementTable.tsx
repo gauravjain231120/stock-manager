@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Panel, Table, Th, Td, Tr } from '@/components/ui';
 import { dateOnly, dayKey, matchesSearch } from '@/lib/format';
-import { PLATFORMS, PLATFORM_LABELS, Platform } from '@/lib/constants';
+import { PLATFORMS, PLATFORM_LABELS, Platform, RETURN_CONDITION_LABELS, ReturnCondition } from '@/lib/constants';
 import { EditMovementButton } from '@/components/EditMovementButton';
 import type { MovementRow } from '@/lib/movements';
 
@@ -104,6 +104,11 @@ export function MovementTable({ rows, title, dateLabel }: { rows: MovementRow[];
                 {r.size ? <span className="text-neutral-500"> · {r.size}</span> : null}
               </div>
               <div className="font-mono text-[11px] text-neutral-500">{r.sku}</div>
+              {r.condition && r.condition !== 'GOOD' ? (
+                <div className={`text-[11px] ${r.condition === 'WRONG' ? 'text-red-500' : 'text-amber-500'}`}>
+                  {RETURN_CONDITION_LABELS[r.condition as ReturnCondition] ?? r.condition} — kept out of stock
+                </div>
+              ) : null}
             </Td>
             <Td>
               {r.trackingId ? <span className="font-mono text-xs">{r.trackingId}</span> : <span className="text-xs text-neutral-400">—</span>}

@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import { connectDB } from '@/lib/db';
-import { MovementType, SystemLocation, stockSkuFor } from '@/lib/constants';
+import { MovementType, SystemLocation, stockSkuFor, ReturnCondition } from '@/lib/constants';
 import { StockMovementModel } from '@/models/StockMovement';
 import { SkuStockModel } from '@/models/SkuStock';
 
@@ -38,6 +38,8 @@ export interface MovementInput {
   trackingId?: string;
   /** Marketplace order number, carried over from the ship queue. */
   orderId?: string;
+  /** For returns: what came back (GOOD / USED / WRONG). */
+  condition?: ReturnCondition;
 }
 
 function norm(s: string) {
