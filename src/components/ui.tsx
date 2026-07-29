@@ -59,8 +59,8 @@ export function Th({ children, right }: { children?: ReactNode; right?: boolean 
   return <th className={`px-5 py-2 font-medium ${right ? 'text-right' : ''}`}>{children}</th>;
 }
 
-export function Td({ children, right, mono }: { children?: ReactNode; right?: boolean; mono?: boolean }) {
-  return <td className={`px-5 py-2 ${right ? 'text-right tabular-nums' : ''} ${mono ? 'font-mono text-xs' : ''}`}>{children}</td>;
+export function Td({ children, right, mono, colSpan }: { children?: ReactNode; right?: boolean; mono?: boolean; colSpan?: number }) {
+  return <td colSpan={colSpan} className={`px-5 py-2 ${right ? 'text-right tabular-nums' : ''} ${mono ? 'font-mono text-xs' : ''}`}>{children}</td>;
 }
 
 export function Tr({ children }: { children: ReactNode }) {

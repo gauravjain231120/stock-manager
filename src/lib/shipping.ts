@@ -189,6 +189,15 @@ export async function shipPending(id: string, qty?: number, trackingId?: string,
   const session = await mongoose.startSession();
   try {
     await session.withTransaction(async () => {
+      // Never let a shipment drive stock below zero, even when the API is called
+      // directly — postMovement applies its delta unconditionally.
+      const enough = await SkuStockModel.findOne(
+        { sku: stockSkuFor(p.sku), locationCode: MAIN, $expr: { $gte: [{ $subtract: ['$onHand', shipQty] }, 0] } },
+        { _id: 1 },
+        { session },
+      );
+      if (!enough) throw new Error(`Not enough stock to ship ${shipQty} × ${p.sku}.`);
+
       await postMovement(session, {
         sku: p.sku,
         locationCode: MAIN,
@@ -282,6 +291,25 @@ export async function cancelPending(id: string, qty?: number) {
     // Re-queueing these values puts the order back exactly as it was (Undo).
     undo: { sku: p.sku, qty: cancelQty, channel: p.channel ?? undefined, orderId: p.orderId ?? undefined },
   };
+}
+
+/**
+ * Ship every queued line of one order in a single go — one parcel, one tracking
+ * number on all of them. Used when a marketplace order holds several products.
+ */
+export async function shipOrder(orderId: string, trackingId?: string) {
+  await connectDB();
+  const id = orderId.trim();
+  if (!id) throw new Error('Which order?');
+  const items = await PendingShipmentModel.find({ orderId: id }).lean();
+  if (items.length === 0) throw new Error('Nothing queued for that order');
+
+  let units = 0;
+  for (const i of items) {
+    await shipPending(String(i._id), undefined, trackingId);
+    units += i.qty;
+  }
+  return { shipped: items.length, units };
 }
 
 /** Pack & ship a chosen set of queue entries (each shipped in full). */

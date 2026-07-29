@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { Panel, Table, Th, Td, Tr, Badge } from '@/components/ui';
 import { ActionButton } from '@/components/ActionButton';
 import { ShipButton } from '@/components/ShipButton';
 import { CancelButton } from '@/components/CancelButton';
 import { EditPendingButton } from '@/components/EditPendingButton';
+import { ShipOrderButton } from '@/components/ShipOrderButton';
 import { PlatformFilter } from '@/components/PlatformFilter';
 import { PLATFORM_LABELS, Platform } from '@/lib/constants';
 
@@ -67,6 +68,20 @@ export function ShipQueue({
     selBySku.set(r.stockSku, e);
   }
   const selShort = [...selBySku.values()].some((e) => e.qty > e.onHand);
+
+  // Lines of the same order ship as one parcel, so keep them together and give
+  // multi-item orders a header with a single "ship it all" action.
+  const orderCounts = new Map<string, number>();
+  for (const r of rows) {
+    if (r.orderId) orderCounts.set(r.orderId, (orderCounts.get(r.orderId) ?? 0) + 1);
+  }
+  const multiOrders = new Set([...orderCounts.entries()].filter(([, n]) => n > 1).map(([o]) => o));
+  const ordered = [...rows].sort((a, b) => {
+    const ao = a.orderId && multiOrders.has(a.orderId) ? a.orderId : '';
+    const bo = b.orderId && multiOrders.has(b.orderId) ? b.orderId : '';
+    if (ao !== bo) return ao && bo ? ao.localeCompare(bo) : ao ? -1 : 1;
+    return 0;
+  });
 
   const allChecked = selectable.length > 0 && selectable.every((r) => selected.has(r.id));
   const shownUnits = rows.reduce((a, r) => a + r.qty, 0);
@@ -150,11 +165,35 @@ export function ShipQueue({
         }
         empty={rows.length === 0}
       >
-        {rows.map((p) => {
+        {ordered.map((p, i) => {
           const s = stockStatus(p.onHand);
           const canSelect = p.onHand >= p.qty && p.qty > 0;
+          // First line of a multi-item order gets the "ship it all together" header.
+          const grouped = p.orderId && multiOrders.has(p.orderId);
+          const isGroupStart = grouped && (i === 0 || ordered[i - 1].orderId !== p.orderId);
+          const groupRows = grouped ? ordered.filter((r) => r.orderId === p.orderId) : [];
           return (
-            <Tr key={p.id}>
+            <Fragment key={p.id}>
+            {isGroupStart ? (
+              <Tr>
+                <Td colSpan={8}>
+                  <div className="flex flex-wrap items-center gap-3 rounded-lg bg-brand-50 px-3 py-2 dark:bg-white/5">
+                    <span className="text-sm font-medium">Order {p.orderId}</span>
+                    <span className="text-xs text-neutral-500">
+                      {groupRows.length} items · {groupRows.reduce((a, r) => a + r.qty, 0)} units — one parcel
+                    </span>
+                    <span className="ml-auto">
+                      <ShipOrderButton
+                        orderId={p.orderId!}
+                        items={groupRows.map((r) => ({ sku: r.sku, name: r.name, qty: r.qty, onHand: r.onHand }))}
+                        trackingId={groupRows.find((r) => r.trackingId)?.trackingId ?? null}
+                      />
+                    </span>
+                  </div>
+                </Td>
+              </Tr>
+            ) : null}
+            <Tr>
               <Td>
                 <input
                   type="checkbox"
@@ -197,6 +236,7 @@ export function ShipQueue({
                 </span>
               </Td>
             </Tr>
+            </Fragment>
           );
         })}
       </Table>
