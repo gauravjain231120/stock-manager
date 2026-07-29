@@ -108,9 +108,9 @@ export function cleanTracking(input?: string | null): string | undefined {
 
 /**
  * What came back in a returned parcel, chosen when logging a Return:
- *   GOOD   resellable — goes back into sellable stock
- *   USED   worn / not resellable — parked in DAMAGED, never sold again
- *   WRONG  not the item that was sent — also kept out of sellable stock
+ *   GOOD   as-new — back into sellable stock
+ *   USED   worn but resellable — also back into stock, flagged as used
+ *   WRONG  not the item that was sent — no stock added, kept in DAMAGED to claim
  */
 export const RETURN_CONDITIONS = ['GOOD', 'USED', 'WRONG'] as const;
 export type ReturnCondition = (typeof RETURN_CONDITIONS)[number];
@@ -121,7 +121,7 @@ export const RETURN_CONDITION_LABELS: Record<ReturnCondition, string> = {
 };
 export const RETURN_CONDITION_HINTS: Record<ReturnCondition, string> = {
   GOOD: 'back to sellable stock',
-  USED: 'kept out of stock',
+  USED: 'back to stock, marked used',
   WRONG: 'not my item — claim it',
 };
 

@@ -106,7 +106,8 @@ export function MovementTable({ rows, title, dateLabel }: { rows: MovementRow[];
               <div className="font-mono text-[11px] text-neutral-500">{r.sku}</div>
               {r.condition && r.condition !== 'GOOD' ? (
                 <div className={`text-[11px] ${r.condition === 'WRONG' ? 'text-red-500' : 'text-amber-500'}`}>
-                  {RETURN_CONDITION_LABELS[r.condition as ReturnCondition] ?? r.condition} — kept out of stock
+                  {RETURN_CONDITION_LABELS[r.condition as ReturnCondition] ?? r.condition}
+                  {r.condition === 'WRONG' ? ' — kept out of stock' : ' — back in stock'}
                 </div>
               ) : null}
             </Td>

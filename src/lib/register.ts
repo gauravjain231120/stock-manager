@@ -51,12 +51,12 @@ export async function recordEntry(
       movementId = await applyMovement({ sku: s, locationCode: loc, qty, type: MovementType.PRODUCED, refType: 'REGISTER' });
       break;
     case 'RETURN': {
-      // Only a good return goes back on the shelf; used and wrong-item parcels
-      // are parked in DAMAGED so they can never be sold by accident.
+      // Good and used parcels both go back on the shelf (used is just flagged);
+      // a wrong item was never ours, so it's parked in DAMAGED to be claimed.
       const cond: ReturnCondition = condition ?? 'GOOD';
       movementId = await applyMovement({
         sku: s,
-        locationCode: cond === 'GOOD' ? loc : SystemLocation.DAMAGED,
+        locationCode: cond === 'WRONG' ? SystemLocation.DAMAGED : loc,
         qty,
         type: MovementType.RETURNED,
         channel,
