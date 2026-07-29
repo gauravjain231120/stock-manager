@@ -169,19 +169,32 @@ export function ShipQueue({
           const s = stockStatus(p.onHand);
           const canSelect = p.onHand >= p.qty && p.qty > 0;
           // First line of a multi-item order gets the "ship it all together" header.
-          const grouped = p.orderId && multiOrders.has(p.orderId);
+          const grouped = Boolean(p.orderId && multiOrders.has(p.orderId));
           const isGroupStart = grouped && (i === 0 || ordered[i - 1].orderId !== p.orderId);
+          const isGroupEnd = grouped && (i === ordered.length - 1 || ordered[i + 1].orderId !== p.orderId);
           const groupRows = grouped ? ordered.filter((r) => r.orderId === p.orderId) : [];
+          const groupShort = groupRows.filter((r) => r.onHand < r.qty);
+          // Tinted band + left accent so the lines of one parcel read as a block.
+          const bandCls = grouped ? 'bg-brand-50/70 dark:bg-white/[0.04]' : '';
+          const accentCls = grouped ? 'border-l-4 border-brand-600' : '';
           return (
             <Fragment key={p.id}>
             {isGroupStart ? (
-              <Tr>
-                <Td colSpan={8}>
-                  <div className="flex flex-wrap items-center gap-3 rounded-lg bg-brand-50 px-3 py-2 dark:bg-white/5">
-                    <span className="text-sm font-medium">Order {p.orderId}</span>
-                    <span className="text-xs text-neutral-500">
-                      {groupRows.length} items · {groupRows.reduce((a, r) => a + r.qty, 0)} units — one parcel
+              <Tr className={bandCls}>
+                <Td colSpan={8} className={accentCls}>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 py-0.5">
+                    <span className="rounded-md bg-brand-600 px-2 py-0.5 text-xs font-semibold text-white">
+                      Pack together
                     </span>
+                    <span className="font-mono text-sm font-medium">Order {p.orderId}</span>
+                    <span className="text-xs text-neutral-500">
+                      {groupRows.length} items · {groupRows.reduce((a, r) => a + r.qty, 0)} units — one parcel, one tracking number
+                    </span>
+                    {groupShort.length > 0 ? (
+                      <span className="text-xs font-medium text-red-500">
+                        {groupShort.length} item{groupShort.length === 1 ? '' : 's'} out of stock — produce first
+                      </span>
+                    ) : null}
                     <span className="ml-auto">
                       <ShipOrderButton
                         orderId={p.orderId!}
@@ -193,8 +206,8 @@ export function ShipQueue({
                 </Td>
               </Tr>
             ) : null}
-            <Tr>
-              <Td>
+            <Tr className={`${bandCls} ${isGroupEnd ? 'border-b-2 border-brand-600/30' : ''}`}>
+              <Td className={accentCls}>
                 <input
                   type="checkbox"
                   checked={selected.has(p.id)}
@@ -208,7 +221,8 @@ export function ShipQueue({
               <Td>
                 <div>{p.name}</div>
                 <div className="font-mono text-[11px] text-neutral-400">{p.sku}</div>
-                {p.orderId ? <div className="text-[11px] text-neutral-400">Order {p.orderId}</div> : null}
+                {/* The order number sits in the group header, so don't repeat it on every line. */}
+                {p.orderId && !grouped ? <div className="text-[11px] text-neutral-400">Order {p.orderId}</div> : null}
                 {p.trackingId ? <div className="font-mono text-[11px] text-emerald-600">#{p.trackingId}</div> : null}
                 {p.stockSku !== p.sku ? (
                   <div className="text-[11px] text-amber-500">
@@ -230,7 +244,10 @@ export function ShipQueue({
               <Td right><span className={`font-semibold ${stockStatus(p.after).color}`}>{p.after}</span></Td>
               <Td right>
                 <span className="inline-flex gap-2">
-                  <ShipButton id={p.id} name={p.name} sku={p.sku} qty={p.qty} stock={p.onHand} orderId={p.orderId} trackingId={p.trackingId} />
+                  {/* One Ship button per order — grouped lines ship from the header. */}
+                  {grouped ? null : (
+                    <ShipButton id={p.id} name={p.name} sku={p.sku} qty={p.qty} stock={p.onHand} orderId={p.orderId} trackingId={p.trackingId} />
+                  )}
                   <EditPendingButton row={p} products={products} />
                   <CancelButton id={p.id} name={p.name} sku={p.sku} qty={p.qty} />
                 </span>
