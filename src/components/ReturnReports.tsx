@@ -91,7 +91,11 @@ export function ReturnReports({ reports, today }: { reports: ReportView[]; today
       const data = await res.json().catch(() => ({}));
       if (!res.ok) toast.error(data?.error || 'Could not save');
       else {
-        toast.success(`Saved ${data.added} tracking number${data.added === 1 ? '' : 's'} ✓${skipNote(data)}`);
+        toast.success(
+          data.merged
+            ? `Added ${data.added} to that day's report — ${data.total} in total ✓${skipNote(data)}`
+            : `Saved ${data.added} tracking number${data.added === 1 ? '' : 's'} ✓${skipNote(data)}`,
+        );
         setText('');
         setOpen(false);
         router.refresh();
@@ -174,6 +178,10 @@ export function ReturnReports({ reports, today }: { reports: ReportView[]; today
               className={`${input} font-mono`}
             />
           </label>
+          <p className="mt-2 text-[11px] text-neutral-400">
+            If a report already exists for that platform and day, these numbers are added to it — the ones you already
+            received stay green and anything new shows as not received.
+          </p>
 
           <div className="mt-3 flex justify-end">
             <button disabled={busy || typedCount === 0} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">

@@ -1,5 +1,6 @@
 import { connectDB } from '@/lib/db';
 import { MovementType, PLATFORMS, Platform, normalizeTracking, MAX_TRACKING_LEN } from '@/lib/constants';
+import { dayKey } from '@/lib/format';
 import { ProductModel } from '@/models/Product';
 import { ReturnReportModel } from '@/models/ReturnReport';
 import { StockMovementModel } from '@/models/StockMovement';
@@ -66,23 +67,65 @@ async function findDuplicates(codes: string[], exceptId?: string) {
   return dupes;
 }
 
+/** The report for one platform on one day, if it exists (day compared in IST). */
+async function findReportForDay(platform: Platform, date: Date) {
+  const day = dayKey(date);
+  const sameDay = await ReturnReportModel.find({ platform }).lean();
+  return sameDay.find((r) => dayKey(r.reportDate as unknown as Date) === day) ?? null;
+}
+
+/**
+ * Save a platform's report. If one already exists for that platform and day, the
+ * numbers are MERGED into it — so pasting Myntra's list into a day that already
+ * holds auto-added returns leaves one report showing received vs not received,
+ * rather than two competing ones.
+ */
 export async function createReturnReport(input: { platform?: string; date?: Date; text: string }) {
   await connectDB();
   const { codes, skipped } = parseTrackingList(input.text);
   if (codes.length === 0) throw new Error('No usable tracking numbers found — paste one per line.');
 
-  const dupes = await findDuplicates(codes);
+  const platform = PLATFORMS.includes(input.platform as Platform) ? (input.platform as Platform) : undefined;
+  const reportDate = input.date ?? new Date();
+  const existing = platform ? await findReportForDay(platform, reportDate) : null;
+
+  const dupes = await findDuplicates(codes, existing ? String(existing._id) : undefined);
   const fresh = codes.filter((c) => !dupes.has(c));
+
+  // Merging into the day's existing report: keep what's there, add what's new.
+  if (existing) {
+    const have = new Set(existing.items.map((i) => i.trackingId));
+    const toAdd = fresh.filter((c) => !have.has(c));
+    if (toAdd.length > 0) {
+      try {
+        await ReturnReportModel.updateOne(
+          { _id: existing._id },
+          { $push: { items: { $each: toAdd.map((trackingId) => ({ trackingId, settled: false })) } } },
+        );
+      } catch (err) {
+        if (isDuplicateKey(err)) throw new Error(DUPLICATE_MESSAGE);
+        throw err;
+      }
+    }
+    return {
+      id: String(existing._id),
+      added: toAdd.length,
+      merged: true,
+      total: have.size + toAdd.length,
+      skipped,
+      duplicates: [...dupes.entries()].map(([trackingId, where]) => ({ trackingId, where })),
+    };
+  }
+
   if (fresh.length === 0) {
     throw new Error(`Every one of those tracking numbers is already on another report (e.g. ${[...dupes.values()][0]}).`);
   }
 
-  const platform = PLATFORMS.includes(input.platform as Platform) ? (input.platform as Platform) : undefined;
   let doc;
   try {
     doc = await ReturnReportModel.create({
       platform,
-      reportDate: input.date ?? new Date(),
+      reportDate,
       items: fresh.map((trackingId) => ({ trackingId })),
     });
   } catch (err) {
@@ -92,9 +135,39 @@ export async function createReturnReport(input: { platform?: string; date?: Date
   return {
     id: String(doc._id),
     added: fresh.length,
+    merged: false,
+    total: fresh.length,
     skipped,
     duplicates: [...dupes.entries()].map(([trackingId, where]) => ({ trackingId, where })),
   };
+}
+
+/**
+ * Put a scanned Myntra return straight onto that day's report, creating the
+ * report if it's the first of the day. Silently does nothing when the number is
+ * already recorded somewhere — logging a return must never fail because of this.
+ */
+export async function autoAddToDayReport(platform: string, trackingId: string, date: Date) {
+  if (platform !== 'MYNTRA') return;
+  const code = normalizeTracking(trackingId);
+  if (!code || code.length > MAX_TRACKING_LEN) return;
+
+  try {
+    await connectDB();
+    const existing = await findReportForDay('MYNTRA', date);
+    if (existing) {
+      if (existing.items.some((i) => i.trackingId === code)) return;
+      const dupes = await findDuplicates([code], String(existing._id));
+      if (dupes.size > 0) return;
+      await ReturnReportModel.updateOne({ _id: existing._id }, { $push: { items: { trackingId: code, settled: false } } });
+      return;
+    }
+    const dupes = await findDuplicates([code]);
+    if (dupes.size > 0) return;
+    await ReturnReportModel.create({ platform: 'MYNTRA', reportDate: date, items: [{ trackingId: code }] });
+  } catch {
+    // Never block the return itself if the report can't be updated.
+  }
 }
 
 /** Every saved report, newest first, with each line matched against real returns. */

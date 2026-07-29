@@ -6,6 +6,7 @@ import { ProductModel } from '@/models/Product';
 import { StockMovementModel } from '@/models/StockMovement';
 import { SkuStockModel } from '@/models/SkuStock';
 import { LocationModel } from '@/models/Location';
+import { autoAddToDayReport } from '@/lib/returnReports';
 
 export type RegisterAction = 'PRODUCE' | 'SHIP' | 'RETURN';
 export const REGISTER_ACTIONS: RegisterAction[] = ['PRODUCE', 'SHIP', 'RETURN'];
@@ -77,6 +78,12 @@ export async function recordEntry(
   // Use the native driver so Mongoose's timestamp handling doesn't override it.
   if (date && movementId) {
     await StockMovementModel.collection.updateOne({ _id: movementId }, { $set: { createdAt: date } });
+  }
+
+  // A scanned Myntra return also lands on that day's return report, so the
+  // report builds itself and pasting Myntra's list later shows the difference.
+  if (action === 'RETURN' && channel && tracking) {
+    await autoAddToDayReport(channel, tracking, date ?? new Date());
   }
   return movementId;
 }
