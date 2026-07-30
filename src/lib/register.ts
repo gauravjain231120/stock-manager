@@ -3,6 +3,7 @@ import { connectDB } from '@/lib/db';
 import { MovementType, SystemLocation, stockSkuFor, cleanTracking, ReturnCondition } from '@/lib/constants';
 import { applyMovement, sellUnits } from '@/lib/stock';
 import { ProductModel } from '@/models/Product';
+import { ProductGroupModel } from '@/models/ProductGroup';
 import { StockMovementModel } from '@/models/StockMovement';
 import { SkuStockModel } from '@/models/SkuStock';
 import { LocationModel } from '@/models/Location';
@@ -269,19 +270,34 @@ export interface RegisterRow {
   inStock: number;
   /** True for bundles: inStock is another SKU's pool, so don't sum it twice. */
   sharedStock?: boolean;
+  /** Parent product (style) + variant attributes — drives the Stock Log picker. */
+  groupCode?: string;
+  groupName?: string;
+  category?: string;
+  color?: string;
+  size?: string;
+}
+
+/** Variant attributes as a plain object, whether Mongoose gives a Map or not. */
+function attrsOf(attributes: unknown): Record<string, string> {
+  if (attributes instanceof Map) return Object.fromEntries(attributes);
+  return (attributes as Record<string, string>) ?? {};
 }
 
 /** Per-product totals for the three actions + current stock. */
 export async function registerTotals(): Promise<RegisterRow[]> {
   await connectDB();
-  const [products, byType, stock, locations] = await Promise.all([
+  const [products, byType, stock, locations, groups] = await Promise.all([
     ProductModel.find({ active: true }).sort({ sku: 1 }).lean(),
     StockMovementModel.aggregate<{ _id: { sku: string; type: string }; qty: number }>([
       { $group: { _id: { sku: '$sku', type: '$type' }, qty: { $sum: '$qty' } } },
     ]),
     SkuStockModel.find().lean(),
     LocationModel.find({ kind: 'SELLABLE' }).lean(),
+    ProductGroupModel.find({}, { code: 1, name: 1 }).lean(),
   ]);
+
+  const groupNameByCode = new Map(groups.map((g) => [g.code, g.name]));
 
   const sellable = new Set(locations.map((l) => l.code));
   const inStockBySku = new Map<string, number>();
@@ -302,6 +318,7 @@ export async function registerTotals(): Promise<RegisterRow[]> {
 
   return products.map((p) => {
     const a = aggBySku.get(p.sku) ?? { produced: 0, shipped: 0, returned: 0 };
+    const attrs = attrsOf(p.attributes);
     return {
       sku: p.sku,
       name: p.name,
@@ -311,6 +328,11 @@ export async function registerTotals(): Promise<RegisterRow[]> {
       returned: a.returned,
       inStock: inStockBySku.get(stockSkuFor(p.sku)) ?? 0,
       sharedStock: stockSkuFor(p.sku) !== p.sku || undefined,
+      groupCode: p.groupCode ?? undefined,
+      groupName: (p.groupCode && groupNameByCode.get(p.groupCode)) || undefined,
+      category: p.category?.trim() || undefined,
+      color: attrs.color?.trim() || undefined,
+      size: attrs.size?.trim() || undefined,
     };
   });
 }
@@ -358,8 +380,7 @@ export async function productInfoBySku(): Promise<Map<string, EntryProductInfo>>
   const products = await ProductModel.find({}, { sku: 1, name: 1, category: 1, attributes: 1 }).lean();
   const out = new Map<string, EntryProductInfo>();
   for (const p of products) {
-    const attrs: Record<string, string> =
-      p.attributes instanceof Map ? Object.fromEntries(p.attributes) : ((p.attributes as Record<string, string>) ?? {});
+    const attrs = attrsOf(p.attributes);
     out.set(p.sku, {
       name: p.category?.trim() || p.name,
       color: attrs.color?.trim() ?? '',

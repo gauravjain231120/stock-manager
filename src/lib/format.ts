@@ -35,6 +35,15 @@ export function dayKey(d?: Date | string | null): string {
 
 const SIZE_ORDER = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL', 'OS', 'FREE'];
 
+/** Real size order (XS, S, M, L, XL, XXL); unknown sizes sort last, then A–Z. */
+export function compareSize(a: string, b: string): number {
+  const idx = (x: string) => {
+    const i = SIZE_ORDER.indexOf(x.trim().toUpperCase());
+    return i < 0 ? 99 : i;
+  };
+  return idx(a) - idx(b) || a.localeCompare(b);
+}
+
 /**
  * Sort variants so the same product+colour group together, then by real size
  * order (XS, S, M, L, XL, XXL) instead of alphabetical (which gives L, M, S…).

@@ -35,7 +35,19 @@ export default async function RegisterPage() {
       <PageHeader title="Stock Log" subtitle="The simple way: pick a product, choose Produce / Ship / Return, enter a quantity." />
 
       <div className="mb-6">
-        <RegisterEntryForm products={rows.map((r) => ({ sku: r.sku, name: r.name, inStock: r.inStock }))} />
+        <RegisterEntryForm
+          products={rows.map((r) => ({
+            sku: r.sku,
+            name: r.name,
+            inStock: r.inStock,
+            groupCode: r.groupCode,
+            groupName: r.groupName,
+            category: r.category,
+            color: r.color,
+            size: r.size,
+            imageUrl: r.imageUrl,
+          }))}
+        />
       </div>
 
       <section className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">

@@ -8,6 +8,7 @@ import {
   RETURN_CONDITIONS, RETURN_CONDITION_LABELS, RETURN_CONDITION_HINTS, ReturnCondition,
 } from '@/lib/constants';
 import { SearchableSelect } from '@/components/SearchableSelect';
+import { ProductPicker, PickerProduct } from '@/components/ProductPicker';
 import { useConfirm } from '@/components/ConfirmProvider';
 import { useToast } from '@/components/ToastProvider';
 
@@ -29,7 +30,7 @@ const ACTIONS = [
 
 const input = 'rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm text-neutral-900 dark:border-white/20 dark:text-white';
 
-export function RegisterEntryForm({ products }: { products: { sku: string; name: string; inStock?: number }[] }) {
+export function RegisterEntryForm({ products }: { products: PickerProduct[] }) {
   const router = useRouter();
   const ask = useConfirm();
   const toast = useToast();
@@ -188,6 +189,10 @@ export function RegisterEntryForm({ products }: { products: { sku: string; name:
           Date
           <input className={input} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
         </label>
+      </div>
+
+      <div className="mt-4 border-t border-black/10 pt-4 dark:border-white/10">
+        <ProductPicker products={products} value={sku} onChange={setSku} />
       </div>
 
       {scanOpen ? (
