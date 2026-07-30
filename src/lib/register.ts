@@ -8,6 +8,7 @@ import { StockMovementModel } from '@/models/StockMovement';
 import { SkuStockModel } from '@/models/SkuStock';
 import { LocationModel } from '@/models/Location';
 import { autoAddToDayReport } from '@/lib/returnReports';
+import { VariantMeta, attrsOf, variantMeta } from '@/lib/variants';
 
 export type RegisterAction = 'PRODUCE' | 'SHIP' | 'RETURN';
 export const REGISTER_ACTIONS: RegisterAction[] = ['PRODUCE', 'SHIP', 'RETURN'];
@@ -260,28 +261,16 @@ export async function restoreEntry(snap: EntrySnapshot) {
   return { ok: true };
 }
 
-export interface RegisterRow {
+/** Parent product (style) + colour/size are carried so the picker can build its rows. */
+export interface RegisterRow extends VariantMeta {
   sku: string;
   name: string;
-  imageUrl?: string;
   produced: number;
   shipped: number;
   returned: number;
   inStock: number;
   /** True for bundles: inStock is another SKU's pool, so don't sum it twice. */
   sharedStock?: boolean;
-  /** Parent product (style) + variant attributes — drives the Stock Log picker. */
-  groupCode?: string;
-  groupName?: string;
-  category?: string;
-  color?: string;
-  size?: string;
-}
-
-/** Variant attributes as a plain object, whether Mongoose gives a Map or not. */
-function attrsOf(attributes: unknown): Record<string, string> {
-  if (attributes instanceof Map) return Object.fromEntries(attributes);
-  return (attributes as Record<string, string>) ?? {};
 }
 
 /** Per-product totals for the three actions + current stock. */
@@ -318,21 +307,15 @@ export async function registerTotals(): Promise<RegisterRow[]> {
 
   return products.map((p) => {
     const a = aggBySku.get(p.sku) ?? { produced: 0, shipped: 0, returned: 0 };
-    const attrs = attrsOf(p.attributes);
     return {
+      ...variantMeta(p, p.groupCode ? groupNameByCode.get(p.groupCode) : undefined),
       sku: p.sku,
       name: p.name,
-      imageUrl: p.imageUrl ?? undefined,
       produced: a.produced,
       shipped: a.shipped,
       returned: a.returned,
       inStock: inStockBySku.get(stockSkuFor(p.sku)) ?? 0,
       sharedStock: stockSkuFor(p.sku) !== p.sku || undefined,
-      groupCode: p.groupCode ?? undefined,
-      groupName: (p.groupCode && groupNameByCode.get(p.groupCode)) || undefined,
-      category: p.category?.trim() || undefined,
-      color: attrs.color?.trim() || undefined,
-      size: attrs.size?.trim() || undefined,
     };
   });
 }

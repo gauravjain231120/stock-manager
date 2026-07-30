@@ -5,11 +5,13 @@ import { useRouter } from 'next/navigation';
 import { Plus } from 'lucide-react';
 import { PLATFORMS, PLATFORM_LABELS, Platform } from '@/lib/constants';
 import { SearchableSelect } from '@/components/SearchableSelect';
+import { ProductPicker } from '@/components/ProductPicker';
 import { useToast } from '@/components/ToastProvider';
 import { useConfirm } from '@/components/ConfirmProvider';
 import { dateOnly } from '@/lib/format';
+import type { VariantMeta } from '@/lib/variants';
 
-interface P { sku: string; name: string; onHand: number; available: number }
+interface P extends VariantMeta { sku: string; name: string; onHand: number; available: number }
 interface Use { where: 'QUEUE' | 'SHIPPED'; sku: string; name: string; qty: number; at: string | null }
 
 const input = 'rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm text-neutral-900 dark:border-white/20 dark:text-white';
@@ -136,6 +138,15 @@ export function AddPendingForm({ products }: { products: P[] }) {
       {avail <= 0 && sku ? (
         <p className="mt-2 text-xs text-amber-600">Heads-up: nothing available for this size — you may need to produce it.</p>
       ) : null}
+
+      <div className="mt-4 border-t border-black/10 pt-4 dark:border-white/10">
+        {/* Chips show AVAILABLE (on-hand − reserved), matching the number above the search box. */}
+        <ProductPicker
+          products={products.map((p) => ({ ...p, inStock: p.available }))}
+          value={sku}
+          onChange={setSku}
+        />
+      </div>
     </form>
   );
 }

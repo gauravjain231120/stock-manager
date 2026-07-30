@@ -1,11 +1,13 @@
 import mongoose from 'mongoose';
 import { connectDB } from '@/lib/db';
 import { ProductModel } from '@/models/Product';
+import { ProductGroupModel } from '@/models/ProductGroup';
 import { SkuStockModel } from '@/models/SkuStock';
 import { PendingShipmentModel } from '@/models/PendingShipment';
 import { StockMovementModel } from '@/models/StockMovement';
 import { postMovement } from '@/lib/stock';
 import { MovementType, SystemLocation, stockSkuFor, infoStockFor, cleanTracking } from '@/lib/constants';
+import { VariantMeta, variantMeta } from '@/lib/variants';
 
 const MAIN = SystemLocation.MAIN;
 
@@ -26,7 +28,8 @@ export interface PendingRow {
   info: { sku: string; label: string; onHand: number } | null;
 }
 
-export interface ShipProduct {
+/** Parent product + colour/size are carried so the add form's picker can build its rows. */
+export interface ShipProduct extends VariantMeta {
   sku: string;
   name: string;
   onHand: number;
@@ -36,15 +39,26 @@ export interface ShipProduct {
 /** Products with current on-hand and available (on-hand − reserved) for the add form. */
 export async function shipProducts(): Promise<ShipProduct[]> {
   await connectDB();
-  const [products, stocks] = await Promise.all([
-    ProductModel.find({ active: true }, { sku: 1, name: 1 }).sort({ sku: 1 }).lean(),
+  const [products, stocks, groups] = await Promise.all([
+    ProductModel.find(
+      { active: true },
+      { sku: 1, name: 1, groupCode: 1, category: 1, imageUrl: 1, attributes: 1 },
+    ).sort({ sku: 1 }).lean(),
     SkuStockModel.find({ locationCode: MAIN }).lean(),
+    ProductGroupModel.find({}, { code: 1, name: 1 }).lean(),
   ]);
   const stockBy = new Map(stocks.map((s) => [s.sku, s]));
+  const groupNameByCode = new Map(groups.map((g) => [g.code, g.name]));
   return products.map((p) => {
     const st = stockBy.get(stockSkuFor(p.sku));
     const onHand = st?.onHand ?? 0;
-    return { sku: p.sku, name: p.name, onHand, available: onHand - (st?.reserved ?? 0) };
+    return {
+      ...variantMeta(p, p.groupCode ? groupNameByCode.get(p.groupCode) : undefined),
+      sku: p.sku,
+      name: p.name,
+      onHand,
+      available: onHand - (st?.reserved ?? 0),
+    };
   });
 }
 

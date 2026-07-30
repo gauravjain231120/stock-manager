@@ -3,17 +3,13 @@
 import { useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import { compareSize } from '@/lib/format';
+import type { VariantMeta } from '@/lib/variants';
 
-export interface PickerProduct {
+export interface PickerProduct extends VariantMeta {
   sku: string;
   name: string;
+  /** The number shown on each chip — on-hand in the Stock Log, available in Ready to Ship. */
   inStock?: number;
-  groupCode?: string;
-  groupName?: string;
-  category?: string;
-  color?: string;
-  size?: string;
-  imageUrl?: string;
 }
 
 interface SizeNode { key: string; label: string; sku: string; stock: number }
