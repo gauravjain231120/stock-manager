@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { Panel, Table, Th, Td, Tr, Badge } from '@/components/ui';
 import { EditableStock } from '@/components/EditableStock';
+import { ExportCsvButton } from '@/components/ExportCsvButton';
+import { toCsv, csvDateStamp } from '@/lib/csv';
 import { compareVariant, groupVariants, matchesSearch } from '@/lib/format';
 
 export interface InvRow {
@@ -12,6 +14,12 @@ export interface InvRow {
   onHand: number;
   shipped: number;
   returned: number;
+  color?: string;
+  size?: string;
+  /** On-hand minus units already reserved by the ship queue. */
+  available?: number;
+  /** True for bundles, whose on-hand is another SKU's pile — don't sum it twice. */
+  sharedStock?: boolean;
 }
 
 // 0 = make it, 1–5 = low, >5 = good.
@@ -37,6 +45,24 @@ export function InventoryTable({ rows }: { rows: InvRow[] }) {
 
   const groups = groupVariants(filtered, (r) => r.sku.split('-').pop() ?? '');
 
+  function buildCsv() {
+    return toCsv(
+      ['SKU', 'Product', 'Colour', 'Size', 'In stock', 'Available', 'Shipped', 'Returned', 'Status', 'Shared stock'],
+      filtered.map((r) => [
+        r.sku,
+        r.category || r.name,
+        r.color ?? '',
+        r.size ?? r.sku.split('-').pop() ?? '',
+        r.onHand,
+        r.available ?? r.onHand,
+        r.shipped,
+        r.returned,
+        stockStatus(r.onHand).label,
+        r.sharedStock ? 'Yes' : 'No',
+      ]),
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div>
@@ -57,6 +83,11 @@ export function InventoryTable({ rows }: { rows: InvRow[] }) {
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search SKU, name or category…"
             className="w-full flex-1 rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm text-neutral-900 dark:border-white/20 dark:text-white sm:w-auto sm:min-w-[16rem]"
+          />
+          <ExportCsvButton
+            count={filtered.length}
+            filename={() => `inventory-${csvDateStamp()}.csv`}
+            build={buildCsv}
           />
         </div>
       </div>

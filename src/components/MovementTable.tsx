@@ -5,6 +5,8 @@ import { Panel, Table, Th, Td, Tr } from '@/components/ui';
 import { dateOnly, dayKey, matchesSearch } from '@/lib/format';
 import { PLATFORMS, PLATFORM_LABELS, Platform, RETURN_CONDITION_LABELS, ReturnCondition } from '@/lib/constants';
 import { EditMovementButton } from '@/components/EditMovementButton';
+import { ExportCsvButton } from '@/components/ExportCsvButton';
+import { toCsv, text, csvDateStamp, csvDateTime } from '@/lib/csv';
 import type { MovementRow } from '@/lib/movements';
 
 const filterCls = 'rounded-lg border border-black/15 bg-transparent px-3 py-1.5 text-sm text-neutral-900 dark:border-white/20 dark:text-white';
@@ -22,8 +24,22 @@ function platformLabel(c: string | null) {
  * filterable by platform and date range, and paged.
  *
  * `title` names the list, `dateLabel` names the first column ("Shipped"/"Returned").
+ * `csvName` prefixes the export filename; `withCondition` adds the two
+ * returns-only columns.
  */
-export function MovementTable({ rows, title, dateLabel }: { rows: MovementRow[]; title: string; dateLabel: string }) {
+export function MovementTable({
+  rows,
+  title,
+  dateLabel,
+  csvName,
+  withCondition = false,
+}: {
+  rows: MovementRow[];
+  title: string;
+  dateLabel: string;
+  csvName: string;
+  withCondition?: boolean;
+}) {
   const [q, setQ] = useState('');
   const [fPlatform, setFPlatform] = useState('all');
   const [onlyUntracked, setOnlyUntracked] = useState(false);
@@ -45,6 +61,40 @@ export function MovementTable({ rows, title, dateLabel }: { rows: MovementRow[];
     const hay = `${r.sku} ${r.name} ${r.color} ${r.size} ${r.trackingId ?? ''} ${r.orderId ?? ''} ${platformLabel(r.channel)}`;
     return matchesSearch(hay, q, r.sku);
   });
+
+  function buildCsv() {
+    const headers = ['Date', 'Time', 'SKU', 'Product', 'Colour', 'Size', 'Qty', 'Platform', 'Tracking / AWB', 'Order no.'];
+    if (withCondition) headers.push('Condition', 'Back in stock');
+
+    return toCsv(
+      headers,
+      filtered.map((r) => {
+        const { date, time } = csvDateTime(r.at);
+        const row: unknown[] = [
+          date,
+          time,
+          // Only tracking and order numbers need the Excel-safe wrapper — SKUs
+          // all start with a letter, so Excel already leaves them alone.
+          r.sku,
+          r.name,
+          r.color,
+          r.size,
+          r.qty,
+          platformLabel(r.channel),
+          text(r.trackingId),
+          text(r.orderId),
+        ];
+        if (withCondition) {
+          row.push(
+            r.condition ? RETURN_CONDITION_LABELS[r.condition as ReturnCondition] ?? r.condition : '',
+            // Only a wrong item is held back; good and used both go on the shelf.
+            r.condition === 'WRONG' ? 'No' : 'Yes',
+          );
+        }
+        return row;
+      }),
+    );
+  }
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / perPage));
   const cur = Math.min(page, pageCount);
@@ -86,6 +136,11 @@ export function MovementTable({ rows, title, dateLabel }: { rows: MovementRow[];
             onChange={(e) => { setQ(e.target.value); setPage(1); }}
             placeholder="Search tracking, product, SKU or order…"
             className="w-48 rounded-lg border border-black/15 bg-transparent px-3 py-1.5 text-sm dark:border-white/20 sm:w-72"
+          />
+          <ExportCsvButton
+            count={filtered.length}
+            filename={() => `${csvName}-${csvDateStamp()}.csv`}
+            build={buildCsv}
           />
         </div>
       }

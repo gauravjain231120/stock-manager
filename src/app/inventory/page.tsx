@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function InventoryPage() {
   const [{ totals, rows }, regRows] = await Promise.all([getInventoryOverview(), registerTotals()]);
-  const flowBySku = new Map(regRows.map((r) => [r.sku, { shipped: r.shipped, returned: r.returned }]));
+  const flowBySku = new Map(regRows.map((r) => [r.sku, r]));
   const toMake = rows.filter((r) => r.onHand <= 0).length;
   const low = rows.filter((r) => r.onHand > 0 && r.onHand <= 5).length;
 
@@ -24,14 +24,21 @@ export default async function InventoryPage() {
       </section>
 
       <InventoryTable
-        rows={rows.map((r) => ({
-          sku: r.sku,
-          name: r.name,
-          category: r.category,
-          onHand: r.onHand,
-          shipped: flowBySku.get(r.sku)?.shipped ?? 0,
-          returned: flowBySku.get(r.sku)?.returned ?? 0,
-        }))}
+        rows={rows.map((r) => {
+          const flow = flowBySku.get(r.sku);
+          return {
+            sku: r.sku,
+            name: r.name,
+            category: r.category,
+            onHand: r.onHand,
+            available: r.available,
+            shipped: flow?.shipped ?? 0,
+            returned: flow?.returned ?? 0,
+            color: flow?.color,
+            size: flow?.size,
+            sharedStock: flow?.sharedStock,
+          };
+        })}
       />
     </main>
   );
