@@ -191,7 +191,11 @@ export async function shipPending(id: string, qty?: number, trackingId?: string,
   const shipQty = qty && qty > 0 ? Math.min(Math.floor(qty), p.qty) : p.qty;
   // A number typed at packing time wins; otherwise use whatever was saved on the row.
   const tracking = cleanTracking(trackingId) ?? p.trackingId ?? undefined;
-  if (trackingId?.trim() && tracking !== p.trackingId) {
+  // A tracking number belongs to the parcel going out now, not to the units left
+  // behind — so only pin it to the row when the whole row ships (kept for the
+  // retry if the transaction below fails). A part-ship clears it instead.
+  const partial = shipQty < p.qty;
+  if (!partial && trackingId?.trim() && tracking !== p.trackingId) {
     await PendingShipmentModel.updateOne({ _id: p._id }, { $set: { trackingId: tracking } });
   }
   // An order number typed at packing time wins, and sticks to whatever is left
@@ -224,7 +228,9 @@ export async function shipPending(id: string, qty?: number, trackingId?: string,
       });
       await SkuStockModel.updateOne({ sku: stockSkuFor(p.sku), locationCode: MAIN }, { $inc: { reserved: -shipQty } }, { session });
       if (shipQty >= p.qty) await PendingShipmentModel.deleteOne({ _id: p._id }, { session });
-      else await PendingShipmentModel.updateOne({ _id: p._id }, { $inc: { qty: -shipQty } }, { session });
+      // What's left needs its own label: drop the AWB that just went out, so the
+      // remainder doesn't sit in the queue looking like it already shipped.
+      else await PendingShipmentModel.updateOne({ _id: p._id }, { $inc: { qty: -shipQty }, $unset: { trackingId: '' } }, { session });
     });
   } finally {
     await session.endSession();
