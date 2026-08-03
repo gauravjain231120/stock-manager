@@ -6,10 +6,29 @@ import { Minus, Plus } from 'lucide-react';
 import { useToast } from '@/components/ToastProvider';
 
 /** Cancel button that opens a "how many?" picker before releasing the reservation. */
-export function CancelButton({ id, name, sku, qty }: { id: string; name: string; sku: string; qty: number }) {
+export function CancelButton({
+  id,
+  name,
+  sku,
+  qty,
+  open: openProp,
+  onOpenChange,
+  hideTrigger,
+}: {
+  id: string;
+  name: string;
+  sku: string;
+  qty: number;
+  /** Drive the dialog from a parent (so it can be opened from a menu that closes). */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  hideTrigger?: boolean;
+}) {
   const router = useRouter();
   const toast = useToast();
-  const [open, setOpen] = useState(false);
+  const [openSelf, setOpenSelf] = useState(false);
+  const open = openProp ?? openSelf;
+  const setOpen = (v: boolean) => (onOpenChange ? onOpenChange(v) : setOpenSelf(v));
   const [n, setN] = useState(qty);
   const [busy, setBusy] = useState(false);
 
@@ -60,12 +79,14 @@ export function CancelButton({ id, name, sku, qty }: { id: string; name: string;
 
   return (
     <>
-      <button
-        onClick={() => { setN(qty); setOpen(true); }}
-        className="rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium transition hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
-      >
-        Cancel
-      </button>
+      {hideTrigger ? null : (
+        <button
+          onClick={() => { setN(qty); setOpen(true); }}
+          className="rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium transition hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+        >
+          Cancel
+        </button>
+      )}
 
       {open ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setOpen(false)}>

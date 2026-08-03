@@ -12,13 +12,22 @@ const input = 'w-full rounded-lg border border-black/15 bg-transparent px-3 py-2
 export function EditPendingButton({
   row,
   products,
+  open: openProp,
+  onOpenChange,
+  hideTrigger,
 }: {
   row: { id: string; sku: string; qty: number; channel: string | null; orderId: string | null; trackingId: string | null };
   products: { sku: string; name: string }[];
+  /** Drive the dialog from a parent (so it can be opened from a menu that closes). */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  hideTrigger?: boolean;
 }) {
   const router = useRouter();
   const toast = useToast();
-  const [open, setOpen] = useState(false);
+  const [openSelf, setOpenSelf] = useState(false);
+  const open = openProp ?? openSelf;
+  const setOpen = (v: boolean) => (onOpenChange ? onOpenChange(v) : setOpenSelf(v));
   const [busy, setBusy] = useState(false);
 
   const [sku, setSku] = useState(row.sku);
@@ -63,12 +72,14 @@ export function EditPendingButton({
 
   return (
     <>
-      <button
-        onClick={start}
-        className="rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium transition hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
-      >
-        Edit
-      </button>
+      {hideTrigger ? null : (
+        <button
+          onClick={start}
+          className="rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium transition hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+        >
+          Edit
+        </button>
+      )}
 
       {open ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setOpen(false)}>

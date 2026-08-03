@@ -3,9 +3,7 @@
 import { Fragment, useState } from 'react';
 import { Panel, Table, Th, Td, Tr, Badge } from '@/components/ui';
 import { ActionButton } from '@/components/ActionButton';
-import { ShipButton } from '@/components/ShipButton';
-import { CancelButton } from '@/components/CancelButton';
-import { EditPendingButton } from '@/components/EditPendingButton';
+import { PendingRowActions } from '@/components/PendingRowActions';
 import { ShipOrderButton } from '@/components/ShipOrderButton';
 import { PlatformFilter } from '@/components/PlatformFilter';
 import { PLATFORM_LABELS, Platform } from '@/lib/constants';
@@ -243,14 +241,7 @@ export function ShipQueue({
               <Td right>{p.qty}</Td>
               <Td right><span className={`font-semibold ${stockStatus(p.after).color}`}>{p.after}</span></Td>
               <Td right>
-                <span className="inline-flex gap-2">
-                  {/* One Ship button per order — grouped lines ship from the header. */}
-                  {grouped ? null : (
-                    <ShipButton id={p.id} name={p.name} sku={p.sku} qty={p.qty} stock={p.onHand} orderId={p.orderId} trackingId={p.trackingId} />
-                  )}
-                  <EditPendingButton row={p} products={products} />
-                  <CancelButton id={p.id} name={p.name} sku={p.sku} qty={p.qty} />
-                </span>
+                <PendingRowActions row={p} products={products} grouped={grouped} />
               </Td>
             </Tr>
             </Fragment>
