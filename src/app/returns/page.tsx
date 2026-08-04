@@ -70,7 +70,7 @@ export default async function ReturnsPage() {
         <ReturnReports reports={reports} today={stats.today} />
       </div>
 
-      <MovementTable rows={rows} title="Returns" dateLabel="Returned" csvName="returns" withCondition />
+      <MovementTable rows={rows} title="Returns" dateLabel="Returned" verb="returned" csvName="returns" withCondition />
     </main>
   );
 }

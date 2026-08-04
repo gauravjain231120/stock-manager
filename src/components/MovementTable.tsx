@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Panel, Table, Th, Td, Tr } from '@/components/ui';
-import { dateOnly, dayKey, matchesSearch } from '@/lib/format';
+import { dateOnly, dayKey, matchesSearch, num } from '@/lib/format';
 import { PLATFORMS, PLATFORM_LABELS, Platform, RETURN_CONDITION_LABELS, ReturnCondition } from '@/lib/constants';
 import { EditMovementButton } from '@/components/EditMovementButton';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
@@ -19,28 +19,41 @@ function platformLabel(c: string | null) {
   return PLATFORM_LABELS[c as Platform] ?? c;
 }
 
+/** "1 Feb 2026 – 4 Aug 2026" — whichever ends of the range were actually picked. */
+function rangeLabel(from: string, to: string): string {
+  if (from && to) return `${dateOnly(from)} – ${dateOnly(to)}`;
+  if (from) return `from ${dateOnly(from)}`;
+  if (to) return `up to ${dateOnly(to)}`;
+  return 'all time';
+}
+
 /**
  * The full history of one kind of movement (shipments or returns) — searchable,
- * filterable by platform and date range, and paged.
+ * filterable by category, platform and date range, and paged. The bar above the
+ * table always totals whatever the filters currently leave in view, so picking
+ * a category and a date range answers "how many went out in that window".
  *
  * `title` names the list, `dateLabel` names the first column ("Shipped"/"Returned").
- * `csvName` prefixes the export filename; `withCondition` adds the two
- * returns-only columns.
+ * `verb` is that word in prose, e.g. "shipped". `csvName` prefixes the export
+ * filename; `withCondition` adds the two returns-only columns.
  */
 export function MovementTable({
   rows,
   title,
   dateLabel,
+  verb,
   csvName,
   withCondition = false,
 }: {
   rows: MovementRow[];
   title: string;
   dateLabel: string;
+  verb: string;
   csvName: string;
   withCondition?: boolean;
 }) {
   const [q, setQ] = useState('');
+  const [fCategory, setFCategory] = useState('all');
   const [fPlatform, setFPlatform] = useState('all');
   const [onlyUntracked, setOnlyUntracked] = useState(false);
   const [fromDate, setFromDate] = useState('');
@@ -48,7 +61,11 @@ export function MovementTable({
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(20);
 
+  const categories = [...new Set(rows.map((r) => r.category).filter(Boolean))].sort();
+
   const filtered = rows.filter((r) => {
+    // "" is a real choice here — the products that have no category at all.
+    if (fCategory !== 'all' && r.category !== fCategory) return false;
     if (fPlatform !== 'all' && r.channel !== fPlatform) return false;
     if (onlyUntracked && r.trackingId) return false;
     // Compare India-time calendar days, so a date means the day you'd see on screen.
@@ -58,7 +75,7 @@ export function MovementTable({
       if (toDate && day > toDate) return false;
     }
     if (!q.trim()) return true;
-    const hay = `${r.sku} ${r.name} ${r.color} ${r.size} ${r.trackingId ?? ''} ${r.orderId ?? ''} ${platformLabel(r.channel)}`;
+    const hay = `${r.sku} ${r.name} ${r.category} ${r.color} ${r.size} ${r.trackingId ?? ''} ${r.orderId ?? ''} ${platformLabel(r.channel)}`;
     return matchesSearch(hay, q, r.sku);
   });
 
@@ -96,6 +113,10 @@ export function MovementTable({
     );
   }
 
+  // Everything the filters left in view — the number you came for when you
+  // picked a category and a date range.
+  const units = filtered.reduce((a, r) => a + r.qty, 0);
+
   const pageCount = Math.max(1, Math.ceil(filtered.length / perPage));
   const cur = Math.min(page, pageCount);
   const pageRows = filtered.slice((cur - 1) * perPage, cur * perPage);
@@ -107,6 +128,16 @@ export function MovementTable({
       title={`${title} (${filtered.length})`}
       actions={
         <div className="flex flex-wrap items-center justify-end gap-2">
+          <select
+            value={fCategory}
+            onChange={(e) => { setFCategory(e.target.value); setPage(1); }}
+            aria-label="Filter by category"
+            className={filterCls}
+          >
+            <option value="all">All categories</option>
+            {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+            {rows.some((r) => !r.category) ? <option value="">No category</option> : null}
+          </select>
           <label className="flex items-center gap-1.5 text-sm text-neutral-500">
             From
             <input type="date" value={fromDate} onChange={(e) => { setFromDate(e.target.value); setPage(1); }} className={filterCls} />
@@ -145,6 +176,19 @@ export function MovementTable({
         </div>
       }
     >
+      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 border-b border-black/10 px-5 py-3 dark:border-white/10">
+        <div className="flex flex-wrap items-baseline gap-2">
+          <span className="text-2xl font-semibold tabular-nums">{num(units)}</span>
+          <span className="text-sm text-neutral-500">
+            unit{units === 1 ? '' : 's'} {verb} in {num(filtered.length)} entr{filtered.length === 1 ? 'y' : 'ies'}
+          </span>
+        </div>
+        <span className="text-xs text-neutral-400">
+          {fCategory === 'all' ? 'All categories' : fCategory || 'No category'} · {rangeLabel(fromDate, toDate)}
+          {fPlatform === 'all' ? '' : ` · ${PLATFORM_LABELS[fPlatform as Platform] ?? fPlatform}`}
+        </span>
+      </div>
+
       <Table
         head={<><Th>{dateLabel}</Th><Th>Product</Th><Th>Tracking</Th><Th>Order no.</Th><Th>Platform</Th><Th right>Qty</Th><Th right>Edit</Th></>}
         empty={filtered.length === 0}

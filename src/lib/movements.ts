@@ -13,6 +13,8 @@ export interface MovementRow {
   color: string;
   size: string;
   qty: number;
+  /** The product's category, e.g. "Coord set" — empty when it has none. */
+  category: string;
   channel: string | null;
   trackingId: string | null;
   orderId: string | null;
@@ -42,7 +44,15 @@ export async function listMovementRows(type: MovementType, limit = 2000): Promis
     products.map((p) => {
       const attrs: Record<string, string> =
         p.attributes instanceof Map ? Object.fromEntries(p.attributes) : ((p.attributes as Record<string, string>) ?? {});
-      return [p.sku, { name: p.category?.trim() || p.name, color: attrs.color?.trim() ?? '', size: attrs.size?.trim() ?? '' }];
+      return [
+        p.sku,
+        {
+          name: p.category?.trim() || p.name,
+          category: p.category?.trim() ?? '',
+          color: attrs.color?.trim() ?? '',
+          size: attrs.size?.trim() ?? '',
+        },
+      ];
     }),
   );
 
@@ -56,6 +66,7 @@ export async function listMovementRows(type: MovementType, limit = 2000): Promis
       color: info?.color ?? '',
       size: info?.size ?? '',
       qty: Math.abs(m.qty),
+      category: info?.category ?? '',
       channel: m.channel ?? null,
       trackingId: m.trackingId ?? null,
       orderId: m.orderId ?? null,
