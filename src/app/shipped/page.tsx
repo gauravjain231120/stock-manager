@@ -8,9 +8,11 @@ import { num } from '@/lib/format';
 export const dynamic = 'force-dynamic';
 
 export default async function ShippedPage() {
-  const [rows, stats] = await Promise.all([
+  const [rows, stats, returnRows] = await Promise.all([
     listMovementRows(MovementType.SOLD),
     movementStats(MovementType.SOLD),
+    // So the table's totals can say how much of the same slice came back.
+    listMovementRows(MovementType.RETURNED),
   ]);
 
   return (
@@ -28,7 +30,7 @@ export default async function ShippedPage() {
         <MovementDayPanel rows={rows} today={stats.today} title="Shipped on a day" verb="shipped" />
       </div>
 
-      <MovementTable rows={rows} title="Shipped" dateLabel="Shipped" verb="shipped" csvName="shipped" />
+      <MovementTable rows={rows} title="Shipped" dateLabel="Shipped" verb="shipped" csvName="shipped" returnRows={returnRows} />
     </main>
   );
 }

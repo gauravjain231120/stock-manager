@@ -35,7 +35,8 @@ function rangeLabel(from: string, to: string): string {
  *
  * `title` names the list, `dateLabel` names the first column ("Shipped"/"Returned").
  * `verb` is that word in prose, e.g. "shipped". `csvName` prefixes the export
- * filename; `withCondition` adds the two returns-only columns.
+ * filename; `withCondition` adds the two returns-only columns. Pass `returnRows`
+ * to have the same bar also count what came back.
  */
 export function MovementTable({
   rows,
@@ -44,6 +45,7 @@ export function MovementTable({
   verb,
   csvName,
   withCondition = false,
+  returnRows,
 }: {
   rows: MovementRow[];
   title: string;
@@ -51,6 +53,8 @@ export function MovementTable({
   verb: string;
   csvName: string;
   withCondition?: boolean;
+  /** The returns ledger, run through these same filters — shown alongside the total. */
+  returnRows?: MovementRow[];
 }) {
   const [q, setQ] = useState('');
   const [fCategory, setFCategory] = useState('all');
@@ -63,7 +67,7 @@ export function MovementTable({
 
   const categories = [...new Set(rows.map((r) => r.category).filter(Boolean))].sort();
 
-  const filtered = rows.filter((r) => {
+  function matches(r: MovementRow) {
     // "" is a real choice here — the products that have no category at all.
     if (fCategory !== 'all' && r.category !== fCategory) return false;
     if (fPlatform !== 'all' && r.channel !== fPlatform) return false;
@@ -77,7 +81,9 @@ export function MovementTable({
     if (!q.trim()) return true;
     const hay = `${r.sku} ${r.name} ${r.category} ${r.color} ${r.size} ${r.trackingId ?? ''} ${r.orderId ?? ''} ${platformLabel(r.channel)}`;
     return matchesSearch(hay, q, r.sku);
-  });
+  }
+
+  const filtered = rows.filter(matches);
 
   function buildCsv() {
     const headers = ['Date', 'Time', 'SKU', 'Product', 'Colour', 'Size', 'Qty', 'Platform', 'Tracking / AWB', 'Order no.'];
@@ -116,6 +122,12 @@ export function MovementTable({
   // Everything the filters left in view — the number you came for when you
   // picked a category and a date range.
   const units = filtered.reduce((a, r) => a + r.qty, 0);
+
+  // The same slice of the returns ledger: returns *logged* in this window, not
+  // necessarily returns of these exact shipments — near enough to read as a rate.
+  const returnsInView = returnRows?.filter(matches) ?? [];
+  const returnedUnits = returnsInView.reduce((a, r) => a + r.qty, 0);
+  const returnRate = units > 0 ? Math.round((returnedUnits / units) * 1000) / 10 : 0;
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / perPage));
   const cur = Math.min(page, pageCount);
@@ -177,11 +189,24 @@ export function MovementTable({
       }
     >
       <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 border-b border-black/10 px-5 py-3 dark:border-white/10">
-        <div className="flex flex-wrap items-baseline gap-2">
-          <span className="text-2xl font-semibold tabular-nums">{num(units)}</span>
-          <span className="text-sm text-neutral-500">
-            unit{units === 1 ? '' : 's'} {verb} in {num(filtered.length)} entr{filtered.length === 1 ? 'y' : 'ies'}
-          </span>
+        <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
+          <div className="flex flex-wrap items-baseline gap-2">
+            <span className="text-2xl font-semibold tabular-nums">{num(units)}</span>
+            <span className="text-sm text-neutral-500">
+              unit{units === 1 ? '' : 's'} {verb} in {num(filtered.length)} entr{filtered.length === 1 ? 'y' : 'ies'}
+            </span>
+          </div>
+          {returnRows ? (
+            <div className="flex flex-wrap items-baseline gap-2">
+              <span className={`text-2xl font-semibold tabular-nums ${returnedUnits > 0 ? 'text-amber-500' : ''}`}>
+                {num(returnedUnits)}
+              </span>
+              <span className="text-sm text-neutral-500">
+                returned in {num(returnsInView.length)} entr{returnsInView.length === 1 ? 'y' : 'ies'}
+                {returnedUnits > 0 ? ` · ${returnRate}%` : ''}
+              </span>
+            </div>
+          ) : null}
         </div>
         <span className="text-xs text-neutral-400">
           {fCategory === 'all' ? 'All categories' : fCategory || 'No category'} · {rangeLabel(fromDate, toDate)}
