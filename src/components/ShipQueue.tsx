@@ -14,6 +14,8 @@ export interface QueueRow {
   /** The SKU whose physical stock this entry ships (differs for bundle sets). */
   stockSku: string;
   name: string;
+  /** The product's category, e.g. "Coord set" — empty when it has none. */
+  category: string;
   qty: number;
   channel: string | null;
   onHand: number;
@@ -38,6 +40,7 @@ function stockStatus(n: number) {
 }
 
 const checkboxCls = 'size-4 accent-brand-600 disabled:cursor-not-allowed disabled:opacity-40';
+const filterCls = 'rounded-lg border border-black/15 bg-transparent px-3 py-1.5 text-sm text-neutral-900 dark:border-white/20 dark:text-white';
 
 /** The Ready-to-Ship queue: filterable table with per-row Ship/Cancel, multi-select, and Ship all. */
 export function ShipQueue({
@@ -52,10 +55,17 @@ export function ShipQueue({
   products: { sku: string; name: string }[];
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [fCategory, setFCategory] = useState('all');
+
+  const categories = [...new Set(rows.map((r) => r.category).filter(Boolean))].sort();
+  // "" is a real choice here — the queued products that have no category at all.
+  const visible = fCategory === 'all' ? rows : rows.filter((r) => r.category === fCategory);
 
   // Rows that can be ticked: enough stock to ship the entry in full.
-  const selectable = rows.filter((r) => r.onHand >= r.qty && r.qty > 0);
-  const sel = rows.filter((r) => selected.has(r.id));
+  const selectable = visible.filter((r) => r.onHand >= r.qty && r.qty > 0);
+  // Only what's on screen counts as selected — a row the filter hides must never
+  // ship on the back of a button that says it ships what you can see.
+  const sel = visible.filter((r) => selected.has(r.id));
   const selUnits = sel.reduce((a, r) => a + r.qty, 0);
   // The same physical pool picked on several rows (same SKU on two platforms, or
   // a bundle + its component) can still overrun stock — check per-pool sums.
@@ -68,13 +78,15 @@ export function ShipQueue({
   const selShort = [...selBySku.values()].some((e) => e.qty > e.onHand);
 
   // Lines of the same order ship as one parcel, so keep them together and give
-  // multi-item orders a header with a single "ship it all" action.
+  // multi-item orders a header with a single "ship it all" action. Counted over
+  // the whole queue, not the filtered view: "Ship whole order" ships every line
+  // of the order, so its header must keep saying what that really is.
   const orderCounts = new Map<string, number>();
   for (const r of rows) {
     if (r.orderId) orderCounts.set(r.orderId, (orderCounts.get(r.orderId) ?? 0) + 1);
   }
   const multiOrders = new Set([...orderCounts.entries()].filter(([, n]) => n > 1).map(([o]) => o));
-  const ordered = [...rows].sort((a, b) => {
+  const ordered = [...visible].sort((a, b) => {
     const ao = a.orderId && multiOrders.has(a.orderId) ? a.orderId : '';
     const bo = b.orderId && multiOrders.has(b.orderId) ? b.orderId : '';
     if (ao !== bo) return ao && bo ? ao.localeCompare(bo) : ao ? -1 : 1;
@@ -82,8 +94,11 @@ export function ShipQueue({
   });
 
   const allChecked = selectable.length > 0 && selectable.every((r) => selected.has(r.id));
-  const shownUnits = rows.reduce((a, r) => a + r.qty, 0);
-  const shownShort = rows.some((r) => r.short);
+  const shownUnits = visible.reduce((a, r) => a + r.qty, 0);
+  const shownShort = visible.some((r) => r.short);
+  const categoryLabel = fCategory === 'all' ? null : fCategory || 'No category';
+  // What "all" currently means, spelled out on the Ship all button.
+  const scope = [platform ? PLATFORM_LABELS[platform] : null, categoryLabel].filter(Boolean).join(' · ');
 
   function toggle(id: string) {
     setSelected((s) => {
@@ -100,11 +115,21 @@ export function ShipQueue({
 
   return (
     <Panel
-      title={`Queue (${platform ? `${rows.length} of ${totalCount}` : totalCount})`}
+      title={`Queue (${platform || categoryLabel ? `${visible.length} of ${totalCount}` : totalCount})`}
       actions={
         <div className="flex flex-wrap items-center justify-end gap-2">
+          <select
+            value={fCategory}
+            onChange={(e) => setFCategory(e.target.value)}
+            aria-label="Filter by category"
+            className={filterCls}
+          >
+            <option value="all">All categories</option>
+            {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+            {rows.some((r) => !r.category) ? <option value="">No category</option> : null}
+          </select>
           <PlatformFilter />
-          {rows.length > 0 ? (
+          {visible.length > 0 ? (
             <>
               <ActionButton
                 label={`Ship selected (${sel.length})`}
@@ -127,14 +152,21 @@ export function ShipQueue({
                 }
               />
               <ActionButton
-                label={platform ? `Ship all ${PLATFORM_LABELS[platform]}` : 'Ship all'}
-                endpoint="/api/pending/ship-all"
+                label={scope ? `Ship all ${scope}` : 'Ship all'}
+                // "Ship all" always means "all of what's in view". The platform
+                // filter lives in the URL so the server can scope it; a category
+                // is picked here, so that case ships the visible rows by id.
+                endpoint={categoryLabel ? '/api/pending/ship-selected' : '/api/pending/ship-all'}
                 method="POST"
-                body={platform ? { channel: platform } : undefined}
+                body={categoryLabel ? { ids: visible.map((r) => r.id) } : platform ? { channel: platform } : undefined}
                 variant="primary"
                 confirmTitle="Ship everything?"
-                confirm={`All ${rows.length} item(s)${platform ? ` on ${PLATFORM_LABELS[platform]}` : ''} will be marked shipped and their stock deducted.`}
-                confirmDetails={[{ label: 'Items', value: String(rows.length) }, { label: 'Units', value: String(shownUnits) }]}
+                confirm={`All ${visible.length} item(s)${scope ? ` on ${scope}` : ''} will be marked shipped and their stock deducted.`}
+                confirmDetails={[
+                  ...(categoryLabel ? [{ label: 'Category', value: categoryLabel }] : []),
+                  { label: 'Items', value: String(visible.length) },
+                  { label: 'Units', value: String(shownUnits) },
+                ]}
                 confirmLabel="Ship all"
                 successMessage="All shipped ✓"
                 disabled={shownShort}
@@ -161,7 +193,7 @@ export function ShipQueue({
             <Th>Product</Th><Th>Platform</Th><Th right>Stock</Th><Th right>Status</Th><Th right>Qty</Th><Th right>After ship</Th><Th right>Action</Th>
           </>
         }
-        empty={rows.length === 0}
+        empty={visible.length === 0}
       >
         {ordered.map((p, i) => {
           const s = stockStatus(p.onHand);
@@ -170,7 +202,9 @@ export function ShipQueue({
           const grouped = Boolean(p.orderId && multiOrders.has(p.orderId));
           const isGroupStart = grouped && (i === 0 || ordered[i - 1].orderId !== p.orderId);
           const isGroupEnd = grouped && (i === ordered.length - 1 || ordered[i + 1].orderId !== p.orderId);
-          const groupRows = grouped ? ordered.filter((r) => r.orderId === p.orderId) : [];
+          // Every line of the order, filtered-out ones included — this header's
+          // Ship button packs the lot, so it must count and list the lot.
+          const groupRows = grouped ? rows.filter((r) => r.orderId === p.orderId) : [];
           const groupShort = groupRows.filter((r) => r.onHand < r.qty);
           // Tinted band + left accent so the lines of one parcel read as a block.
           const bandCls = grouped ? 'bg-brand-50/70 dark:bg-white/[0.04]' : '';

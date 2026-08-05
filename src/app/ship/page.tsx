@@ -41,6 +41,7 @@ export default async function ShipPage({ searchParams }: { searchParams: Promise
     sku: p.sku,
     stockSku: p.stockSku,
     name: p.name,
+    category: p.category,
     qty: p.qty,
     channel: p.channel,
     onHand: p.onHand,

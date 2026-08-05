@@ -15,7 +15,7 @@ export interface Entry {
   sku: string;
   qty: number;
   channel: string | null;
-  product: { name: string; color: string; size: string } | null;
+  product: { name: string; category: string; color: string; size: string } | null;
   trackingId: string | null;
 }
 
@@ -46,6 +46,7 @@ export function RecentEntriesTable({ entries }: { entries: Entry[] }) {
   const ask = useConfirm();
   const [q, setQ] = useState('');
   const [fAction, setFAction] = useState('all');
+  const [fCategory, setFCategory] = useState('all');
   const [fPlatform, setFPlatform] = useState('all');
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(20);
@@ -58,12 +59,17 @@ export function RecentEntriesTable({ entries }: { entries: Entry[] }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
+  const categories = [...new Set(entries.map((e) => e.product?.category ?? '').filter(Boolean))].sort();
+
   const filtered = entries.filter((e) => {
     if (fAction !== 'all' && e.type !== fAction) return false;
+    // "" is a real choice here — entries whose product has no category (or no
+    // product record left at all).
+    if (fCategory !== 'all' && (e.product?.category ?? '') !== fCategory) return false;
     if (fPlatform !== 'all' && e.channel !== fPlatform) return false;
     if (!q.trim()) return true;
     const p = e.product;
-    const hay = `${e.sku} ${p ? `${p.name} ${p.color} ${p.size}` : ''} ${TYPE_LABEL[e.type] ?? e.type} ${platformLabel(e.channel)} ${e.trackingId ?? ''}`;
+    const hay = `${e.sku} ${p ? `${p.name} ${p.category} ${p.color} ${p.size}` : ''} ${TYPE_LABEL[e.type] ?? e.type} ${platformLabel(e.channel)} ${e.trackingId ?? ''}`;
     return matchesSearch(hay, q, e.sku);
   });
 
@@ -131,6 +137,16 @@ export function RecentEntriesTable({ entries }: { entries: Entry[] }) {
             {ACTION_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
+          </select>
+          <select
+            value={fCategory}
+            onChange={(e) => { setFCategory(e.target.value); setPage(1); }}
+            aria-label="Filter by category"
+            className={filterCls}
+          >
+            <option value="all">All categories</option>
+            {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+            {entries.some((e) => !e.product?.category) ? <option value="">No category</option> : null}
           </select>
           <select value={fPlatform} onChange={(e) => { setFPlatform(e.target.value); setPage(1); }} aria-label="Filter by platform" className={filterCls}>
             <option value="all">All platforms</option>

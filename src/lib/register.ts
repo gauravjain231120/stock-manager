@@ -349,6 +349,8 @@ export async function getProduceList(): Promise<ProduceRow[]> {
 
 export interface EntryProductInfo {
   name: string;
+  /** The product's category, e.g. "Coord set" — empty when it has none. */
+  category: string;
   color: string;
   size: string;
 }
@@ -366,6 +368,7 @@ export async function productInfoBySku(): Promise<Map<string, EntryProductInfo>>
     const attrs = attrsOf(p.attributes);
     out.set(p.sku, {
       name: p.category?.trim() || p.name,
+      category: p.category?.trim() ?? '',
       color: attrs.color?.trim() ?? '',
       size: attrs.size?.trim() ?? '',
     });

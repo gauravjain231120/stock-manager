@@ -17,6 +17,8 @@ export interface PendingRow {
   /** The SKU whose physical stock this entry ships (differs for bundles). */
   stockSku: string;
   name: string;
+  /** The product's category, e.g. "Coord set" — empty when it has none. */
+  category: string;
   qty: number;
   channel: string | null;
   orderId: string | null;
@@ -101,10 +103,11 @@ export async function listPending(): Promise<PendingRow[]> {
   const infoSkus = items.map((i) => infoStockFor(i.sku)?.sku).filter((s): s is string => Boolean(s));
   const stockSkus = [...new Set([...items.map((i) => stockSkuFor(i.sku)), ...infoSkus])];
   const [products, stocks] = await Promise.all([
-    ProductModel.find({ sku: { $in: skus } }, { sku: 1, name: 1 }).lean(),
+    ProductModel.find({ sku: { $in: skus } }, { sku: 1, name: 1, category: 1 }).lean(),
     SkuStockModel.find({ sku: { $in: stockSkus }, locationCode: MAIN }).lean(),
   ]);
   const nameBy = new Map(products.map((p) => [p.sku, p.name]));
+  const categoryBy = new Map(products.map((p) => [p.sku, p.category?.trim() ?? '']));
   const stockBy = new Map(stocks.map((s) => [s.sku, s]));
   return items.map((i) => {
     const st = stockBy.get(stockSkuFor(i.sku));
@@ -115,6 +118,7 @@ export async function listPending(): Promise<PendingRow[]> {
       sku: i.sku,
       stockSku: stockSkuFor(i.sku),
       name: nameBy.get(i.sku) ?? i.sku,
+      category: categoryBy.get(i.sku) ?? '',
       qty: i.qty,
       channel: i.channel ?? null,
       orderId: i.orderId ?? null,
