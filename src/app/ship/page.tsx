@@ -2,6 +2,7 @@ import { listPending, shipProducts } from '@/lib/shipping';
 import { PageHeader, StatCard } from '@/components/ui';
 import { AddPendingForm } from '@/components/AddPendingForm';
 import { ShipQueue } from '@/components/ShipQueue';
+import { ToMakeTable } from '@/components/ToMakeTable';
 import { num } from '@/lib/format';
 import { PLATFORMS, PLATFORM_LABELS, Platform } from '@/lib/constants';
 
@@ -31,6 +32,21 @@ export default async function ShipPage({ searchParams }: { searchParams: Promise
     perPlatform.set(key, e);
   }
   const platformStats = [...perPlatform.entries()].sort((a, b) => b[1].units - a[1].units);
+
+  // The sewing list: per physical pile, what the whole queue needs minus what's
+  // on hand. Deliberately built from `pending` rather than the filtered view —
+  // production is production, and hiding a shortfall behind a platform filter is
+  // how an order misses its ship-by date.
+  const nameBySku = new Map(products.map((p) => [p.sku, p.name]));
+  const onHandByStockSku = new Map(pending.map((p) => [p.stockSku, p.onHand]));
+  const toMake = [...queuedBySku.entries()]
+    .map(([stockSku, needed]) => {
+      const onHand = onHandByStockSku.get(stockSku) ?? 0;
+      return { stockSku, name: nameBySku.get(stockSku) ?? stockSku, onHand, needed, make: needed - onHand };
+    })
+    .filter((m) => m.make > 0)
+    .sort((a, b) => b.make - a.make || a.name.localeCompare(b.name));
+  const makeUnits = toMake.reduce((a, m) => a + m.make, 0);
 
   // Optional platform filter (?platform=AMAZON). Narrows only the visible queue.
   const sp = await searchParams;
@@ -63,6 +79,12 @@ export default async function ShipPage({ searchParams }: { searchParams: Promise
       <section className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
         <StatCard label="Orders to pack" value={pending.length} tone={pending.length ? 'warn' : 'good'} />
         <StatCard label="Units to ship" value={num(units)} />
+        <StatCard
+          label="Units to make"
+          value={num(makeUnits)}
+          hint={`${toMake.length} item${toMake.length === 1 ? '' : 's'}`}
+          tone={makeUnits ? 'danger' : 'good'}
+        />
         {platformStats.map(([channel, s]) => (
           <StatCard
             key={channel || 'none'}
@@ -84,6 +106,12 @@ export default async function ShipPage({ searchParams }: { searchParams: Promise
         <p className="mt-3 px-1 text-xs text-neutral-400">Nothing to pack right now. Add an order above as soon as it comes in. ✨</p>
       ) : platform && rows.length === 0 ? (
         <p className="mt-3 px-1 text-xs text-neutral-400">No {PLATFORM_LABELS[platform]} orders in the queue — switch the filter to “All platforms”.</p>
+      ) : null}
+
+      {pending.length > 0 ? (
+        <div className="mt-6">
+          <ToMakeTable rows={toMake} />
+        </div>
       ) : null}
     </main>
   );
