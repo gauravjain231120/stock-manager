@@ -79,18 +79,23 @@ export async function addPending(input: { sku: string; qty: number; channel?: st
     { $inc: { reserved: qty }, $setOnInsert: { onHand: 0, buffer: 0 } },
     { upsert: true },
   );
-  // Same product (+ platform) already queued -> add to its quantity. Orders that
-  // carry their own order number stay on their own row so it isn't lost.
+  // ONLY the same order number merges — two units of one product on one order are
+  // one row of qty 2. Everything else gets its own row: two customers who bought
+  // the same product are two parcels to pack, and collapsing them into a single
+  // qty-2 row loses that. Rows added without an order number never merge, since
+  // there's nothing to say they belong together.
   const orderId = input.orderId?.trim() || undefined;
-  const existing = await PendingShipmentModel.findOne({
-    sku,
-    ...(channel ? { channel } : {}),
-    ...(orderId ? { orderId } : { orderId: { $in: [null, ''] } }),
-  });
-  if (existing) {
-    existing.qty += qty;
-    await existing.save();
-    return { id: String(existing._id) };
+  if (orderId) {
+    const existing = await PendingShipmentModel.findOne({
+      sku,
+      ...(channel ? { channel } : {}),
+      orderId,
+    });
+    if (existing) {
+      existing.qty += qty;
+      await existing.save();
+      return { id: String(existing._id) };
+    }
   }
   const doc = await PendingShipmentModel.create({ sku, qty, channel, orderId, trackingId: cleanTracking(input.trackingId) });
   return { id: String(doc._id) };
