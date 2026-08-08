@@ -13,6 +13,8 @@ export interface QueueRow {
   sku: string;
   /** The SKU whose physical stock this entry ships (differs for bundle sets). */
   stockSku: string;
+  /** That SKU's product name, e.g. "Co-ord Set" — only set when it isn't this one. */
+  stockName: string | null;
   name: string;
   /** The product's category, e.g. "Coord set" — empty when it has none. */
   category: string;
@@ -258,7 +260,7 @@ export function ShipQueue({
                 {p.trackingId ? <div className="font-mono text-[11px] text-emerald-600">#{p.trackingId}</div> : null}
                 {p.stockSku !== p.sku ? (
                   <div className="text-[11px] text-amber-500">
-                    set — ships 1 Halter top ({p.stockSku})
+                    shares stock — takes {p.qty} {p.stockName ?? 'unit'} ({p.stockSku})
                     {p.info ? ` (${p.info.label}: ${p.info.onHand})` : ''}
                   </div>
                 ) : null}

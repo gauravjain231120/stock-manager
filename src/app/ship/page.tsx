@@ -56,6 +56,7 @@ export default async function ShipPage({ searchParams }: { searchParams: Promise
     id: p.id,
     sku: p.sku,
     stockSku: p.stockSku,
+    stockName: p.stockName,
     name: p.name,
     category: p.category,
     qty: p.qty,

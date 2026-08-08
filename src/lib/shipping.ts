@@ -16,6 +16,8 @@ export interface PendingRow {
   sku: string;
   /** The SKU whose physical stock this entry ships (differs for bundles). */
   stockSku: string;
+  /** That SKU's product name, e.g. "Co-ord Set" — only set when it isn't this one. */
+  stockName: string | null;
   name: string;
   /** The product's category, e.g. "Coord set" — empty when it has none. */
   category: string;
@@ -107,21 +109,35 @@ export async function listPending(): Promise<PendingRow[]> {
   const skus = [...new Set(items.map((i) => i.sku))];
   const infoSkus = items.map((i) => infoStockFor(i.sku)?.sku).filter((s): s is string => Boolean(s));
   const stockSkus = [...new Set([...items.map((i) => stockSkuFor(i.sku)), ...infoSkus])];
-  const [products, stocks] = await Promise.all([
+  const [products, stockProducts, stocks] = await Promise.all([
     ProductModel.find({ sku: { $in: skus } }, { sku: 1, name: 1, category: 1 }).lean(),
+    // Whose pile a bundle actually draws on, so the queue can name it.
+    ProductModel.find({ sku: { $in: stockSkus } }, { sku: 1, name: 1, groupCode: 1 }).lean(),
     SkuStockModel.find({ sku: { $in: stockSkus }, locationCode: MAIN }).lean(),
   ]);
+  const groups = await ProductGroupModel.find(
+    { code: { $in: [...new Set(stockProducts.map((p) => p.groupCode).filter((c): c is string => Boolean(c)))] } },
+    { code: 1, name: 1 },
+  ).lean();
+  const groupNameBy = new Map(groups.map((g) => [g.code, g.name]));
+  // Prefer the parent product's name ("Co-ord Set") over the variant's full name
+  // ("Co-ord Set Black-Ikat 3XL") — the row already shows the colour and size.
+  const stockNameBy = new Map(
+    stockProducts.map((p) => [p.sku, (p.groupCode && groupNameBy.get(p.groupCode)) || p.name]),
+  );
   const nameBy = new Map(products.map((p) => [p.sku, p.name]));
   const categoryBy = new Map(products.map((p) => [p.sku, p.category?.trim() ?? '']));
   const stockBy = new Map(stocks.map((s) => [s.sku, s]));
   return items.map((i) => {
-    const st = stockBy.get(stockSkuFor(i.sku));
+    const stockSku = stockSkuFor(i.sku);
+    const st = stockBy.get(stockSku);
     const onHand = st?.onHand ?? 0;
     const inf = infoStockFor(i.sku);
     return {
       id: String(i._id),
       sku: i.sku,
-      stockSku: stockSkuFor(i.sku),
+      stockSku,
+      stockName: stockSku === i.sku ? null : stockNameBy.get(stockSku) ?? null,
       name: nameBy.get(i.sku) ?? i.sku,
       category: categoryBy.get(i.sku) ?? '',
       qty: i.qty,
