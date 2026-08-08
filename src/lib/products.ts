@@ -8,6 +8,13 @@ import { LocationModel } from '@/models/Location';
 import { StockMovementModel } from '@/models/StockMovement';
 import { ChannelListingModel } from '@/models/ChannelListing';
 import { ChannelInventoryStateModel } from '@/models/ChannelInventoryState';
+import { PendingShipmentModel } from '@/models/PendingShipment';
+import { MarketplaceOrderModel } from '@/models/MarketplaceOrder';
+import { ReturnRecordModel } from '@/models/ReturnRecord';
+import { ReturnShipmentModel } from '@/models/ReturnShipment';
+import { ProductionBatchModel } from '@/models/ProductionBatch';
+import { BomModel } from '@/models/Bom';
+import { ReorderPolicyModel } from '@/models/ReorderPolicy';
 
 /** Uppercase alphanumeric slug for building SKUs. */
 function slug(s: string) {
@@ -189,8 +196,10 @@ export async function removeVariant(sku: string) {
 }
 
 /**
- * Rename a variant's SKU, carrying its stock, ledger history and channel mappings
- * over to the new code so nothing is lost. Fails if the new SKU already exists.
+ * Rename a variant's SKU, carrying everything that points at it — stock, ledger
+ * history, channel mappings, anything queued or in flight — over to the new code
+ * so nothing is left referring to a SKU that no longer exists. Fails if the new
+ * SKU already exists.
  */
 export async function renameVariantSku(oldSku: string, newSku: string) {
   await connectDB();
@@ -207,6 +216,15 @@ export async function renameVariantSku(oldSku: string, newSku: string) {
     StockMovementModel.updateMany({ sku: o }, { $set: { sku: n } }),
     ChannelListingModel.updateMany({ sku: o }, { $set: { sku: n } }),
     ChannelInventoryStateModel.updateMany({ sku: o }, { $set: { sku: n } }),
+    // Work in flight: an unshipped queue row, a marketplace order, a return being
+    // processed or a production batch would otherwise point at a dead SKU.
+    PendingShipmentModel.updateMany({ sku: o }, { $set: { sku: n } }),
+    MarketplaceOrderModel.updateMany({ sku: o }, { $set: { sku: n } }),
+    ReturnRecordModel.updateMany({ sku: o }, { $set: { sku: n } }),
+    ReturnShipmentModel.updateMany({ sku: o }, { $set: { sku: n } }),
+    ProductionBatchModel.updateMany({ sku: o }, { $set: { sku: n } }),
+    BomModel.updateMany({ sku: o }, { $set: { sku: n } }),
+    ReorderPolicyModel.updateMany({ sku: o }, { $set: { sku: n } }),
   ]);
   return { sku: n };
 }

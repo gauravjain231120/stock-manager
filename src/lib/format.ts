@@ -33,7 +33,9 @@ export function dayKey(d?: Date | string | null): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(date);
 }
 
-const SIZE_ORDER = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL', 'OS', 'FREE'];
+// 3XL is what the marketplaces call it and what our SKUs use; XXXL stays as an
+// alias so any older data still sorts into the same slot rather than last.
+const SIZE_ORDER = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', 'XXXL', 'OS', 'FREE'];
 
 /** Real size order (XS, S, M, L, XL, XXL); unknown sizes sort last, then A–Z. */
 export function compareSize(a: string, b: string): number {

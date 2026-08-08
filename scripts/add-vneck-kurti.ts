@@ -35,7 +35,9 @@ const COLORS: { name: string; code: string }[] = [
   { name: 'Grey', code: 'CO-G-GR' },
 ];
 
-const SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
+// 3XL, not XXXL — the Amazon listings spell it that way and the marketplace is
+// what sends the SKU on an order (see scripts/rename-xxxl-to-3xl.ts).
+const SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'];
 
 const COORD = { code: 'COORDSET', prefix: 'RRC-001', name: 'Co-ord Set', category: 'Coord set' };
 
