@@ -37,12 +37,14 @@ export function PendingRowActions({
           name={row.name}
           sku={row.sku}
           qty={row.qty}
-          stock={row.onHand}
+          stock={row.free}
           orderId={row.orderId}
           trackingId={row.trackingId}
         />
       )}
-      <ProduceButton sku={row.sku} stockSku={row.stockSku} name={row.name} onHand={row.onHand} need={row.qty} />
+      {/* Sized against what's left for THIS row, so the box opens on the units
+          this order alone is missing — not the whole pile's shortfall. */}
+      <ProduceButton sku={row.sku} stockSku={row.stockSku} name={row.name} onHand={row.free} need={row.qty} />
 
       <RowMenu>
         {(close) => (

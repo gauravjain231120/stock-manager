@@ -20,9 +20,14 @@ export interface QueueRow {
   category: string;
   qty: number;
   channel: string | null;
-  onHand: number;
+  /**
+   * Units of this row's pile still free for it, once the orders queued ahead of
+   * it have taken theirs. A pile of 1 with two orders on it leaves the second
+   * row 0 — the first order already has that garment spoken for.
+   */
+  free: number;
   after: number;
-  /** True when this SKU's total queued units exceed stock (blocks Ship all). */
+  /** True when this row wants more than is left for it (blocks Ship all). */
   short: boolean;
   /** Companion stock shown for reference next to bundles (never deducted). */
   info: { sku: string; label: string; onHand: number } | null;
@@ -63,21 +68,23 @@ export function ShipQueue({
   // "" is a real choice here — the queued products that have no category at all.
   const visible = fCategory === 'all' ? rows : rows.filter((r) => r.category === fCategory);
 
-  // Rows that can be ticked: enough stock to ship the entry in full.
-  const selectable = visible.filter((r) => r.onHand >= r.qty && r.qty > 0);
+  // Rows that can be ticked: enough left for this row to ship it in full.
+  const selectable = visible.filter((r) => r.free >= r.qty && r.qty > 0);
   // Only what's on screen counts as selected — a row the filter hides must never
   // ship on the back of a button that says it ships what you can see.
   const sel = visible.filter((r) => selected.has(r.id));
   const selUnits = sel.reduce((a, r) => a + r.qty, 0);
   // The same physical pool picked on several rows (same SKU on two platforms, or
-  // a bundle + its component) can still overrun stock — check per-pool sums.
-  const selBySku = new Map<string, { qty: number; onHand: number }>();
+  // a bundle + its component) can still overrun stock — check per-pool sums. The
+  // headroom is the EARLIEST ticked row's free count, since rows are in queue
+  // order and every later row's count already nets off the ones above it.
+  const selBySku = new Map<string, { qty: number; free: number }>();
   for (const r of sel) {
-    const e = selBySku.get(r.stockSku) ?? { qty: 0, onHand: r.onHand };
+    const e = selBySku.get(r.stockSku) ?? { qty: 0, free: r.free };
     e.qty += r.qty;
     selBySku.set(r.stockSku, e);
   }
-  const selShort = [...selBySku.values()].some((e) => e.qty > e.onHand);
+  const selShort = [...selBySku.values()].some((e) => e.qty > e.free);
 
   // Lines of the same order ship as one parcel, so keep them together and give
   // multi-item orders a header with a single "ship it all" action. Counted over
@@ -198,8 +205,8 @@ export function ShipQueue({
         empty={visible.length === 0}
       >
         {ordered.map((p, i) => {
-          const s = stockStatus(p.onHand);
-          const canSelect = p.onHand >= p.qty && p.qty > 0;
+          const s = stockStatus(p.free);
+          const canSelect = p.free >= p.qty && p.qty > 0;
           // First line of a multi-item order gets the "ship it all together" header.
           const grouped = Boolean(p.orderId && multiOrders.has(p.orderId));
           const isGroupStart = grouped && (i === 0 || ordered[i - 1].orderId !== p.orderId);
@@ -207,7 +214,7 @@ export function ShipQueue({
           // Every line of the order, filtered-out ones included — this header's
           // Ship button packs the lot, so it must count and list the lot.
           const groupRows = grouped ? rows.filter((r) => r.orderId === p.orderId) : [];
-          const groupShort = groupRows.filter((r) => r.onHand < r.qty);
+          const groupShort = groupRows.filter((r) => r.free < r.qty);
           // Tinted band + left accent so the lines of one parcel read as a block.
           const bandCls = grouped ? 'bg-brand-50/70 dark:bg-white/[0.04]' : '';
           const accentCls = grouped ? 'border-l-4 border-brand-600' : '';
@@ -232,7 +239,7 @@ export function ShipQueue({
                     <span className="ml-auto">
                       <ShipOrderButton
                         orderId={p.orderId!}
-                        items={groupRows.map((r) => ({ sku: r.sku, name: r.name, qty: r.qty, onHand: r.onHand }))}
+                        items={groupRows.map((r) => ({ sku: r.sku, name: r.name, qty: r.qty, free: r.free }))}
                         trackingId={groupRows.find((r) => r.trackingId)?.trackingId ?? null}
                       />
                     </span>
@@ -247,7 +254,7 @@ export function ShipQueue({
                   checked={selected.has(p.id)}
                   onChange={() => toggle(p.id)}
                   disabled={!canSelect}
-                  title={canSelect ? undefined : 'Not enough stock to ship this entry in full'}
+                  title={canSelect ? undefined : 'Not enough stock left for this order — earlier orders come first'}
                   aria-label={`Select ${p.sku}`}
                   className={checkboxCls}
                 />
@@ -266,7 +273,7 @@ export function ShipQueue({
                 ) : null}
               </Td>
               <Td>{platformLabel(p.channel)}</Td>
-              <Td right><span className={`font-semibold ${s.color}`}>{p.onHand}</span></Td>
+              <Td right><span className={`font-semibold ${s.color}`}>{p.free}</span></Td>
               <Td right>
                 {p.after < 0 ? (
                   <Badge tone="danger">Out of stock (make {-p.after})</Badge>

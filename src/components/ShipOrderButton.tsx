@@ -6,7 +6,8 @@ import { ScanLine, Package } from 'lucide-react';
 import { useToast } from '@/components/ToastProvider';
 import { MAX_TRACKING_LEN, normalizeTracking } from '@/lib/constants';
 
-interface Item { sku: string; name: string; qty: number; onHand: number }
+/** `free` is the stock left for that line once earlier orders have taken theirs. */
+interface Item { sku: string; name: string; qty: number; free: number }
 
 /**
  * Ship every line of one order together — one parcel, one tracking number.
@@ -29,7 +30,7 @@ export function ShipOrderButton({
   const [busy, setBusy] = useState(false);
 
   const units = items.reduce((a, i) => a + i.qty, 0);
-  const short = items.filter((i) => i.onHand < i.qty);
+  const short = items.filter((i) => i.free < i.qty);
   const trackingLen = (normalizeTracking(tracking) ?? '').length;
   const trackingTooLong = trackingLen > MAX_TRACKING_LEN;
 
