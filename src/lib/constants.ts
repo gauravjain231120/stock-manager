@@ -54,10 +54,12 @@ export const PLATFORM_LABELS: Record<Platform, string> = {
  * a matching SKU keeps its own ledger entries (so its sales stay visible), but
  * every on-hand / reserved effect lands on the mapped SKU (same colour+size
  * suffix). RRC-012 "Halter with Palazzos" contains the RRC-002 Halter top —
- * shipping a set takes one halter from the halter pile.
+ * shipping a set takes one halter from the halter pile. RRC-013 "V-Neck Kurti"
+ * is the RRC-001 Co-ord Set sold on its own, so it draws on that same pile.
  */
 export const BUNDLE_STOCK_PREFIX: Record<string, string> = {
   'RRC-012-': 'RRC-002-',
+  'RRC-013-': 'RRC-001-',
 };
 
 /** The SKU whose physical stock a given SKU uses (itself unless it's a bundle). */
