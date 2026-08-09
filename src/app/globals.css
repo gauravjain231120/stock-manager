@@ -44,3 +44,49 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Printing / "Save as PDF" ------------------------------------------------
+   Screen chrome (sidebar, buttons, filters) carries .no-print and drops out.
+   Everything left is forced black-on-white: whoever is printing a stock sheet
+   may well be on the dark theme, and that prints as a black page. */
+@page {
+  size: A4;
+  margin: 12mm;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  .print-sheet,
+  .print-sheet * {
+    color: #000 !important;
+    background: transparent !important;
+  }
+
+  /* Secondary text stays readable but recedes; shortfalls read as bold, since
+     a red number is just another grey once it hits a mono printer. */
+  .print-sheet .print-muted {
+    color: #555 !important;
+  }
+
+  .print-sheet .print-short {
+    font-weight: 700 !important;
+  }
+
+  /* Column headings repeat on every sheet, and no row is split across a page. */
+  thead {
+    display: table-header-group;
+  }
+
+  tr {
+    break-inside: avoid;
+  }
+}

@@ -44,7 +44,7 @@ export function Sidebar() {
   return (
     <>
       {/* Mobile top bar */}
-      <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-black/10 bg-white px-4 py-3 dark:border-white/10 dark:bg-neutral-950 md:hidden">
+      <header className="no-print sticky top-0 z-30 flex items-center gap-3 border-b border-black/10 bg-white px-4 py-3 dark:border-white/10 dark:bg-neutral-950 md:hidden">
         <button onClick={() => setOpen(true)} aria-label="Open menu" className="rounded-lg p-1.5 text-neutral-700 hover:bg-black/5 dark:text-neutral-200 dark:hover:bg-white/10">
           <Menu size={22} />
         </button>
@@ -58,7 +58,7 @@ export function Sidebar() {
 
       {/* Sidebar — off-canvas drawer on mobile, docked on desktop */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-black/10 bg-white px-3 py-5 transition-transform duration-200 dark:border-white/10 dark:bg-neutral-950 md:static md:z-auto md:w-60 md:translate-x-0 md:transition-none ${open ? 'translate-x-0' : '-translate-x-full'}`}
+        className={`no-print fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-black/10 bg-white px-3 py-5 transition-transform duration-200 dark:border-white/10 dark:bg-neutral-950 md:static md:z-auto md:w-60 md:translate-x-0 md:transition-none ${open ? 'translate-x-0' : '-translate-x-full'}`}
       >
         <div className="mb-7 flex items-start justify-between px-2">
           <div>

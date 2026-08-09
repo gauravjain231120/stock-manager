@@ -1,3 +1,5 @@
+import Link from 'next/link';
+import { FileText } from 'lucide-react';
 import { listPending, shipProducts } from '@/lib/shipping';
 import { PageHeader, StatCard } from '@/components/ui';
 import { AddPendingForm } from '@/components/AddPendingForm';
@@ -90,7 +92,21 @@ export default async function ShipPage({ searchParams }: { searchParams: Promise
 
   return (
     <main className="px-4 py-6 sm:px-6 sm:py-8">
-      <PageHeader title="Ready to Ship" subtitle="Add each order as it comes in; hit Ship when you pack it. Stock is reserved until shipped." />
+      <PageHeader
+        title="Ready to Ship"
+        subtitle="Add each order as it comes in; hit Ship when you pack it. Stock is reserved until shipped."
+        actions={
+          <Link
+            href="/ship/stock-report?print=1"
+            target="_blank"
+            title="A printable stock sheet with the queue's claims already taken off"
+            className="flex items-center gap-1.5 rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium text-neutral-600 transition hover:bg-black/5 dark:border-white/20 dark:text-neutral-300 dark:hover:bg-white/10"
+          >
+            <FileText size={14} />
+            Stock after shipping (PDF)
+          </Link>
+        }
+      />
 
       <div className="mb-6">
         <AddPendingForm products={products} />
