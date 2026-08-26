@@ -50,9 +50,8 @@ export default async function RegisterPage() {
         />
       </div>
 
-      <section className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <section className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3">
         <StatCard label="In stock" value={num(totals.inStock)} />
-        <StatCard label="Produced" value={num(totals.produced)} tone="good" />
         <StatCard label="Shipped" value={num(totals.shipped)} />
         <StatCard label="Returned" value={num(totals.returned)} tone={totals.returned ? 'warn' : 'default'} />
       </section>
