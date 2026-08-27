@@ -161,7 +161,10 @@ export function RegisterEntryForm({ products }: { products: PickerProduct[] }) {
           <button
             type="button"
             key={a.key}
-            onClick={() => setAction(a.key)}
+            onClick={() => {
+              setAction(a.key);
+              if (a.key === 'RETURN' && !qty) setQty('1');
+            }}
             className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition ${
               action === a.key ? `${a.tone} text-white shadow-sm` : 'border border-black/15 text-neutral-600 hover:bg-black/5 dark:border-white/20 dark:text-neutral-300 dark:hover:bg-white/10'
             }`}
