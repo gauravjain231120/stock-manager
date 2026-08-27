@@ -113,7 +113,7 @@ export function RegisterEntryForm({ products }: { products: PickerProduct[] }) {
         setErr(/insufficient stock|not enough stock/i.test(raw) ? `Not enough stock to ship ${qty}.` : raw);
       } else {
         toast.success(`${actionLabel} saved ✓`);
-        setQty('');
+        setQty(action === 'RETURN' ? '1' : '');
         setTracking('');
         setScanOpen(false);
         router.refresh();
