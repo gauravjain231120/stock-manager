@@ -1,6 +1,6 @@
 import Link from 'next/link';
-import { FileText } from 'lucide-react';
-import { listPending, shipProducts } from '@/lib/shipping';
+import { FileText, Printer } from 'lucide-react';
+import { listPending, shipProducts, queueRows } from '@/lib/shipping';
 import { PageHeader, StatCard } from '@/components/ui';
 import { AddPendingForm } from '@/components/AddPendingForm';
 import { ShipQueue } from '@/components/ShipQueue';
@@ -50,45 +50,13 @@ export default async function ShipPage({ searchParams }: { searchParams: Promise
     .sort((a, b) => b.make - a.make || a.name.localeCompare(b.name));
   const makeUnits = toMake.reduce((a, m) => a + m.make, 0);
 
-  // Hand each pile out row by row, in the order the orders came in: the first
-  // order to want a garment gets what's on the shelf, and only the rows left over
-  // are short. Before this, every row sharing a pile carried the pile's WHOLE
-  // shortfall, so one missing garment read "make 1" on all four rows that wanted
-  // it — four pieces of work for one piece of sewing. Each row's own shortfall
-  // now adds up to exactly the To-make figure above. Run over the whole queue
-  // rather than the filtered view: who has a claim on a garment can't depend on
-  // which platform tab happens to be open.
-  const freeById = new Map<string, number>();
-  const leftBySku = new Map<string, number>();
-  for (const p of pending) {
-    const free = leftBySku.get(p.stockSku) ?? p.onHand;
-    freeById.set(p.id, free);
-    leftBySku.set(p.stockSku, Math.max(0, free - p.qty));
-  }
-
   // Optional platform filter (?platform=AMAZON). Narrows only the visible queue.
   const sp = await searchParams;
   const platform = PLATFORMS.includes(sp.platform as Platform) ? (sp.platform as Platform) : null;
-  const shown = platform ? pending.filter((p) => p.channel === platform) : pending;
-  const rows = shown.map((p) => {
-    const free = freeById.get(p.id) ?? p.onHand;
-    return {
-      id: p.id,
-      sku: p.sku,
-      stockSku: p.stockSku,
-      stockName: p.stockName,
-      name: p.name,
-      category: p.category,
-      qty: p.qty,
-      channel: p.channel,
-      free,
-      info: p.info,
-      orderId: p.orderId,
-      trackingId: p.trackingId,
-      after: free - p.qty,
-      short: p.qty > free,
-    };
-  });
+  // queueRows() allocates stock over the WHOLE queue before we narrow to a
+  // platform — who has a claim on a garment can't depend on which tab is open.
+  const allRows = queueRows(pending);
+  const rows = platform ? allRows.filter((r) => r.channel === platform) : allRows;
 
   return (
     <main className="px-4 py-6 sm:px-6 sm:py-8">
@@ -96,15 +64,26 @@ export default async function ShipPage({ searchParams }: { searchParams: Promise
         title="Ready to Ship"
         subtitle="Add each order as it comes in; hit Ship when you pack it. Stock is reserved until shipped."
         actions={
-          <Link
-            href="/ship/stock-report?print=1"
-            target="_blank"
-            title="A printable stock sheet with the queue's claims already taken off"
-            className="flex items-center gap-1.5 rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium text-neutral-600 transition hover:bg-black/5 dark:border-white/20 dark:text-neutral-300 dark:hover:bg-white/10"
-          >
-            <FileText size={14} />
-            Stock after shipping (PDF)
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/ship/queue-print?print=1"
+              target="_blank"
+              title="The whole queue — product, platform, stock, and status — on one printed page"
+              className="flex items-center gap-1.5 rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium text-neutral-600 transition hover:bg-black/5 dark:border-white/20 dark:text-neutral-300 dark:hover:bg-white/10"
+            >
+              <Printer size={14} />
+              Print queue
+            </Link>
+            <Link
+              href="/ship/stock-report?print=1"
+              target="_blank"
+              title="A printable stock sheet with the queue's claims already taken off"
+              className="flex items-center gap-1.5 rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium text-neutral-600 transition hover:bg-black/5 dark:border-white/20 dark:text-neutral-300 dark:hover:bg-white/10"
+            >
+              <FileText size={14} />
+              Stock after shipping (PDF)
+            </Link>
+          </div>
         }
       />
 

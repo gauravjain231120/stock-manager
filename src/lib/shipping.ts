@@ -152,6 +152,56 @@ export async function listPending(): Promise<PendingRow[]> {
   });
 }
 
+export interface QueueRow {
+  id: string;
+  sku: string;
+  stockSku: string;
+  stockName: string | null;
+  name: string;
+  category: string;
+  qty: number;
+  channel: string | null;
+  /** Units of this row's pile still free for it, once the orders queued ahead of
+   *  it have taken theirs. */
+  free: number;
+  after: number;
+  short: boolean;
+  info: { sku: string; label: string; onHand: number } | null;
+  orderId: string | null;
+  trackingId: string | null;
+}
+
+/**
+ * Hands each physical pile out row by row, in the order the orders came in:
+ * the first order to want a garment gets what's on the shelf, and only the
+ * rows left over are short. Must run over the WHOLE queue, never a filtered
+ * subset — who has a claim on a garment can't depend on which platform tab
+ * happens to be open.
+ */
+export function queueRows(pending: PendingRow[]): QueueRow[] {
+  const leftBySku = new Map<string, number>();
+  return pending.map((p) => {
+    const free = leftBySku.get(p.stockSku) ?? p.onHand;
+    leftBySku.set(p.stockSku, Math.max(0, free - p.qty));
+    return {
+      id: p.id,
+      sku: p.sku,
+      stockSku: p.stockSku,
+      stockName: p.stockName,
+      name: p.name,
+      category: p.category,
+      qty: p.qty,
+      channel: p.channel,
+      free,
+      info: p.info,
+      orderId: p.orderId,
+      trackingId: p.trackingId,
+      after: free - p.qty,
+      short: p.qty > free,
+    };
+  });
+}
+
 export interface OrderIdUse {
   where: 'QUEUE' | 'SHIPPED';
   sku: string;

@@ -89,4 +89,12 @@ body {
   tr {
     break-inside: avoid;
   }
+
+  /* Used by <FitOnePage>: gives its content a hard one-page height budget (the
+     @page size above, minus its margin on both edges) to scale against, and
+     clips rather than spilling onto a second page if it still comes up short. */
+  .print-fit {
+    height: 273mm;
+    overflow: hidden;
+  }
 }
