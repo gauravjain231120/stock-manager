@@ -56,6 +56,17 @@ export default async function QueuePrintPage({
   const units = rows.reduce((a, r) => a + r.qty, 0);
   const generated = dateTime(new Date());
 
+  // Rows are already in platform-print order, so the first time each channel
+  // is seen fixes this map's order too — no separate sort needed.
+  const unitsByChannel = new Map<string, number>();
+  for (const r of rows) {
+    const key = r.channel ?? '';
+    unitsByChannel.set(key, (unitsByChannel.get(key) ?? 0) + r.qty);
+  }
+  const platformSummary = [...unitsByChannel.entries()]
+    .map(([channel, qty]) => `${platformLabel(channel || null)}: ${qty}`)
+    .join(' · ');
+
   return (
     <main className="px-4 py-6 sm:px-6 sm:py-8 print:p-0">
       <div className="no-print mb-6 flex flex-wrap items-center justify-between gap-3">
@@ -73,10 +84,12 @@ export default async function QueuePrintPage({
         <p className="mb-1 text-[10px] text-neutral-500 print-muted">
           {rows.length} order{rows.length === 1 ? '' : 's'} · {units} unit{units === 1 ? '' : 's'} · {generated}
         </p>
+        {platformSummary ? <p className="mb-1 text-[10px] font-semibold">{platformSummary}</p> : null}
 
         <table className="w-full border-collapse text-[10px] leading-tight">
           <thead>
             <tr>
+              <th className={th}>#</th>
               <th className={th}>Product</th>
               <th className={th}>Platform</th>
               <th className={thR}>Stock</th>
@@ -84,8 +97,9 @@ export default async function QueuePrintPage({
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
+            {rows.map((r, i) => (
               <tr key={r.id}>
+                <td className={td}>{i + 1}</td>
                 <td className={td}>{r.name}</td>
                 <td className={td}>{platformLabel(r.channel)}</td>
                 <td className={tdR}>{r.free}</td>
