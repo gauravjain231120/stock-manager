@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { listPending, queueRows } from '@/lib/shipping';
 import { PrintButton } from '@/components/PrintButton';
-import { PLATFORM_LABELS, Platform } from '@/lib/constants';
+import { PLATFORMS, PLATFORM_LABELS, Platform } from '@/lib/constants';
 import { dateTime, dayKey } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
@@ -23,6 +23,15 @@ function statusLabel(free: number) {
   return 'Good';
 }
 
+// Myntra and Amazon pack first; everything else follows in no particular
+// order, then unassigned rows last.
+const PRINT_ORDER = ['MYNTRA', 'AMAZON', ...PLATFORMS.filter((p) => p !== 'MYNTRA' && p !== 'AMAZON')];
+function platformRank(channel: string | null) {
+  if (!channel) return PRINT_ORDER.length;
+  const i = PRINT_ORDER.indexOf(channel);
+  return i === -1 ? PRINT_ORDER.length : i;
+}
+
 const th = 'border-b-2 border-black/40 px-1.5 py-0.5 text-left font-semibold dark:border-white/40';
 const thR = `${th} text-right`;
 const td = 'border-b border-black/10 px-1.5 py-0.5 align-top dark:border-white/10';
@@ -41,7 +50,9 @@ export default async function QueuePrintPage({
 }) {
   const sp = await searchParams;
   const pending = await listPending();
-  const rows = queueRows(pending);
+  // Sorted for print, not for the stock allocation above it — free/after are
+  // already computed in queue order, sorting here just changes display order.
+  const rows = queueRows(pending).sort((a, b) => platformRank(a.channel) - platformRank(b.channel));
   const units = rows.reduce((a, r) => a + r.qty, 0);
   const generated = dateTime(new Date());
 
