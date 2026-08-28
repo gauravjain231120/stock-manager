@@ -51,19 +51,24 @@ export default async function QueuePrintPage({
   const sp = await searchParams;
   const pending = await listPending();
   // Sorted for print, not for the stock allocation above it — free/after are
-  // already computed in queue order, sorting here just changes display order.
-  const rows = queueRows(pending).sort((a, b) => platformRank(a.channel) - platformRank(b.channel));
+  // already computed in queue order. Same product groups together first —
+  // packing the same garment off two platforms shouldn't mean hunting two
+  // spots on the sheet — then Myntra-before-Amazon breaks the tie.
+  const rows = queueRows(pending).sort((a, b) => {
+    if (a.name !== b.name) return a.name.localeCompare(b.name);
+    return platformRank(a.channel) - platformRank(b.channel);
+  });
   const units = rows.reduce((a, r) => a + r.qty, 0);
   const generated = dateTime(new Date());
 
-  // Rows are already in platform-print order, so the first time each channel
-  // is seen fixes this map's order too — no separate sort needed.
+  // Rows are grouped by product now, not by platform, so this needs its own sort.
   const unitsByChannel = new Map<string, number>();
   for (const r of rows) {
     const key = r.channel ?? '';
     unitsByChannel.set(key, (unitsByChannel.get(key) ?? 0) + r.qty);
   }
   const platformSummary = [...unitsByChannel.entries()]
+    .sort((a, b) => platformRank(a[0] || null) - platformRank(b[0] || null))
     .map(([channel, qty]) => `${platformLabel(channel || null)}: ${qty}`)
     .join(' · ');
 
