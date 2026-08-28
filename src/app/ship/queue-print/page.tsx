@@ -2,7 +2,6 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { listPending, queueRows } from '@/lib/shipping';
 import { PrintButton } from '@/components/PrintButton';
-import { FitOnePage } from '@/components/FitOnePage';
 import { PLATFORM_LABELS, Platform } from '@/lib/constants';
 import { dateTime, dayKey } from '@/lib/format';
 
@@ -24,15 +23,16 @@ function statusLabel(free: number) {
   return 'Good';
 }
 
-const th = 'border-b-2 border-black/40 px-2 py-1 text-left font-semibold dark:border-white/40';
+const th = 'border-b-2 border-black/40 px-1.5 py-0.5 text-left font-semibold dark:border-white/40';
 const thR = `${th} text-right`;
-const td = 'border-b border-black/10 px-2 py-1 align-top dark:border-white/10';
+const td = 'border-b border-black/10 px-1.5 py-0.5 align-top dark:border-white/10';
 const tdR = `${td} text-right tabular-nums`;
 
 /**
- * The whole Ready-to-Ship queue — product, platform, stock, and status — on
- * one printed page, whatever the queue's size (see FitOnePage). Screen chrome
- * carries `no-print`, so "Save as PDF" gives you just the sheet.
+ * The whole Ready-to-Ship queue — product, platform, stock, and status.
+ * Compact enough that a normal queue lands on one page; a long one just
+ * carries on to a second rather than losing rows. Screen chrome carries
+ * `no-print`, so "Save as PDF" gives you just the sheet.
  */
 export default async function QueuePrintPage({
   searchParams,
@@ -59,41 +59,36 @@ export default async function QueuePrintPage({
       </div>
 
       <div className="print-sheet">
-        <FitOnePage>
-          <header className="mb-3">
-            <h1 className="text-xl font-bold">Ready to Ship — full queue</h1>
-            <p className="text-sm text-neutral-500 print-muted">
-              {rows.length} order{rows.length === 1 ? '' : 's'} · {units} unit{units === 1 ? '' : 's'} · {generated}
-            </p>
-          </header>
+        <p className="mb-1 text-[10px] text-neutral-500 print-muted">
+          {rows.length} order{rows.length === 1 ? '' : 's'} · {units} unit{units === 1 ? '' : 's'} · {generated}
+        </p>
 
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr>
-                <th className={th}>Product</th>
-                <th className={th}>Platform</th>
-                <th className={thR}>Stock</th>
-                <th className={thR}>Status</th>
+        <table className="w-full border-collapse text-[10px] leading-tight">
+          <thead>
+            <tr>
+              <th className={th}>Product</th>
+              <th className={th}>Platform</th>
+              <th className={thR}>Stock</th>
+              <th className={thR}>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.id}>
+                <td className={td}>{r.name}</td>
+                <td className={td}>{platformLabel(r.channel)}</td>
+                <td className={tdR}>{r.free}</td>
+                <td className={`${tdR} ${r.after < 0 ? 'print-short text-red-600' : ''}`}>
+                  {r.after < 0 ? `Out of stock (make ${-r.after})` : statusLabel(r.free)}
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.id}>
-                  <td className={td}>{r.name}</td>
-                  <td className={td}>{platformLabel(r.channel)}</td>
-                  <td className={tdR}>{r.free}</td>
-                  <td className={`${tdR} ${r.after < 0 ? 'print-short text-red-600' : ''}`}>
-                    {r.after < 0 ? `Out of stock (make ${-r.after})` : statusLabel(r.free)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+            ))}
+          </tbody>
+        </table>
 
-          {rows.length === 0 ? (
-            <p className="py-8 text-center text-sm text-neutral-400">Nothing queued right now.</p>
-          ) : null}
-        </FitOnePage>
+        {rows.length === 0 ? (
+          <p className="py-8 text-center text-sm text-neutral-400">Nothing queued right now.</p>
+        ) : null}
       </div>
     </main>
   );
