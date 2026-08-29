@@ -46,15 +46,21 @@ const tdR = `${td} text-right tabular-nums`;
 export default async function QueuePrintPage({
   searchParams,
 }: {
-  searchParams: Promise<{ print?: string }>;
+  searchParams: Promise<{ print?: string; platform?: string }>;
 }) {
   const sp = await searchParams;
+  const platform = PLATFORMS.includes(sp.platform as Platform) ? (sp.platform as Platform) : null;
   const pending = await listPending();
+  // Stock is allocated over the WHOLE queue before narrowing to a platform —
+  // who has a claim on a garment can't depend on which tab was open when
+  // printing (same rule as the on-screen queue in /ship).
+  const allRows = queueRows(pending);
+  const filteredRows = platform ? allRows.filter((r) => r.channel === platform) : allRows;
   // Sorted for print, not for the stock allocation above it — free/after are
   // already computed in queue order. Same product groups together first —
   // packing the same garment off two platforms shouldn't mean hunting two
   // spots on the sheet — then Myntra-before-Amazon breaks the tie.
-  const rows = queueRows(pending).sort((a, b) => {
+  const rows = filteredRows.sort((a, b) => {
     if (a.name !== b.name) return a.name.localeCompare(b.name);
     return platformRank(a.channel) - platformRank(b.channel);
   });
@@ -117,7 +123,9 @@ export default async function QueuePrintPage({
         </table>
 
         {rows.length === 0 ? (
-          <p className="py-8 text-center text-sm text-neutral-400">Nothing queued right now.</p>
+          <p className="py-8 text-center text-sm text-neutral-400">
+            {platform ? `Nothing queued for ${platformLabel(platform)} right now.` : 'Nothing queued right now.'}
+          </p>
         ) : null}
       </div>
     </main>

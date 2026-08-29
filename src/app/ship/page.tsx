@@ -66,9 +66,13 @@ export default async function ShipPage({ searchParams }: { searchParams: Promise
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Link
-              href="/ship/queue-print?print=1"
+              href={`/ship/queue-print?print=1${platform ? `&platform=${platform}` : ''}`}
               target="_blank"
-              title="The whole queue — product, platform, stock, and status — on one printed page"
+              title={
+                platform
+                  ? `The ${PLATFORM_LABELS[platform]} queue — product, platform, stock, and status — on one printed page`
+                  : 'The whole queue — product, platform, stock, and status — on one printed page'
+              }
               className="flex items-center gap-1.5 rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium text-neutral-600 transition hover:bg-black/5 dark:border-white/20 dark:text-neutral-300 dark:hover:bg-white/10"
             >
               <Printer size={14} />
