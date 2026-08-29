@@ -130,20 +130,27 @@ export function InventoryTable({ rows }: { rows: InvRow[] }) {
         groups.map((g) => {
           // Every size of this one colour, added up for the row that closes the table.
           const gt = g.rows.reduce(
-            (a, r) => ({ shipped: a.shipped + r.shipped, returned: a.returned + r.returned, onHand: a.onHand + r.onHand }),
-            { shipped: 0, returned: 0, onHand: 0 },
+            (a, r) => ({
+              shipped: a.shipped + r.shipped,
+              returned: a.returned + r.returned,
+              onHand: a.onHand + r.onHand,
+              available: a.available + (r.available ?? r.onHand),
+            }),
+            { shipped: 0, returned: 0, onHand: 0, available: 0 },
           );
           return (
             <Panel key={g.key} title={g.title} actions={<span className="text-xs text-neutral-400">{gt.onHand} on hand</span>}>
-              <Table head={<><Th>Size</Th><Th right>Shipped</Th><Th right>Returned</Th><Th right>On hand</Th><Th right>Status</Th></>}>
+              <Table head={<><Th>Size</Th><Th right>Shipped</Th><Th right>Returned</Th><Th right>On hand</Th><Th right>Available</Th><Th right>Status</Th></>}>
                 {g.rows.map((r) => {
                   const s = stockStatus(r.onHand);
+                  const avail = r.available ?? r.onHand;
                   return (
                     <Tr key={r.sku}>
                       <Td>{r.sku.split('-').pop()}</Td>
                       <Td right>{r.shipped}</Td>
                       <Td right>{r.returned}</Td>
                       <Td right><EditableStock sku={r.sku} value={r.onHand} /></Td>
+                      <Td right className={avail < r.onHand ? 'text-amber-600' : undefined}>{avail}</Td>
                       <Td right><Badge tone={s.tone}>{s.label}</Badge></Td>
                     </Tr>
                   );
@@ -153,6 +160,7 @@ export function InventoryTable({ rows }: { rows: InvRow[] }) {
                   <Td right>{gt.shipped}</Td>
                   <Td right>{gt.returned}</Td>
                   <Td right>{gt.onHand}</Td>
+                  <Td right>{gt.available}</Td>
                   <Td right />
                 </Tr>
               </Table>
