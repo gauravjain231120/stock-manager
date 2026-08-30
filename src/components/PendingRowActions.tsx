@@ -69,13 +69,22 @@ export function PendingRowActions({
           this order alone is missing — not the whole pile's shortfall. */}
       <ProduceButton sku={row.sku} stockSku={row.stockSku} name={row.name} onHand={row.free} need={row.qty} />
 
+      <button
+        onClick={toggleReady}
+        title={row.ready ? 'Back in the pack pile — will print again' : 'Packed and set aside — leaves it off the print sheet'}
+        className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${
+          row.ready
+            ? 'border-emerald-600/40 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-500/30 dark:bg-emerald-900/30 dark:text-emerald-300 dark:hover:bg-emerald-900/50'
+            : 'border-black/15 hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10'
+        }`}
+      >
+        {row.ready ? 'Ready ✓' : 'Mark ready'}
+      </button>
+
       <RowMenu>
         {(close) => (
           <>
             <button className={menuItemCls} onClick={() => { close(); setEdit(true); }}>Edit</button>
-            <button className={menuItemCls} onClick={() => { close(); toggleReady(); }}>
-              {row.ready ? 'Unmark ready' : 'Mark ready'}
-            </button>
             <button
               className={`${menuItemCls} text-red-600 dark:text-red-400`}
               onClick={() => { close(); setCancel(true); }}
