@@ -1,4 +1,4 @@
-import { shipPending, cancelPending, editPending } from '@/lib/shipping';
+import { shipPending, cancelPending, editPending, setPendingReady } from '@/lib/shipping';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,6 +29,19 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       orderId: typeof body?.orderId === 'string' ? body.orderId : undefined,
       trackingId: typeof body?.trackingId === 'string' ? body.trackingId : undefined,
     });
+    return Response.json({ ok: true, ...res });
+  } catch (err) {
+    return Response.json({ error: err instanceof Error ? err.message : String(err) }, { status: 400 });
+  }
+}
+
+/** PUT /api/pending/[id] -> flip the "packed & set aside" flag (kept off the print sheet once set). */
+export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const { id } = await ctx.params;
+  const body = await req.json().catch(() => ({} as { ready?: boolean }));
+  const ready = Boolean(body?.ready);
+  try {
+    const res = await setPendingReady(id, ready);
     return Response.json({ ok: true, ...res });
   } catch (err) {
     return Response.json({ error: err instanceof Error ? err.message : String(err) }, { status: 400 });

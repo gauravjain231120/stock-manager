@@ -30,6 +30,8 @@ export interface PendingRow {
   available: number;
   /** Companion stock shown for reference next to bundles (never deducted). */
   info: { sku: string; label: string; onHand: number } | null;
+  /** Packed and set aside — kept off the print sheet so it isn't packed twice. */
+  ready: boolean;
 }
 
 /** Parent product + colour/size are carried so the add form's picker can build its rows. */
@@ -148,6 +150,7 @@ export async function listPending(): Promise<PendingRow[]> {
       onHand,
       available: onHand - (st?.reserved ?? 0),
       info: inf ? { sku: inf.sku, label: inf.label, onHand: stockBy.get(inf.sku)?.onHand ?? 0 } : null,
+      ready: i.ready ?? false,
     };
   });
 }
@@ -169,6 +172,8 @@ export interface QueueRow {
   info: { sku: string; label: string; onHand: number } | null;
   orderId: string | null;
   trackingId: string | null;
+  /** Packed and set aside — kept off the print sheet so it isn't packed twice. */
+  ready: boolean;
 }
 
 /**
@@ -198,6 +203,7 @@ export function queueRows(pending: PendingRow[]): QueueRow[] {
       trackingId: p.trackingId,
       after: free - p.qty,
       short: p.qty > free,
+      ready: p.ready,
     };
   });
 }
@@ -365,6 +371,18 @@ export async function editPending(
 
   await p.save();
   return { id: String(p._id), sku: p.sku, qty: p.qty };
+}
+
+/**
+ * Mark a queue entry packed and set aside (or put it back in the pack pile).
+ * Purely a print flag — no stock or reservation changes, so it can be flipped
+ * either way with nothing to undo.
+ */
+export async function setPendingReady(id: string, ready: boolean) {
+  await connectDB();
+  const p = await PendingShipmentModel.findByIdAndUpdate(id, { ready }, { new: true });
+  if (!p) throw new Error('Item not found');
+  return { id: String(p._id), ready: p.ready ?? false };
 }
 
 /**

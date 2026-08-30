@@ -1,10 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { ShipButton } from '@/components/ShipButton';
 import { ProduceButton } from '@/components/ProduceButton';
 import { CancelButton } from '@/components/CancelButton';
 import { EditPendingButton } from '@/components/EditPendingButton';
+import { useToast } from '@/components/ToastProvider';
 import { RowMenu, menuItemCls } from '@/components/RowMenu';
 import type { QueueRow } from '@/components/ShipQueue';
 
@@ -28,6 +30,27 @@ export function PendingRowActions({
 }) {
   const [edit, setEdit] = useState(false);
   const [cancel, setCancel] = useState(false);
+  const router = useRouter();
+  const toast = useToast();
+
+  async function toggleReady() {
+    const nextReady = !row.ready;
+    try {
+      const res = await fetch(`/api/pending/${row.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ready: nextReady }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) toast.error(data?.error || 'Failed to update');
+      else {
+        toast.success(nextReady ? 'Marked ready — off the print sheet ✓' : 'Back in the pack pile');
+        router.refresh();
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Request failed');
+    }
+  }
 
   return (
     <span className="inline-flex items-center gap-2">
@@ -50,6 +73,9 @@ export function PendingRowActions({
         {(close) => (
           <>
             <button className={menuItemCls} onClick={() => { close(); setEdit(true); }}>Edit</button>
+            <button className={menuItemCls} onClick={() => { close(); toggleReady(); }}>
+              {row.ready ? 'Unmark ready' : 'Mark ready'}
+            </button>
             <button
               className={`${menuItemCls} text-red-600 dark:text-red-400`}
               onClick={() => { close(); setCancel(true); }}

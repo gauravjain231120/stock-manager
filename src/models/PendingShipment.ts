@@ -14,6 +14,9 @@ const PendingShipmentSchema = new Schema(
     // is just "check the number, hit Ship".
     trackingId: { type: String, trim: true, uppercase: true },
     buyer: { type: String, trim: true },
+    // Packed and set aside, but not yet shipped — kept off the print sheet so it
+    // isn't packed twice.
+    ready: { type: Boolean, default: false },
   },
   { timestamps: true },
 );

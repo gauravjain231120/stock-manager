@@ -55,7 +55,9 @@ export default async function QueuePrintPage({
   // who has a claim on a garment can't depend on which tab was open when
   // printing (same rule as the on-screen queue in /ship).
   const allRows = queueRows(pending);
-  const filteredRows = platform ? allRows.filter((r) => r.channel === platform) : allRows;
+  // Items marked ready are already packed and set aside — printing them again
+  // would just get them packed twice.
+  const filteredRows = allRows.filter((r) => !r.ready && (!platform || r.channel === platform));
   // Sorted for print, not for the stock allocation above it — free/after are
   // already computed in queue order. Same product groups together first —
   // packing the same garment off two platforms shouldn't mean hunting two

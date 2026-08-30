@@ -33,6 +33,8 @@ export interface QueueRow {
   info: { sku: string; label: string; onHand: number } | null;
   orderId: string | null;
   trackingId: string | null;
+  /** Packed and set aside — kept off the print sheet so it isn't packed twice. */
+  ready: boolean;
 }
 
 function platformLabel(c?: string | null) {
@@ -260,7 +262,10 @@ export function ShipQueue({
                 />
               </Td>
               <Td>
-                <div>{p.name}</div>
+                <div className="flex items-center gap-1.5">
+                  <span>{p.name}</span>
+                  {p.ready ? <Badge tone="good">Ready</Badge> : null}
+                </div>
                 <div className="font-mono text-[11px] text-neutral-400">{p.sku}</div>
                 {/* The order number sits in the group header, so don't repeat it on every line. */}
                 {p.orderId && !grouped ? <div className="text-[11px] text-neutral-400">Order {p.orderId}</div> : null}
