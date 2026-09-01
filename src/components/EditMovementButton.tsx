@@ -2,24 +2,36 @@
 
 import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { PLATFORMS, PLATFORM_LABELS, Platform, MAX_TRACKING_LEN, normalizeTracking } from '@/lib/constants';
+import {
+  PLATFORMS,
+  PLATFORM_LABELS,
+  Platform,
+  MAX_TRACKING_LEN,
+  normalizeTracking,
+  RETURN_CONDITIONS,
+  RETURN_CONDITION_LABELS,
+  RETURN_CONDITION_HINTS,
+  ReturnCondition,
+} from '@/lib/constants';
 import { useToast } from '@/components/ToastProvider';
 import type { MovementRow } from '@/lib/movements';
 
 const input = 'w-full rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm text-neutral-900 dark:border-white/20 dark:text-white';
 
-/** Fix a shipment or return after the fact — tracking, order number, platform, quantity or date. */
+/** Fix a shipment or return after the fact — tracking, order number, platform, quantity, date, or (returns only) condition. */
 export function EditMovementButton({ row, title }: { row: MovementRow; title: string }) {
   const router = useRouter();
   const toast = useToast();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const isReturn = title === 'return';
 
   const [tracking, setTracking] = useState(row.trackingId ?? '');
   const [orderId, setOrderId] = useState(row.orderId ?? '');
   const [channel, setChannel] = useState<Platform>((row.channel as Platform) ?? 'AMAZON');
   const [qty, setQty] = useState(String(row.qty));
   const [date, setDate] = useState(row.at.slice(0, 10));
+  const [condition, setCondition] = useState<ReturnCondition>((row.condition as ReturnCondition) ?? 'GOOD');
 
   const trackingLen = (normalizeTracking(tracking) ?? '').length;
   const trackingTooLong = trackingLen > MAX_TRACKING_LEN;
@@ -30,6 +42,7 @@ export function EditMovementButton({ row, title }: { row: MovementRow; title: st
     setChannel((row.channel as Platform) ?? 'AMAZON');
     setQty(String(row.qty));
     setDate(row.at.slice(0, 10));
+    setCondition((row.condition as ReturnCondition) ?? 'GOOD');
     setOpen(true);
   }
 
@@ -41,7 +54,14 @@ export function EditMovementButton({ row, title }: { row: MovementRow; title: st
       const res = await fetch(`/api/register/${row.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ trackingId: tracking, orderId, channel, qty: Number(qty), date }),
+        body: JSON.stringify({
+          trackingId: tracking,
+          orderId,
+          channel,
+          qty: Number(qty),
+          date,
+          ...(isReturn ? { condition } : {}),
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) toast.error(data?.error || 'Failed to save');
@@ -112,9 +132,36 @@ export function EditMovementButton({ row, title }: { row: MovementRow; title: st
                 Date
                 <input className={input} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
               </label>
+              {isReturn ? (
+                <div className="flex flex-col gap-1 text-xs text-neutral-500">
+                  What came back?
+                  <div className="mt-0.5 flex flex-col gap-1.5">
+                    {RETURN_CONDITIONS.map((k) => (
+                      <button
+                        type="button"
+                        key={k}
+                        onClick={() => setCondition(k)}
+                        className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                          condition === k
+                            ? k === 'GOOD' ? 'bg-emerald-600 text-white' : k === 'USED' ? 'bg-amber-600 text-white' : 'bg-red-600 text-white'
+                            : 'border border-black/15 text-neutral-600 hover:bg-black/5 dark:border-white/20 dark:text-neutral-300 dark:hover:bg-white/10'
+                        }`}
+                      >
+                        {RETURN_CONDITION_LABELS[k]}
+                        <span className={`ml-auto text-xs font-normal ${condition === k ? 'opacity-80' : 'text-neutral-400'}`}>
+                          {RETURN_CONDITION_HINTS[k]}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
 
-            <p className="mt-3 text-[11px] text-neutral-400">Changing the quantity adjusts stock to match.</p>
+            <p className="mt-3 text-[11px] text-neutral-400">
+              Changing the quantity adjusts stock to match.
+              {isReturn ? ' Changing condition across the Wrong-item line moves the stock between shelves too.' : ''}
+            </p>
 
             <div className="mt-4 flex justify-end gap-2">
               <button type="button" onClick={() => setOpen(false)} className="rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">
