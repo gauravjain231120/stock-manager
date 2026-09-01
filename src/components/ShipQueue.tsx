@@ -7,7 +7,7 @@ import { PendingRowActions } from '@/components/PendingRowActions';
 import { ShipOrderButton } from '@/components/ShipOrderButton';
 import { PlatformFilter } from '@/components/PlatformFilter';
 import { PLATFORM_LABELS, Platform } from '@/lib/constants';
-import { dateTime } from '@/lib/format';
+import { dateTime, dayKey } from '@/lib/format';
 
 export interface QueueRow {
   id: string;
@@ -69,10 +69,21 @@ export function ShipQueue({
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [fCategory, setFCategory] = useState('all');
+  const [fShipDate, setFShipDate] = useState<'all' | 'today' | 'tomorrow' | 'overdue'>('all');
 
   const categories = [...new Set(rows.map((r) => r.category).filter(Boolean))].sort();
+  const todayKey = dayKey(new Date());
+  const tomorrowKey = dayKey(new Date(Date.now() + 86400_000));
+  function matchesShipDate(r: QueueRow) {
+    if (fShipDate === 'all') return true;
+    if (!r.shipByAt) return false;
+    const key = dayKey(r.shipByAt);
+    if (fShipDate === 'today') return key === todayKey;
+    if (fShipDate === 'tomorrow') return key === tomorrowKey;
+    return key < todayKey; // overdue
+  }
   // "" is a real choice here — the queued products that have no category at all.
-  const visible = fCategory === 'all' ? rows : rows.filter((r) => r.category === fCategory);
+  const visible = rows.filter((r) => (fCategory === 'all' || r.category === fCategory) && matchesShipDate(r));
 
   // Rows that can be ticked: enough left for this row to ship it in full.
   const selectable = visible.filter((r) => r.free >= r.qty && r.qty > 0);
@@ -130,7 +141,7 @@ export function ShipQueue({
 
   return (
     <Panel
-      title={`Queue (${platform || categoryLabel ? `${visible.length} of ${totalCount}` : totalCount})`}
+      title={`Queue (${platform || categoryLabel || fShipDate !== 'all' ? `${visible.length} of ${totalCount}` : totalCount})`}
       actions={
         <div className="flex flex-wrap items-center justify-end gap-2">
           <select
@@ -144,6 +155,17 @@ export function ShipQueue({
             {rows.some((r) => !r.category) ? <option value="">No category</option> : null}
           </select>
           <PlatformFilter />
+          <select
+            value={fShipDate}
+            onChange={(e) => setFShipDate(e.target.value as typeof fShipDate)}
+            aria-label="Filter by ship-by date"
+            className={filterCls}
+          >
+            <option value="all">Any ship date</option>
+            <option value="overdue">Overdue</option>
+            <option value="today">Ship by today</option>
+            <option value="tomorrow">Ship by tomorrow</option>
+          </select>
           {visible.length > 0 ? (
             <>
               <ActionButton
