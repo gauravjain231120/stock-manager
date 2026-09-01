@@ -17,6 +17,11 @@ const PendingShipmentSchema = new Schema(
     // Packed and set aside, but not yet shipped — kept off the print sheet so it
     // isn't packed twice.
     ready: { type: Boolean, default: false },
+    // When the marketplace order was actually placed (not when it was added to
+    // this queue) and its ship-by deadline — both optional, set by whatever
+    // integration adds the order (e.g. an order-alert bot).
+    placedAt: { type: Date },
+    shipByAt: { type: Date },
   },
   { timestamps: true },
 );

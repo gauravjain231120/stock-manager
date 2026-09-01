@@ -9,6 +9,8 @@ const Add = z.object({
   channel: z.string().optional(),
   orderId: z.string().optional(),
   trackingId: z.string().optional(),
+  placedAt: z.string().datetime().optional(),
+  shipByAt: z.string().datetime().optional(),
 });
 
 /** GET /api/pending -> { count } (for the sidebar badge). */

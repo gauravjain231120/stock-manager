@@ -7,6 +7,7 @@ import { PendingRowActions } from '@/components/PendingRowActions';
 import { ShipOrderButton } from '@/components/ShipOrderButton';
 import { PlatformFilter } from '@/components/PlatformFilter';
 import { PLATFORM_LABELS, Platform } from '@/lib/constants';
+import { dateTime } from '@/lib/format';
 
 export interface QueueRow {
   id: string;
@@ -33,6 +34,9 @@ export interface QueueRow {
   info: { sku: string; label: string; onHand: number } | null;
   orderId: string | null;
   trackingId: string | null;
+  /** When the marketplace order was actually placed (set by an order-alert integration, if any). */
+  placedAt: string | null;
+  shipByAt: string | null;
   /** Packed and set aside — kept off the print sheet so it isn't packed twice. */
   ready: boolean;
 }
@@ -270,6 +274,8 @@ export function ShipQueue({
                 {/* The order number sits in the group header, so don't repeat it on every line. */}
                 {p.orderId && !grouped ? <div className="text-[11px] text-neutral-400">Order {p.orderId}</div> : null}
                 {p.trackingId ? <div className="font-mono text-[11px] text-emerald-600">#{p.trackingId}</div> : null}
+                {p.placedAt ? <div className="text-[11px] text-neutral-400">Placed {dateTime(p.placedAt)}</div> : null}
+                {p.shipByAt ? <div className="text-[11px] text-amber-500">Ship by {dateTime(p.shipByAt)}</div> : null}
                 {p.stockSku !== p.sku ? (
                   <div className="text-[11px] text-amber-500">
                     shares stock — takes {p.qty} {p.stockName ?? 'unit'} ({p.stockSku})

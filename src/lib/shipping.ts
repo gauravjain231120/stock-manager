@@ -26,6 +26,9 @@ export interface PendingRow {
   orderId: string | null;
   trackingId: string | null;
   createdAt: string;
+  /** When the marketplace order was actually placed (distinct from createdAt, which is when it was queued here). */
+  placedAt: string | null;
+  shipByAt: string | null;
   onHand: number;
   available: number;
   /** Companion stock shown for reference next to bundles (never deducted). */
@@ -69,7 +72,15 @@ export async function shipProducts(): Promise<ShipProduct[]> {
 }
 
 /** Add an order to the queue and RESERVE its stock (does not deduct on-hand yet). */
-export async function addPending(input: { sku: string; qty: number; channel?: string; orderId?: string; trackingId?: string }) {
+export async function addPending(input: {
+  sku: string;
+  qty: number;
+  channel?: string;
+  orderId?: string;
+  trackingId?: string;
+  placedAt?: string | Date;
+  shipByAt?: string | Date;
+}) {
   await connectDB();
   const sku = input.sku.trim().toUpperCase();
   const qty = Math.floor(input.qty);
@@ -101,7 +112,15 @@ export async function addPending(input: { sku: string; qty: number; channel?: st
       return { id: String(existing._id) };
     }
   }
-  const doc = await PendingShipmentModel.create({ sku, qty, channel, orderId, trackingId: cleanTracking(input.trackingId) });
+  const doc = await PendingShipmentModel.create({
+    sku,
+    qty,
+    channel,
+    orderId,
+    trackingId: cleanTracking(input.trackingId),
+    placedAt: input.placedAt,
+    shipByAt: input.shipByAt,
+  });
   return { id: String(doc._id) };
 }
 
@@ -147,6 +166,8 @@ export async function listPending(): Promise<PendingRow[]> {
       orderId: i.orderId ?? null,
       trackingId: i.trackingId ?? null,
       createdAt: (i.createdAt as unknown as Date).toISOString(),
+      placedAt: i.placedAt ? (i.placedAt as unknown as Date).toISOString() : null,
+      shipByAt: i.shipByAt ? (i.shipByAt as unknown as Date).toISOString() : null,
       onHand,
       available: onHand - (st?.reserved ?? 0),
       info: inf ? { sku: inf.sku, label: inf.label, onHand: stockBy.get(inf.sku)?.onHand ?? 0 } : null,
@@ -172,6 +193,8 @@ export interface QueueRow {
   info: { sku: string; label: string; onHand: number } | null;
   orderId: string | null;
   trackingId: string | null;
+  placedAt: string | null;
+  shipByAt: string | null;
   /** Packed and set aside — kept off the print sheet so it isn't packed twice. */
   ready: boolean;
 }
@@ -201,6 +224,8 @@ export function queueRows(pending: PendingRow[]): QueueRow[] {
       info: p.info,
       orderId: p.orderId,
       trackingId: p.trackingId,
+      placedAt: p.placedAt,
+      shipByAt: p.shipByAt,
       after: free - p.qty,
       short: p.qty > free,
       ready: p.ready,
