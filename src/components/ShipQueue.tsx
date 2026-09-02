@@ -1,11 +1,13 @@
 'use client';
 
 import { Fragment, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Panel, Table, Th, Td, Tr, Badge } from '@/components/ui';
 import { ActionButton } from '@/components/ActionButton';
 import { PendingRowActions } from '@/components/PendingRowActions';
 import { ShipOrderButton } from '@/components/ShipOrderButton';
 import { PlatformFilter } from '@/components/PlatformFilter';
+import { ShipDateFilter } from '@/components/ShipDateFilter';
 import { PLATFORM_LABELS, Platform } from '@/lib/constants';
 import { dateTime, dayKey } from '@/lib/format';
 
@@ -70,11 +72,16 @@ export function ShipQueue({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [fCategory, setFCategory] = useState('all');
   const [fShipDate, setFShipDate] = useState<'all' | 'today' | 'tomorrow' | 'overdue'>('all');
+  // An exact calendar date, picked via ShipDateFilter, lives in the URL (not
+  // local state) so the Print queue link can carry it too — it takes priority
+  // over the quick preset dropdown when set.
+  const exactDate = useSearchParams().get('date') ?? '';
 
   const categories = [...new Set(rows.map((r) => r.category).filter(Boolean))].sort();
   const todayKey = dayKey(new Date());
   const tomorrowKey = dayKey(new Date(Date.now() + 86400_000));
   function matchesShipDate(r: QueueRow) {
+    if (exactDate) return dayKey(r.shipByAt) === exactDate;
     if (fShipDate === 'all') return true;
     if (!r.shipByAt) return false;
     const key = dayKey(r.shipByAt);
@@ -141,7 +148,7 @@ export function ShipQueue({
 
   return (
     <Panel
-      title={`Queue (${platform || categoryLabel || fShipDate !== 'all' ? `${visible.length} of ${totalCount}` : totalCount})`}
+      title={`Queue (${platform || categoryLabel || fShipDate !== 'all' || exactDate ? `${visible.length} of ${totalCount}` : totalCount})`}
       actions={
         <div className="flex flex-wrap items-center justify-end gap-2">
           <select
@@ -158,7 +165,9 @@ export function ShipQueue({
           <select
             value={fShipDate}
             onChange={(e) => setFShipDate(e.target.value as typeof fShipDate)}
-            aria-label="Filter by ship-by date"
+            aria-label="Filter by ship-by date preset"
+            title={exactDate ? 'A specific date is selected — clear it to use these presets' : undefined}
+            disabled={Boolean(exactDate)}
             className={filterCls}
           >
             <option value="all">Any ship date</option>
@@ -166,6 +175,7 @@ export function ShipQueue({
             <option value="today">Ship by today</option>
             <option value="tomorrow">Ship by tomorrow</option>
           </select>
+          <ShipDateFilter />
           {visible.length > 0 ? (
             <>
               <ActionButton

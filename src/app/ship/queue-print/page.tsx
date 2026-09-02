@@ -7,9 +7,13 @@ import { dateTime, dayKey } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
 
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
 // Chrome names the saved file after the document title, so put the date in it.
-export async function generateMetadata() {
-  return { title: `Rangrooh Ready to Ship queue ${dayKey(new Date())}` };
+export async function generateMetadata({ searchParams }: { searchParams: Promise<{ date?: string }> }) {
+  const sp = await searchParams;
+  const date = sp.date && DATE_RE.test(sp.date) ? sp.date : dayKey(new Date());
+  return { title: `Rangrooh Ready to Ship queue ${date}` };
 }
 
 function platformLabel(c?: string | null) {
@@ -46,10 +50,11 @@ const tdR = `${td} text-right tabular-nums`;
 export default async function QueuePrintPage({
   searchParams,
 }: {
-  searchParams: Promise<{ print?: string; platform?: string }>;
+  searchParams: Promise<{ print?: string; platform?: string; date?: string }>;
 }) {
   const sp = await searchParams;
   const platform = PLATFORMS.includes(sp.platform as Platform) ? (sp.platform as Platform) : null;
+  const date = sp.date && DATE_RE.test(sp.date) ? sp.date : null;
   const pending = await listPending();
   // Stock is allocated over the WHOLE queue before narrowing to a platform —
   // who has a claim on a garment can't depend on which tab was open when
@@ -57,7 +62,9 @@ export default async function QueuePrintPage({
   const allRows = queueRows(pending);
   // Items marked ready are already packed and set aside — printing them again
   // would just get them packed twice.
-  const filteredRows = allRows.filter((r) => !r.ready && (!platform || r.channel === platform));
+  const filteredRows = allRows.filter(
+    (r) => !r.ready && (!platform || r.channel === platform) && (!date || dayKey(r.shipByAt) === date)
+  );
   // Sorted for print, not for the stock allocation above it — free/after are
   // already computed in queue order. Same product groups together first —
   // packing the same garment off two platforms shouldn't mean hunting two
@@ -96,6 +103,7 @@ export default async function QueuePrintPage({
       <div className="print-sheet">
         <p className="mb-1 text-[10px] text-neutral-500 print-muted">
           {rows.length} order{rows.length === 1 ? '' : 's'} · {units} unit{units === 1 ? '' : 's'} · {generated}
+          {date ? ` · Ship by ${date}` : ''}
         </p>
         {platformSummary ? <p className="mb-1 text-[10px] font-semibold">{platformSummary}</p> : null}
 
@@ -126,7 +134,9 @@ export default async function QueuePrintPage({
 
         {rows.length === 0 ? (
           <p className="py-8 text-center text-sm text-neutral-400">
-            {platform ? `Nothing queued for ${platformLabel(platform)} right now.` : 'Nothing queued right now.'}
+            {[platform ? platformLabel(platform) : null, date ? `ship-by ${date}` : null].filter(Boolean).length > 0
+              ? `Nothing queued for ${[platform ? platformLabel(platform) : null, date ? `ship-by ${date}` : null].filter(Boolean).join(', ')} right now.`
+              : 'Nothing queued right now.'}
           </p>
         ) : null}
       </div>
