@@ -28,6 +28,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       channel: typeof body?.channel === 'string' ? body.channel : undefined,
       orderId: typeof body?.orderId === 'string' ? body.orderId : undefined,
       trackingId: typeof body?.trackingId === 'string' ? body.trackingId : undefined,
+      placedAt: typeof body?.placedAt === 'string' ? body.placedAt : undefined,
+      shipByAt: typeof body?.shipByAt === 'string' ? body.shipByAt : undefined,
     });
     return Response.json({ ok: true, ...res });
   } catch (err) {

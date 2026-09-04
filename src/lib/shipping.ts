@@ -350,7 +350,15 @@ export async function shipPending(id: string, qty?: number, trackingId?: string,
  */
 export async function editPending(
   id: string,
-  changes: { sku?: string; qty?: number; channel?: string; orderId?: string; trackingId?: string },
+  changes: {
+    sku?: string;
+    qty?: number;
+    channel?: string;
+    orderId?: string;
+    trackingId?: string;
+    placedAt?: string;
+    shipByAt?: string;
+  },
 ) {
   await connectDB();
   const p = await PendingShipmentModel.findById(id);
@@ -372,6 +380,9 @@ export async function editPending(
   if (changes.channel !== undefined) p.channel = changes.channel || undefined;
   if (changes.orderId !== undefined) p.orderId = changes.orderId.trim() || undefined;
   if (changes.trackingId !== undefined) p.trackingId = cleanTracking(changes.trackingId);
+  // Display-only fields — no effect on stock/reservation, so no special handling.
+  if (changes.placedAt !== undefined) p.placedAt = changes.placedAt ? new Date(changes.placedAt) : undefined;
+  if (changes.shipByAt !== undefined) p.shipByAt = changes.shipByAt ? new Date(changes.shipByAt) : undefined;
 
   // Move the reservation: release everything held on the old pool, hold the new.
   const oldPool = stockSkuFor(oldSku);
