@@ -8,13 +8,27 @@ import { SearchableSelect } from '@/components/SearchableSelect';
 import { ProductPicker } from '@/components/ProductPicker';
 import { useToast } from '@/components/ToastProvider';
 import { useConfirm } from '@/components/ConfirmProvider';
-import { dateOnly } from '@/lib/format';
+import { dateOnly, dayKey } from '@/lib/format';
 import type { VariantMeta } from '@/lib/variants';
 
 interface P extends VariantMeta { sku: string; name: string; onHand: number; available: number }
 interface Use { where: 'QUEUE' | 'SHIPPED'; sku: string; name: string; qty: number; at: string | null }
 
 const input = 'rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm text-neutral-900 dark:border-white/20 dark:text-white';
+
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+
+// A bare YYYY-MM-DD from the date input means "ships by end of that day" —
+// convert to the actual IST end-of-day instant, matching how ship-by dates
+// are computed everywhere else in this system (myntra/amazon poll logic).
+function istEndOfDayIso(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d, 23, 59, 59, 999) - IST_OFFSET_MS).toISOString();
+}
+
+function tomorrowIst(): string {
+  return dayKey(new Date(Date.now() + 86400_000));
+}
 
 export function AddPendingForm({ products }: { products: P[] }) {
   const router = useRouter();
@@ -24,6 +38,7 @@ export function AddPendingForm({ products }: { products: P[] }) {
   const [qty, setQty] = useState('1');
   const [channel, setChannel] = useState<Platform>('AMAZON');
   const [orderId, setOrderId] = useState('');
+  const [shipByAt, setShipByAt] = useState(tomorrowIst);
   const [busy, setBusy] = useState(false);
   const [checking, setChecking] = useState(false);
 
@@ -65,6 +80,7 @@ export function AddPendingForm({ products }: { products: P[] }) {
         { label: 'Platform', value: PLATFORM_LABELS[channel] },
         { label: 'Qty', value: qty },
         ...(orderId.trim() ? [{ label: 'Order no.', value: orderId.trim() }] : []),
+        ...(shipByAt ? [{ label: 'Ship by', value: dateOnly(shipByAt) }] : []),
         ...dupes.map((d) => ({
           label: d.where === 'SHIPPED' ? 'Already shipped' : 'Already queued',
           value: `${d.qty} × ${d.name}${d.at ? ` on ${dateOnly(d.at)}` : ''}`,
@@ -79,7 +95,13 @@ export function AddPendingForm({ products }: { products: P[] }) {
       const res = await fetch('/api/pending', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sku, qty: Number(qty), channel, orderId: orderId.trim() || undefined }),
+        body: JSON.stringify({
+          sku,
+          qty: Number(qty),
+          channel,
+          orderId: orderId.trim() || undefined,
+          shipByAt: shipByAt ? istEndOfDayIso(shipByAt) : undefined,
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) toast.error(data?.error || 'Failed to add');
@@ -96,8 +118,8 @@ export function AddPendingForm({ products }: { products: P[] }) {
 
   return (
     <form onSubmit={onSubmit} className="rounded-xl border border-black/10 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-neutral-900">
-      <div className="grid gap-4 sm:grid-cols-[2fr_auto_auto_auto_auto] sm:items-end">
-        {/* Product · Qty · Platform · Order no. · Add */}
+      <div className="grid gap-4 sm:grid-cols-[2fr_auto_auto_auto_auto_auto] sm:items-end">
+        {/* Product · Qty · Platform · Order no. · Ship by · Add */}
         <label className="flex flex-col gap-1 text-xs text-neutral-500">
           <span className="flex items-center justify-between">
             <span>Product</span>
@@ -127,6 +149,10 @@ export function AddPendingForm({ products }: { products: P[] }) {
         <label className="flex flex-col gap-1 text-xs text-neutral-500">
           Order no. <span className="text-[10px] text-neutral-400">optional</span>
           <input className={`${input} w-36`} value={orderId} onChange={(e) => setOrderId(e.target.value)} placeholder="405-123…" />
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-neutral-500">
+          Ship by
+          <input className={input} type="date" value={shipByAt} onChange={(e) => setShipByAt(e.target.value)} />
         </label>
         <button
           disabled={busy || checking || !sku || !qty}
