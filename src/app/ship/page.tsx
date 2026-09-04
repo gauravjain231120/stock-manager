@@ -17,7 +17,7 @@ function platformLabel(c?: string | null) {
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-export default async function ShipPage({ searchParams }: { searchParams: Promise<{ platform?: string; date?: string }> }) {
+export default async function ShipPage({ searchParams }: { searchParams: Promise<{ platform?: string; dates?: string }> }) {
   const [pending, products] = await Promise.all([listPending(), shipProducts()]);
   const units = pending.reduce((a, p) => a + p.qty, 0);
   // Total queued units per PHYSICAL stock pool — a product can appear on >1 row
@@ -55,10 +55,13 @@ export default async function ShipPage({ searchParams }: { searchParams: Promise
   // Optional platform filter (?platform=AMAZON). Narrows only the visible queue.
   const sp = await searchParams;
   const platform = PLATFORMS.includes(sp.platform as Platform) ? (sp.platform as Platform) : null;
-  // Optional exact ship-by date (?date=YYYY-MM-DD), set by ShipDateFilter —
-  // carried into the Print queue link so the printed sheet matches the filter.
-  const date = sp.date && DATE_RE.test(sp.date) ? sp.date : null;
-  const printParams = [platform ? `platform=${platform}` : '', date ? `date=${date}` : ''].filter(Boolean).join('&');
+  // Optional set of exact ship-by dates (?dates=YYYY-MM-DD,YYYY-MM-DD), set by
+  // ShipDateFilter — carried into the Print queue link so the printed sheet
+  // matches the filter.
+  const dates = sp.dates ? sp.dates.split(',').filter((d) => DATE_RE.test(d)) : [];
+  const printParams = [platform ? `platform=${platform}` : '', dates.length ? `dates=${dates.join(',')}` : '']
+    .filter(Boolean)
+    .join('&');
   // queueRows() allocates stock over the WHOLE queue before we narrow to a
   // platform — who has a claim on a garment can't depend on which tab is open.
   const allRows = queueRows(pending);
@@ -75,8 +78,8 @@ export default async function ShipPage({ searchParams }: { searchParams: Promise
               href={`/ship/queue-print?print=1${printParams ? `&${printParams}` : ''}`}
               target="_blank"
               title={
-                date
-                  ? `The queue ship-by ${date}${platform ? ` (${PLATFORM_LABELS[platform]})` : ''} — on one printed page`
+                dates.length > 0
+                  ? `The queue ship-by ${dates.join(', ')}${platform ? ` (${PLATFORM_LABELS[platform]})` : ''} — on one printed page`
                   : platform
                     ? `The ${PLATFORM_LABELS[platform]} queue — product, platform, stock, and status — on one printed page`
                     : 'The whole queue — product, platform, stock, and status — on one printed page'
