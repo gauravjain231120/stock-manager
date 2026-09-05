@@ -130,8 +130,17 @@ export function ShipQueue({
   const shownUnits = visible.reduce((a, r) => a + r.qty, 0);
   const shownShort = visible.some((r) => r.short);
   const categoryLabel = fCategory === 'all' ? null : fCategory || 'No category';
+  const shipDateLabel = exactDates.length > 0 ? exactDates.join(', ') : fShipDate !== 'all' ? fShipDate : null;
+  // Anything beyond the platform filter (category, ship date) narrows the
+  // view client-side, so "Ship all" in that case must ship exactly the
+  // visible rows by id — the server-side /api/pending/ship-all endpoint only
+  // knows how to filter by platform, so it can't be trusted to also respect
+  // these. Previously only categoryLabel was checked here, so ship-all with
+  // just a date filter active silently shipped the WHOLE queue instead of
+  // the filtered date — a real incident, not hypothetical.
+  const hasNarrowFilter = Boolean(categoryLabel) || Boolean(shipDateLabel);
   // What "all" currently means, spelled out on the Ship all button.
-  const scope = [platform ? PLATFORM_LABELS[platform] : null, categoryLabel].filter(Boolean).join(' · ');
+  const scope = [platform ? PLATFORM_LABELS[platform] : null, categoryLabel, shipDateLabel].filter(Boolean).join(' · ');
 
   function toggle(id: string) {
     setSelected((s) => {
@@ -201,16 +210,19 @@ export function ShipQueue({
               <ActionButton
                 label={scope ? `Ship all ${scope}` : 'Ship all'}
                 // "Ship all" always means "all of what's in view". The platform
-                // filter lives in the URL so the server can scope it; a category
-                // is picked here, so that case ships the visible rows by id.
-                endpoint={categoryLabel ? '/api/pending/ship-selected' : '/api/pending/ship-all'}
+                // filter lives in the URL so the server can scope it there; any
+                // OTHER active filter (category or ship date) has no server-side
+                // equivalent, so those cases must ship the visible rows by id
+                // instead of trusting /api/pending/ship-all to also filter them.
+                endpoint={hasNarrowFilter ? '/api/pending/ship-selected' : '/api/pending/ship-all'}
                 method="POST"
-                body={categoryLabel ? { ids: visible.map((r) => r.id) } : platform ? { channel: platform } : undefined}
+                body={hasNarrowFilter ? { ids: visible.map((r) => r.id) } : platform ? { channel: platform } : undefined}
                 variant="primary"
                 confirmTitle="Ship everything?"
                 confirm={`All ${visible.length} item(s)${scope ? ` on ${scope}` : ''} will be marked shipped and their stock deducted.`}
                 confirmDetails={[
                   ...(categoryLabel ? [{ label: 'Category', value: categoryLabel }] : []),
+                  ...(shipDateLabel ? [{ label: 'Ship date', value: shipDateLabel }] : []),
                   { label: 'Items', value: String(visible.length) },
                   { label: 'Units', value: String(shownUnits) },
                 ]}
