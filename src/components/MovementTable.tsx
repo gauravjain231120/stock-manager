@@ -68,6 +68,7 @@ export function MovementTable({
   const [toDate, setToDate] = useState('');
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(20);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const categories = [...new Set(rows.map((r) => r.category).filter(Boolean))].sort();
 
@@ -139,6 +140,30 @@ export function MovementTable({
   const from = filtered.length === 0 ? 0 : (cur - 1) * perPage + 1;
   const to = Math.min(cur * perPage, filtered.length);
 
+  // Recomputed from `selected` × the current page every render, so a row that
+  // disappears after being moved (or a page/filter change) drops out on its
+  // own instead of leaving a stale, un-clickable count behind.
+  const selectedRows = pageRows.filter((r) => selected.has(r.id));
+  const allOnPageChecked = pageRows.length > 0 && pageRows.every((r) => selected.has(r.id));
+
+  function toggleRow(id: string) {
+    setSelected((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAllOnPage() {
+    setSelected((s) => {
+      const next = new Set(s);
+      if (allOnPageChecked) pageRows.forEach((r) => next.delete(r.id));
+      else pageRows.forEach((r) => next.add(r.id));
+      return next;
+    });
+  }
+
   return (
     <Panel
       title={`${title} (${filtered.length})`}
@@ -189,6 +214,20 @@ export function MovementTable({
             filename={() => `${csvName}-${csvDateStamp()}.csv`}
             build={buildCsv}
           />
+          {allowMoveToQueue ? (
+            <ActionButton
+              label={`Move to queue (${selectedRows.length})`}
+              endpoint="/api/register/move-to-queue"
+              method="POST"
+              body={{ ids: selectedRows.map((r) => r.id) }}
+              confirmTitle="Move these back to Ready to Ship?"
+              confirm={`${selectedRows.length} shipment(s) will come off Shipped, their stock will be un-deducted, and they'll reappear in the Ready-to-Ship queue, due today.`}
+              confirmLabel="Move to queue"
+              successMessage="Moved to Ready to Ship ✓"
+              disabled={selectedRows.length === 0}
+              title={selectedRows.length === 0 ? 'Tick some shipments in the table first' : undefined}
+            />
+          ) : null}
         </div>
       }
     >
@@ -221,6 +260,18 @@ export function MovementTable({
       <Table
         head={
           <>
+            {allowMoveToQueue ? (
+              <Th>
+                <input
+                  type="checkbox"
+                  checked={allOnPageChecked}
+                  onChange={toggleAllOnPage}
+                  disabled={pageRows.length === 0}
+                  aria-label="Select all shipments on this page"
+                  className="size-4 accent-brand-600 disabled:cursor-not-allowed disabled:opacity-40"
+                />
+              </Th>
+            ) : null}
             <Th>{dateLabel}</Th><Th>Product</Th><Th>Tracking</Th><Th>Order no.</Th><Th>Platform</Th><Th right>Qty</Th>
             {allowMoveToQueue ? <Th right>Move back</Th> : null}
             <Th right>Edit</Th>
@@ -230,6 +281,17 @@ export function MovementTable({
       >
         {pageRows.map((r) => (
           <Tr key={r.id}>
+            {allowMoveToQueue ? (
+              <Td>
+                <input
+                  type="checkbox"
+                  checked={selected.has(r.id)}
+                  onChange={() => toggleRow(r.id)}
+                  aria-label={`Select ${r.name}`}
+                  className="size-4 accent-brand-600"
+                />
+              </Td>
+            ) : null}
             <Td>{dateOnly(r.at)}</Td>
             <Td>
               <div className="font-medium">

@@ -286,6 +286,17 @@ export async function moveShippedToQueue(movementId: string) {
   return { ok: true };
 }
 
+/** Move several mistaken shipments back to the queue at once (the Shipped page's bulk button). */
+export async function moveManyShippedToQueue(ids: string[]) {
+  await connectDB();
+  let moved = 0;
+  for (const id of ids) {
+    await moveShippedToQueue(id);
+    moved++;
+  }
+  return { moved };
+}
+
 export interface EntrySnapshot {
   sku: string;
   locationCode: string;
