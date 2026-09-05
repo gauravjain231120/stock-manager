@@ -5,7 +5,7 @@ import { PageHeader, StatCard } from '@/components/ui';
 import { AddPendingForm } from '@/components/AddPendingForm';
 import { ShipQueue } from '@/components/ShipQueue';
 import { ToMakeTable } from '@/components/ToMakeTable';
-import { num } from '@/lib/format';
+import { num, dayKey } from '@/lib/format';
 import { PLATFORMS, PLATFORM_LABELS, Platform } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
@@ -19,10 +19,27 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export default async function ShipPage({ searchParams }: { searchParams: Promise<{ platform?: string; dates?: string }> }) {
   const [pending, products] = await Promise.all([listPending(), shipProducts()]);
-  const units = pending.reduce((a, p) => a + p.qty, 0);
+  // Optional platform filter (?platform=AMAZON). Narrows only the visible queue.
+  const sp = await searchParams;
+  const platform = PLATFORMS.includes(sp.platform as Platform) ? (sp.platform as Platform) : null;
+  // Optional set of exact ship-by dates (?dates=YYYY-MM-DD,YYYY-MM-DD), set by
+  // ShipDateFilter — carried into the Print queue link so the printed sheet
+  // matches the filter.
+  const dates = sp.dates ? sp.dates.split(',').filter((d) => DATE_RE.test(d)) : [];
+
+  // The stat cards reflect whatever's actually filtered (platform and/or ship
+  // dates) so "Orders to pack" etc. answer "how many of what I'm looking at",
+  // not "how many total" regardless of the filter shown on screen.
+  const filteredPending = pending.filter(
+    (p) => (!platform || p.channel === platform) && (dates.length === 0 || dates.includes(dayKey(p.shipByAt)))
+  );
+  const units = filteredPending.reduce((a, p) => a + p.qty, 0);
   // Total queued units per PHYSICAL stock pool — a product can appear on >1 row
   // (different platforms), and a bundle draws from its component's pool, so
   // "After ship" reflects what's left once ALL queued units of that pool ship.
+  // Deliberately built from the FULL queue, not the filtered view — production
+  // is production, and hiding a shortfall behind a platform/date filter is how
+  // an order misses its ship-by date.
   const queuedBySku = new Map<string, number>();
   for (const p of pending) queuedBySku.set(p.stockSku, (queuedBySku.get(p.stockSku) ?? 0) + p.qty);
 
@@ -30,12 +47,13 @@ export default async function ShipPage({ searchParams }: { searchParams: Promise
   // multi-item order (several SKUs sharing one orderId) is one order to pack,
   // not several. Rows with no order number can't be grouped, so each counts
   // as its own order.
-  const orderCount = new Set(pending.map((p) => p.orderId || `row:${p.id}`)).size;
+  const orderCount = new Set(filteredPending.map((p) => p.orderId || `row:${p.id}`)).size;
 
   // Orders/units waiting per platform, busiest first — orders counted the
-  // same distinct-order-id way as the overall count above.
+  // same distinct-order-id way as the overall count above. Built from the
+  // filtered set too, so picking a ship date narrows these the same way.
   const perPlatform = new Map<string, { orders: Set<string>; units: number }>();
-  for (const p of pending) {
+  for (const p of filteredPending) {
     const key = p.channel ?? '';
     const e = perPlatform.get(key) ?? { orders: new Set<string>(), units: 0 };
     e.orders.add(p.orderId || `row:${p.id}`);
@@ -60,14 +78,6 @@ export default async function ShipPage({ searchParams }: { searchParams: Promise
     .filter((m) => m.make > 0)
     .sort((a, b) => b.make - a.make || a.name.localeCompare(b.name));
   const makeUnits = toMake.reduce((a, m) => a + m.make, 0);
-
-  // Optional platform filter (?platform=AMAZON). Narrows only the visible queue.
-  const sp = await searchParams;
-  const platform = PLATFORMS.includes(sp.platform as Platform) ? (sp.platform as Platform) : null;
-  // Optional set of exact ship-by dates (?dates=YYYY-MM-DD,YYYY-MM-DD), set by
-  // ShipDateFilter — carried into the Print queue link so the printed sheet
-  // matches the filter.
-  const dates = sp.dates ? sp.dates.split(',').filter((d) => DATE_RE.test(d)) : [];
   const printParams = [platform ? `platform=${platform}` : '', dates.length ? `dates=${dates.join(',')}` : '']
     .filter(Boolean)
     .join('&');
