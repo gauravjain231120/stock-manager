@@ -322,7 +322,7 @@ export async function shipPending(id: string, qty?: number, trackingId?: string,
       );
       if (!enough) throw new Error(`Not enough stock to ship ${shipQty} × ${p.sku}.`);
 
-      await postMovement(session, {
+      const movementId = await postMovement(session, {
         sku: p.sku,
         locationCode: MAIN,
         qty: -shipQty,
@@ -332,6 +332,13 @@ export async function shipPending(id: string, qty?: number, trackingId?: string,
         trackingId: tracking,
         orderId: order,
       });
+      // The Shipped page's date is this order's own ship-by date, not "whatever
+      // day someone happened to click Ship" — a 5th-packed, 6th-due order should
+      // read as shipped on the 6th. Native driver: Mongoose's timestamps plugin
+      // always sets createdAt itself on .create(), so setting it there is a no-op.
+      if (p.shipByAt) {
+        await StockMovementModel.collection.updateOne({ _id: movementId }, { $set: { createdAt: p.shipByAt } }, { session });
+      }
       await SkuStockModel.updateOne({ sku: stockSkuFor(p.sku), locationCode: MAIN }, { $inc: { reserved: -shipQty } }, { session });
       if (shipQty >= p.qty) await PendingShipmentModel.deleteOne({ _id: p._id }, { session });
       // What's left needs its own label: drop the AWB that just went out, so the
