@@ -83,6 +83,7 @@ export default async function RegisterPage() {
             channel: m.channel ?? null,
             product: productInfo.get(m.sku) ?? null,
             trackingId: m.trackingId ?? null,
+            orderId: m.orderId ?? null,
           }))}
         />
       </div>

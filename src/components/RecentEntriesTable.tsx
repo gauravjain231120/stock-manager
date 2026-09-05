@@ -17,6 +17,7 @@ export interface Entry {
   channel: string | null;
   product: { name: string; category: string; color: string; size: string } | null;
   trackingId: string | null;
+  orderId: string | null;
 }
 
 const TYPE_LABEL: Record<string, string> = { PRODUCED: 'Produce', SOLD: 'Ship', RETURNED: 'Return', ADJUSTED: 'Opening' };
@@ -69,7 +70,7 @@ export function RecentEntriesTable({ entries }: { entries: Entry[] }) {
     if (fPlatform !== 'all' && e.channel !== fPlatform) return false;
     if (!q.trim()) return true;
     const p = e.product;
-    const hay = `${e.sku} ${p ? `${p.name} ${p.category} ${p.color} ${p.size}` : ''} ${TYPE_LABEL[e.type] ?? e.type} ${platformLabel(e.channel)} ${e.trackingId ?? ''}`;
+    const hay = `${e.sku} ${p ? `${p.name} ${p.category} ${p.color} ${p.size}` : ''} ${TYPE_LABEL[e.type] ?? e.type} ${platformLabel(e.channel)} ${e.trackingId ?? ''} ${e.orderId ?? ''}`;
     return matchesSearch(hay, q, e.sku);
   });
 
@@ -157,7 +158,7 @@ export function RecentEntriesTable({ entries }: { entries: Entry[] }) {
           <input
             value={q}
             onChange={(e) => { setQ(e.target.value); setPage(1); }}
-            placeholder="Search product, SKU or platform…"
+            placeholder="Search product, SKU, order or platform…"
             className="w-48 rounded-lg border border-black/15 bg-transparent px-3 py-1.5 text-sm dark:border-white/20 sm:w-64"
           />
         </div>
@@ -191,6 +192,7 @@ export function RecentEntriesTable({ entries }: { entries: Entry[] }) {
                 ) : (
                   <span className="font-mono text-xs">{e.sku}</span>
                 )}
+                {e.orderId ? <div className="text-[11px] text-neutral-400">Order {e.orderId}</div> : null}
                 {e.trackingId ? (
                   <div className="font-mono text-[11px] text-neutral-400">#{e.trackingId}</div>
                 ) : null}
