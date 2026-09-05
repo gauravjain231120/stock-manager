@@ -7,8 +7,18 @@ import { ProductGroupModel } from '@/models/ProductGroup';
 import { StockMovementModel } from '@/models/StockMovement';
 import { SkuStockModel } from '@/models/SkuStock';
 import { LocationModel } from '@/models/Location';
+import { PendingShipmentModel } from '@/models/PendingShipment';
 import { autoAddToDayReport } from '@/lib/returnReports';
 import { VariantMeta, attrsOf, variantMeta } from '@/lib/variants';
+
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+
+// A mistaken shipment moved back to the queue is, by definition, already due —
+// so it lands on today's IST calendar day rather than some arbitrary default.
+function todayIstEndOfDay(): Date {
+  const ist = new Date(Date.now() + IST_OFFSET_MS);
+  return new Date(Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth(), ist.getUTCDate(), 23, 59, 59, 999) - IST_OFFSET_MS);
+}
 
 export type RegisterAction = 'PRODUCE' | 'SHIP' | 'RETURN';
 export const REGISTER_ACTIONS: RegisterAction[] = ['PRODUCE', 'SHIP', 'RETURN'];
@@ -229,6 +239,51 @@ export async function deleteEntry(movementId: string) {
       createdAt: (mv.createdAt as unknown as Date).toISOString(),
     },
   };
+}
+
+/**
+ * Undo a shipment that was marked Shipped by mistake: reverses the stock
+ * deduction, deletes the Shipped entry, and puts the order straight back on
+ * the Ready-to-Ship queue (reserved again, due today) instead of just
+ * vanishing it from the books. Only Shipped (SOLD) entries can be moved this
+ * way — a Produce or Return has nowhere in the queue to go back to.
+ */
+export async function moveShippedToQueue(movementId: string) {
+  await connectDB();
+  const mv = await StockMovementModel.findById(movementId).lean();
+  if (!mv) throw new Error('Entry not found');
+  if (mv.type !== MovementType.SOLD) throw new Error('Only a shipment can be moved back to the queue');
+
+  const qty = Math.abs(mv.qty);
+  const pool = stockSkuFor(mv.sku);
+  const session = await mongoose.startSession();
+  try {
+    await session.withTransaction(async () => {
+      // Put the unit back on the shelf, then immediately reserve it again for
+      // the queue — net physical stock is unchanged, only its claim moves.
+      await SkuStockModel.updateOne(
+        { sku: pool, locationCode: mv.locationCode },
+        { $inc: { onHand: qty, reserved: qty }, $setOnInsert: { buffer: 0 } },
+        { session, upsert: true },
+      );
+      await StockMovementModel.deleteOne({ _id: mv._id }, { session });
+      await PendingShipmentModel.create(
+        [{
+          sku: mv.sku,
+          qty,
+          channel: mv.channel ?? undefined,
+          orderId: mv.orderId ?? undefined,
+          trackingId: mv.trackingId ?? undefined,
+          shipByAt: todayIstEndOfDay(),
+        }],
+        { session },
+      );
+    });
+  } finally {
+    await session.endSession();
+  }
+
+  return { ok: true };
 }
 
 export interface EntrySnapshot {

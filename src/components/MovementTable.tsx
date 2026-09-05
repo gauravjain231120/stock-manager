@@ -5,6 +5,7 @@ import { Panel, Table, Th, Td, Tr } from '@/components/ui';
 import { dateOnly, dayKey, matchesSearch, num } from '@/lib/format';
 import { PLATFORMS, PLATFORM_LABELS, Platform, RETURN_CONDITION_LABELS, ReturnCondition } from '@/lib/constants';
 import { EditMovementButton } from '@/components/EditMovementButton';
+import { ActionButton } from '@/components/ActionButton';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
 import { toCsv, text, csvDateStamp, csvDateTime } from '@/lib/csv';
 import type { MovementRow } from '@/lib/movements';
@@ -46,6 +47,7 @@ export function MovementTable({
   csvName,
   withCondition = false,
   returnRows,
+  allowMoveToQueue = false,
 }: {
   rows: MovementRow[];
   title: string;
@@ -55,6 +57,8 @@ export function MovementTable({
   withCondition?: boolean;
   /** The returns ledger, run through these same filters — shown alongside the total. */
   returnRows?: MovementRow[];
+  /** Shipped only: offer "Move to Ready to Ship" to undo a shipment marked by mistake. */
+  allowMoveToQueue?: boolean;
 }) {
   const [q, setQ] = useState('');
   const [fCategory, setFCategory] = useState('all');
@@ -215,7 +219,13 @@ export function MovementTable({
       </div>
 
       <Table
-        head={<><Th>{dateLabel}</Th><Th>Product</Th><Th>Tracking</Th><Th>Order no.</Th><Th>Platform</Th><Th right>Qty</Th><Th right>Edit</Th></>}
+        head={
+          <>
+            <Th>{dateLabel}</Th><Th>Product</Th><Th>Tracking</Th><Th>Order no.</Th><Th>Platform</Th><Th right>Qty</Th>
+            {allowMoveToQueue ? <Th right>Move back</Th> : null}
+            <Th right>Edit</Th>
+          </>
+        }
         empty={filtered.length === 0}
       >
         {pageRows.map((r) => (
@@ -228,6 +238,7 @@ export function MovementTable({
                 {r.size ? <span className="text-neutral-500"> · {r.size}</span> : null}
               </div>
               <div className="font-mono text-[11px] text-neutral-500">{r.sku}</div>
+              {r.orderId ? <div className="text-[11px] text-neutral-400">Order {r.orderId}</div> : null}
               {r.condition && r.condition !== 'GOOD' ? (
                 <div className={`text-[11px] ${r.condition === 'WRONG' ? 'text-red-500' : 'text-amber-500'}`}>
                   {RETURN_CONDITION_LABELS[r.condition as ReturnCondition] ?? r.condition}
@@ -241,6 +252,19 @@ export function MovementTable({
             <Td>{r.orderId ? <span className="font-mono text-xs">{r.orderId}</span> : <span className="text-xs text-neutral-400">—</span>}</Td>
             <Td>{platformLabel(r.channel)}</Td>
             <Td right>{r.qty}</Td>
+            {allowMoveToQueue ? (
+              <Td right>
+                <ActionButton
+                  label="Move to queue"
+                  endpoint={`/api/register/${r.id}/move-to-queue`}
+                  method="POST"
+                  confirmTitle="Move back to Ready to Ship?"
+                  confirm={`${r.name}${r.orderId ? ` (Order ${r.orderId})` : ''} will come off Shipped, its stock will be un-deducted, and it'll reappear in the Ready-to-Ship queue, due today.`}
+                  confirmLabel="Move to queue"
+                  successMessage="Moved to Ready to Ship ✓"
+                />
+              </Td>
+            ) : null}
             <Td right><EditMovementButton row={r} title={dateLabel === 'Returned' ? 'return' : 'shipment'} /></Td>
           </Tr>
         ))}
