@@ -26,16 +26,25 @@ export default async function ShipPage({ searchParams }: { searchParams: Promise
   const queuedBySku = new Map<string, number>();
   for (const p of pending) queuedBySku.set(p.stockSku, (queuedBySku.get(p.stockSku) ?? 0) + p.qty);
 
-  // Orders/units waiting per platform, busiest first.
-  const perPlatform = new Map<string, { orders: number; units: number }>();
+  // "Orders to pack" counts distinct order numbers, not queue rows — a
+  // multi-item order (several SKUs sharing one orderId) is one order to pack,
+  // not several. Rows with no order number can't be grouped, so each counts
+  // as its own order.
+  const orderCount = new Set(pending.map((p) => p.orderId || `row:${p.id}`)).size;
+
+  // Orders/units waiting per platform, busiest first — orders counted the
+  // same distinct-order-id way as the overall count above.
+  const perPlatform = new Map<string, { orders: Set<string>; units: number }>();
   for (const p of pending) {
     const key = p.channel ?? '';
-    const e = perPlatform.get(key) ?? { orders: 0, units: 0 };
-    e.orders += 1;
+    const e = perPlatform.get(key) ?? { orders: new Set<string>(), units: 0 };
+    e.orders.add(p.orderId || `row:${p.id}`);
     e.units += p.qty;
     perPlatform.set(key, e);
   }
-  const platformStats = [...perPlatform.entries()].sort((a, b) => b[1].units - a[1].units);
+  const platformStats = [...perPlatform.entries()]
+    .map(([channel, e]) => [channel, { orders: e.orders.size, units: e.units }] as const)
+    .sort((a, b) => b[1].units - a[1].units);
 
   // The sewing list: per physical pile, what the whole queue needs minus what's
   // on hand. Deliberately built from `pending` rather than the filtered view —
@@ -107,7 +116,7 @@ export default async function ShipPage({ searchParams }: { searchParams: Promise
       </div>
 
       <section className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-        <StatCard label="Orders to pack" value={pending.length} tone={pending.length ? 'warn' : 'good'} />
+        <StatCard label="Orders to pack" value={orderCount} tone={orderCount ? 'warn' : 'good'} />
         <StatCard label="Units to ship" value={num(units)} />
         <StatCard
           label="Units to make"
