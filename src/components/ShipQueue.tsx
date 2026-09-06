@@ -71,6 +71,7 @@ export function ShipQueue({
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [fCategory, setFCategory] = useState('all');
+  const [fReady, setFReady] = useState<'all' | 'ready' | 'not-ready'>('all');
   const [fShipDate, setFShipDate] = useState<'all' | 'today' | 'tomorrow' | 'overdue'>('all');
   // A SET of exact calendar dates, picked via ShipDateFilter, lives in the URL
   // (not local state) so the Print queue link can carry the same set too — it
@@ -89,8 +90,12 @@ export function ShipQueue({
     if (fShipDate === 'tomorrow') return key === tomorrowKey;
     return key < todayKey; // overdue
   }
+  function matchesReady(r: QueueRow) {
+    if (fReady === 'all') return true;
+    return fReady === 'ready' ? r.ready : !r.ready;
+  }
   // "" is a real choice here — the queued products that have no category at all.
-  const visible = rows.filter((r) => (fCategory === 'all' || r.category === fCategory) && matchesShipDate(r));
+  const visible = rows.filter((r) => (fCategory === 'all' || r.category === fCategory) && matchesShipDate(r) && matchesReady(r));
 
   // Rows that can be ticked: enough left for this row to ship it in full.
   const selectable = visible.filter((r) => r.free >= r.qty && r.qty > 0);
@@ -131,16 +136,19 @@ export function ShipQueue({
   const shownShort = visible.some((r) => r.short);
   const categoryLabel = fCategory === 'all' ? null : fCategory || 'No category';
   const shipDateLabel = exactDates.length > 0 ? exactDates.join(', ') : fShipDate !== 'all' ? fShipDate : null;
-  // Anything beyond the platform filter (category, ship date) narrows the
-  // view client-side, so "Ship all" in that case must ship exactly the
+  const readyLabel = fReady === 'all' ? null : fReady === 'ready' ? 'Ready' : 'Not ready';
+  // Anything beyond the platform filter (category, ship date, ready) narrows
+  // the view client-side, so "Ship all" in that case must ship exactly the
   // visible rows by id — the server-side /api/pending/ship-all endpoint only
   // knows how to filter by platform, so it can't be trusted to also respect
   // these. Previously only categoryLabel was checked here, so ship-all with
   // just a date filter active silently shipped the WHOLE queue instead of
   // the filtered date — a real incident, not hypothetical.
-  const hasNarrowFilter = Boolean(categoryLabel) || Boolean(shipDateLabel);
+  const hasNarrowFilter = Boolean(categoryLabel) || Boolean(shipDateLabel) || Boolean(readyLabel);
   // What "all" currently means, spelled out on the Ship all button.
-  const scope = [platform ? PLATFORM_LABELS[platform] : null, categoryLabel, shipDateLabel].filter(Boolean).join(' · ');
+  const scope = [platform ? PLATFORM_LABELS[platform] : null, categoryLabel, shipDateLabel, readyLabel]
+    .filter(Boolean)
+    .join(' · ');
 
   function toggle(id: string) {
     setSelected((s) => {
@@ -171,6 +179,16 @@ export function ShipQueue({
             {rows.some((r) => !r.category) ? <option value="">No category</option> : null}
           </select>
           <PlatformFilter />
+          <select
+            value={fReady}
+            onChange={(e) => setFReady(e.target.value as typeof fReady)}
+            aria-label="Filter by packed status"
+            className={filterCls}
+          >
+            <option value="all">Ready + Not ready</option>
+            <option value="ready">Ready</option>
+            <option value="not-ready">Not ready</option>
+          </select>
           <select
             value={fShipDate}
             onChange={(e) => setFShipDate(e.target.value as typeof fShipDate)}
@@ -223,6 +241,7 @@ export function ShipQueue({
                 confirmDetails={[
                   ...(categoryLabel ? [{ label: 'Category', value: categoryLabel }] : []),
                   ...(shipDateLabel ? [{ label: 'Ship date', value: shipDateLabel }] : []),
+                  ...(readyLabel ? [{ label: 'Status', value: readyLabel }] : []),
                   { label: 'Items', value: String(visible.length) },
                   { label: 'Units', value: String(shownUnits) },
                 ]}
