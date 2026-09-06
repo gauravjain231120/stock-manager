@@ -95,7 +95,12 @@ export function ShipQueue({
     return fReady === 'ready' ? r.ready : !r.ready;
   }
   // "" is a real choice here — the queued products that have no category at all.
-  const visible = rows.filter((r) => (fCategory === 'all' || r.category === fCategory) && matchesShipDate(r) && matchesReady(r));
+  // Filtered by everything EXCEPT the ready/not-ready dropdown, so its own
+  // options can show counts for what picking each one would leave visible.
+  const visibleBeforeReady = rows.filter((r) => (fCategory === 'all' || r.category === fCategory) && matchesShipDate(r));
+  const readyCount = visibleBeforeReady.filter((r) => r.ready).length;
+  const notReadyCount = visibleBeforeReady.length - readyCount;
+  const visible = visibleBeforeReady.filter(matchesReady);
 
   // Rows that can be ticked: enough left for this row to ship it in full.
   const selectable = visible.filter((r) => r.free >= r.qty && r.qty > 0);
@@ -185,9 +190,9 @@ export function ShipQueue({
             aria-label="Filter by packed status"
             className={filterCls}
           >
-            <option value="all">Ready + Not ready</option>
-            <option value="ready">Ready</option>
-            <option value="not-ready">Not ready</option>
+            <option value="all">Ready + Not ready ({visibleBeforeReady.length})</option>
+            <option value="ready">Ready ({readyCount})</option>
+            <option value="not-ready">Not ready ({notReadyCount})</option>
           </select>
           <select
             value={fShipDate}
