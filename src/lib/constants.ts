@@ -62,8 +62,17 @@ export const BUNDLE_STOCK_PREFIX: Record<string, string> = {
   'RRC-013-': 'RRC-001-',
 };
 
+/**
+ * RRC-012-CO-HI-GRN ("Halter with Salwar", Green) is NOT a Halter-with-Palazzos
+ * bundle like every other RRC-012 colour — it's a standalone product with its
+ * own stock. Its marketplace SKU can't be renumbered off "012" once listed, so
+ * the exception lives here instead: checked before the prefix map applies.
+ */
+const BUNDLE_STOCK_SKU_EXCEPTIONS = ['RRC-012-CO-HI-GRN-'];
+
 /** The SKU whose physical stock a given SKU uses (itself unless it's a bundle). */
 export function stockSkuFor(sku: string): string {
+  if (BUNDLE_STOCK_SKU_EXCEPTIONS.some((ex) => sku.startsWith(ex))) return sku;
   for (const [prefix, target] of Object.entries(BUNDLE_STOCK_PREFIX)) {
     if (sku.startsWith(prefix)) return target + sku.slice(prefix.length);
   }
@@ -81,6 +90,7 @@ const BUNDLE_INFO_PREFIX: Record<string, { prefix: string; label: string }> = {
 
 /** Companion SKU + label to display for a bundle SKU, or null for normal SKUs. */
 export function infoStockFor(sku: string): { sku: string; label: string } | null {
+  if (BUNDLE_STOCK_SKU_EXCEPTIONS.some((ex) => sku.startsWith(ex))) return null;
   for (const [from, info] of Object.entries(BUNDLE_INFO_PREFIX)) {
     if (sku.startsWith(from)) return { sku: info.prefix + sku.slice(from.length), label: info.label };
   }
