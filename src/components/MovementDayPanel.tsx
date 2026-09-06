@@ -43,16 +43,21 @@ export function MovementDayPanel({
 
   const dayRows = day ? rows.filter((r) => dayKey(r.at) === day) : [];
   const units = dayRows.reduce((a, r) => a + r.qty, 0);
+  // A row with no order number can't be grouped with anything else, so it
+  // counts as its own order — same convention as the Ready-to-Ship queue.
+  const orderCount = new Set(dayRows.map((r) => r.orderId || `row:${r.id}`)).size;
 
-  const byPlatform = new Map<string, { units: number; count: number }>();
+  const byPlatform = new Map<string, { units: number; orders: Set<string> }>();
   for (const r of dayRows) {
     const key = r.channel ?? '';
-    const e = byPlatform.get(key) ?? { units: 0, count: 0 };
+    const e = byPlatform.get(key) ?? { units: 0, orders: new Set<string>() };
     e.units += r.qty;
-    e.count += 1;
+    e.orders.add(r.orderId || `row:${r.id}`);
     byPlatform.set(key, e);
   }
-  const platforms = [...byPlatform.entries()].sort((a, b) => b[1].units - a[1].units);
+  const platforms = [...byPlatform.entries()]
+    .map(([channel, e]) => [channel, { units: e.units, count: e.orders.size }] as const)
+    .sort((a, b) => b[1].units - a[1].units);
 
   return (
     <Panel
@@ -83,7 +88,7 @@ export function MovementDayPanel({
             <div className="flex flex-wrap items-baseline gap-2">
               <span className="text-3xl font-semibold tabular-nums">{num(units)}</span>
               <span className="text-sm text-neutral-500">
-                unit{units === 1 ? '' : 's'} in {dayRows.length} entr{dayRows.length === 1 ? 'y' : 'ies'}
+                unit{units === 1 ? '' : 's'} in {orderCount} order{orderCount === 1 ? '' : 's'}
                 {day === today ? ' today' : ` on ${day}`}
               </span>
             </div>
@@ -93,7 +98,7 @@ export function MovementDayPanel({
                 <div key={channel || 'none'} className="rounded-lg border border-black/10 px-4 py-3 dark:border-white/10">
                   <div className="text-sm text-neutral-500">{platformLabel(channel || null)}</div>
                   <div className="mt-0.5 text-2xl font-semibold tabular-nums">{num(s.units)}</div>
-                  <div className="text-xs text-neutral-400">{s.count} entr{s.count === 1 ? 'y' : 'ies'}</div>
+                  <div className="text-xs text-neutral-400">{s.count} order{s.count === 1 ? '' : 's'}</div>
                 </div>
               ))}
             </div>

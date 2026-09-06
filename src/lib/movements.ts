@@ -25,8 +25,11 @@ export interface MovementRow {
 export interface MovementStats {
   count: number;
   units: number;
+  /** Distinct order numbers — a multi-item order is one order, not one per SKU row. */
+  orderCount: number;
   last30Count: number;
   last30Units: number;
+  last30OrderCount: number;
   tracked: number;
   untracked: number;
   /** Today's date in India time (YYYY-MM-DD), for the day picker's default. */
@@ -79,8 +82,13 @@ export async function listMovementRows(type: MovementType, limit = 2000): Promis
 export async function movementStats(type: MovementType): Promise<MovementStats> {
   await connectDB();
   const since = new Date(Date.now() - 30 * 86_400_000);
+  // A row with no order number can't be grouped with anything else, so it
+  // counts as its own order — the same convention the Ready-to-Ship queue
+  // uses (order number if there is one, else the row's own id). Two separate
+  // $addToSet groups (all-time, last 30 days) rather than one conditional
+  // set, since a set accumulator has no clean "skip this document" expression.
   const [agg] = await StockMovementModel.aggregate<{
-    count: number; units: number; last30Count: number; last30Units: number; tracked: number;
+    count: number; units: number; last30Count: number; last30Units: number; tracked: number; orderKeys: string[];
   }>([
     { $match: { type } },
     {
@@ -91,8 +99,13 @@ export async function movementStats(type: MovementType): Promise<MovementStats> 
         last30Count: { $sum: { $cond: [{ $gte: ['$createdAt', since] }, 1, 0] } },
         last30Units: { $sum: { $cond: [{ $gte: ['$createdAt', since] }, { $abs: '$qty' }, 0] } },
         tracked: { $sum: { $cond: [{ $ifNull: ['$trackingId', false] }, 1, 0] } },
+        orderKeys: { $addToSet: { $ifNull: ['$orderId', { $toString: '$_id' }] } },
       },
     },
+  ]);
+  const [last30Agg] = await StockMovementModel.aggregate<{ orderKeys: string[] }>([
+    { $match: { type, createdAt: { $gte: since } } },
+    { $group: { _id: null, orderKeys: { $addToSet: { $ifNull: ['$orderId', { $toString: '$_id' }] } } } },
   ]);
 
   const count = agg?.count ?? 0;
@@ -100,8 +113,10 @@ export async function movementStats(type: MovementType): Promise<MovementStats> 
   return {
     count,
     units: agg?.units ?? 0,
+    orderCount: agg?.orderKeys.length ?? 0,
     last30Count: agg?.last30Count ?? 0,
     last30Units: agg?.last30Units ?? 0,
+    last30OrderCount: last30Agg?.orderKeys.length ?? 0,
     tracked,
     untracked: count - tracked,
     today: dayKey(new Date()),

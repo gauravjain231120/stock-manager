@@ -20,9 +20,9 @@ export default async function ShippedPage() {
       <PageHeader title="Shipped" subtitle="Everything that has gone out, with its tracking number." />
 
       <section className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <StatCard label="Shipments" value={num(stats.count)} />
+        <StatCard label="Orders shipped" value={num(stats.orderCount)} hint={`${num(stats.count)} rows`} />
         <StatCard label="Units shipped" value={num(stats.units)} />
-        <StatCard label="Last 30 days" value={num(stats.last30Units)} hint={`${stats.last30Count} shipments`} />
+        <StatCard label="Last 30 days" value={num(stats.last30Units)} hint={`${stats.last30OrderCount} orders`} />
         <StatCard label="With tracking" value={num(stats.tracked)} hint={`${stats.untracked} without`} />
       </section>
 
