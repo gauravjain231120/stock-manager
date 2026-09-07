@@ -11,6 +11,7 @@ const Add = z.object({
   trackingId: z.string().optional(),
   placedAt: z.string().datetime().optional(),
   shipByAt: z.string().datetime().optional(),
+  noMerge: z.boolean().optional(),
 });
 
 /** GET /api/pending -> { count } (for the sidebar badge). */

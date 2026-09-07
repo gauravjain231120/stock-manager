@@ -80,6 +80,8 @@ export async function addPending(input: {
   trackingId?: string;
   placedAt?: string | Date;
   shipByAt?: string | Date;
+  /** Always create a fresh row, even if one for this sku+order already exists. */
+  noMerge?: boolean;
 }) {
   await connectDB();
   const sku = input.sku.trim().toUpperCase();
@@ -98,9 +100,11 @@ export async function addPending(input: {
   // one row of qty 2. Everything else gets its own row: two customers who bought
   // the same product are two parcels to pack, and collapsing them into a single
   // qty-2 row loses that. Rows added without an order number never merge, since
-  // there's nothing to say they belong together.
+  // there's nothing to say they belong together. noMerge skips this entirely —
+  // used by the order-alert integrations, which add one unit at a time so every
+  // physical piece keeps its own row instead of collapsing into a qty count.
   const orderId = input.orderId?.trim() || undefined;
-  if (orderId) {
+  if (orderId && !input.noMerge) {
     const existing = await PendingShipmentModel.findOne({
       sku,
       ...(channel ? { channel } : {}),
