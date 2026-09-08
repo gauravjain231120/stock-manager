@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { getInventoryOverview } from '@/lib/queries';
 import { PrintButton } from '@/components/PrintButton';
-import { compareVariant, dateTime } from '@/lib/format';
+import { compareVariant, dateTime, groupVariants } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,9 +22,12 @@ const td = 'border-b border-black/10 px-1.5 py-0.5 align-top dark:border-white/1
 const tdR = `${td} text-right tabular-nums`;
 
 /**
- * The whole inventory (or one category of it) — product, size, available —
- * on one printable sheet. Screen chrome carries `no-print`, so "Save as PDF"
- * gives you just the sheet, same pattern as the Ready-to-Ship print page.
+ * The whole inventory (or one category of it) on one printable sheet — one
+ * table per colour, same grouping the on-screen Inventory page already uses
+ * (groupVariants keys on everything but the size suffix), so a colour's
+ * sizes read together instead of one long undifferentiated list. Screen
+ * chrome carries `no-print`, so "Save as PDF" gives you just the sheet, same
+ * pattern as the Ready-to-Ship print page.
  */
 export default async function InventoryPrintPage({
   searchParams,
@@ -41,6 +44,7 @@ export default async function InventoryPrintPage({
       if (a.name !== b.name) return a.name.localeCompare(b.name);
       return compareVariant(a.sku, b.sku);
     });
+  const groups = groupVariants(filtered, (r) => sizeFromSku(r.sku));
   const totalAvailable = filtered.reduce((a, r) => a + Math.max(0, r.available), 0);
   const generated = dateTime(new Date());
 
@@ -58,31 +62,39 @@ export default async function InventoryPrintPage({
       </div>
 
       <div className="print-sheet">
-        <p className="mb-1 text-[10px] text-neutral-500 print-muted">
+        <p className="mb-3 text-[10px] text-neutral-500 print-muted">
           {filtered.length} SKU{filtered.length === 1 ? '' : 's'} · {totalAvailable} available · {generated}
           {category ? ` · ${category}` : ''}
         </p>
 
-        <table className="w-full border-collapse text-[10px] leading-tight">
-          <thead>
-            <tr>
-              <th className={th}>#</th>
-              <th className={th}>Product</th>
-              <th className={th}>Size</th>
-              <th className={thR}>Available</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((r, i) => (
-              <tr key={r.sku}>
-                <td className={td}>{i + 1}</td>
-                <td className={td}>{r.category || r.name}</td>
-                <td className={td}>{sizeFromSku(r.sku)}</td>
-                <td className={`${tdR} ${r.available <= 0 ? 'print-short text-red-600' : ''}`}>{r.available}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        {groups.map((g) => {
+          const groupAvailable = g.rows.reduce((a, r) => a + r.available, 0);
+          return (
+            <table key={g.key} className="mb-4 w-full border-collapse text-[10px] leading-tight">
+              <thead>
+                <tr>
+                  <th colSpan={2} className={`${th} text-[11px]`}>{g.title}</th>
+                </tr>
+                <tr>
+                  <th className={th}>Size</th>
+                  <th className={thR}>Available</th>
+                </tr>
+              </thead>
+              <tbody>
+                {g.rows.map((r) => (
+                  <tr key={r.sku}>
+                    <td className={td}>{sizeFromSku(r.sku)}</td>
+                    <td className={`${tdR} ${r.available <= 0 ? 'print-short text-red-600' : ''}`}>{r.available}</td>
+                  </tr>
+                ))}
+                <tr className="font-semibold">
+                  <td className={td}>Total</td>
+                  <td className={tdR}>{groupAvailable}</td>
+                </tr>
+              </tbody>
+            </table>
+          );
+        })}
 
         {filtered.length === 0 ? (
           <p className="py-8 text-center text-sm text-neutral-400">
