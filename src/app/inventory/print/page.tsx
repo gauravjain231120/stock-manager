@@ -16,9 +16,12 @@ function sizeFromSku(sku: string) {
   return sku.split('-').pop() ?? '';
 }
 
-const th = 'border-b-2 border-black/40 px-1.5 py-0.5 text-left font-semibold dark:border-white/40';
+// Solid, fully-opaque borders on every side — an opacity-based border (e.g.
+// border-black/10) can render too faint to see once a page actually prints
+// or gets saved as a PDF, even though it looks fine on screen.
+const th = 'border border-black px-1.5 py-1 text-left font-semibold';
 const thR = `${th} text-right`;
-const td = 'border-b border-black/10 px-1.5 py-0.5 align-top dark:border-white/10';
+const td = 'border border-black px-1.5 py-1 align-top';
 const tdR = `${td} text-right tabular-nums`;
 
 /**
