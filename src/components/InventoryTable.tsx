@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
+import { Printer } from 'lucide-react';
 import { Panel, Table, Th, Td, Tr, Badge } from '@/components/ui';
 import { EditableStock } from '@/components/EditableStock';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
@@ -98,6 +100,15 @@ export function InventoryTable({ rows }: { rows: InvRow[] }) {
             filename={() => `inventory-${csvDateStamp()}.csv`}
             build={buildCsv}
           />
+          <Link
+            href={`/inventory/print${cat ? `?category=${encodeURIComponent(cat)}` : ''}`}
+            target="_blank"
+            title={cat ? `Print just ${cat}` : 'Print the whole inventory — product, size, available'}
+            className="flex items-center gap-1.5 rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium text-neutral-600 transition hover:bg-black/5 dark:border-white/20 dark:text-neutral-300 dark:hover:bg-white/10"
+          >
+            <Printer size={14} />
+            Print
+          </Link>
         </div>
       </div>
 

@@ -501,3 +501,49 @@ export async function shipAllPending(channel?: string) {
   for (const i of items) await shipPending(String(i._id));
   return { shipped: items.length };
 }
+
+/**
+ * Recompute every SKU's `reserved` counter from the Ready-to-Ship queue itself,
+ * and correct any that drifted. `reserved` is a live counter maintained by
+ * $inc calls scattered across add/cancel/ship (never a ledger entry, unlike
+ * onHand), so a bug anywhere in that chain — or old data from before a bundle
+ * mapping existed — can leave it permanently wrong with nothing to self-heal
+ * it. Safe to run any time: it only ever sets `reserved` to what the queue
+ * actually says right now.
+ */
+export async function reconcileReservedStock() {
+  await connectDB();
+  const pending = await PendingShipmentModel.find().lean();
+  const actual = new Map<string, number>();
+  for (const p of pending) {
+    const pool = stockSkuFor(p.sku);
+    actual.set(pool, (actual.get(pool) ?? 0) + p.qty);
+  }
+
+  const allStock = await SkuStockModel.find({ locationCode: MAIN }).lean();
+  const corrections: { sku: string; from: number; to: number }[] = [];
+  const seen = new Set<string>();
+
+  for (const s of allStock) {
+    seen.add(s.sku);
+    const correct = actual.get(s.sku) ?? 0;
+    if (s.reserved !== correct) {
+      corrections.push({ sku: s.sku, from: s.reserved, to: correct });
+      await SkuStockModel.updateOne({ _id: s._id }, { $set: { reserved: correct } });
+    }
+  }
+  // A pool the queue claims but that has no SkuStock row at all yet (e.g. a
+  // brand-new product) — create it so the reservation isn't silently dropped.
+  for (const [pool, qty] of actual) {
+    if (!seen.has(pool)) {
+      corrections.push({ sku: pool, from: 0, to: qty });
+      await SkuStockModel.updateOne(
+        { sku: pool, locationCode: MAIN },
+        { $set: { reserved: qty }, $setOnInsert: { onHand: 0, buffer: 0 } },
+        { upsert: true },
+      );
+    }
+  }
+
+  return { checked: allStock.length, corrected: corrections.length, corrections };
+}
