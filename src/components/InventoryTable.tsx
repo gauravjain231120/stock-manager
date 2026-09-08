@@ -101,7 +101,7 @@ export function InventoryTable({ rows }: { rows: InvRow[] }) {
             build={buildCsv}
           />
           <Link
-            href={`/inventory/print${cat ? `?category=${encodeURIComponent(cat)}` : ''}`}
+            href={`/inventory/print?print=1${cat ? `&category=${encodeURIComponent(cat)}` : ''}`}
             target="_blank"
             title={cat ? `Print just ${cat}` : 'Print the whole inventory — product, size, available'}
             className="flex items-center gap-1.5 rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium text-neutral-600 transition hover:bg-black/5 dark:border-white/20 dark:text-neutral-300 dark:hover:bg-white/10"
