@@ -7,6 +7,7 @@ const AddVariant = z.object({
   color: z.string().optional(),
   size: z.string().optional(),
   openingQty: z.number().int().min(0).optional(),
+  sku: z.string().optional(),
 });
 
 const RenameSku = z.object({ sku: z.string().min(1), newSku: z.string().min(1) });

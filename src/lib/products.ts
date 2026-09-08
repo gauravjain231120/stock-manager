@@ -138,13 +138,16 @@ export async function updateProductGroup(
 }
 
 /** Add a single colour/size variant (new SKU) to an existing product. */
-export async function addVariant(code: string, v: { color?: string; size?: string; openingQty?: number }) {
+export async function addVariant(code: string, v: { color?: string; size?: string; openingQty?: number; sku?: string }) {
   await connectDB();
   const c = code.trim().toUpperCase();
   const group = await ProductGroupModel.findOne({ code: c });
   if (!group) throw new Error('Product not found');
 
-  const sku = variantSku(c, v.color, v.size);
+  // An explicit SKU wins — a marketplace listing's own SKU (e.g. RRC-011-CO-C-RED-XS)
+  // rarely matches what auto-derives from just colour+size, and typing it here beats
+  // creating the auto-derived one and immediately renaming it.
+  const sku = v.sku?.trim() ? v.sku.trim().toUpperCase() : variantSku(c, v.color, v.size);
   if (await ProductModel.exists({ sku })) throw new Error(`Variant ${sku} already exists`);
 
   const attributes: Record<string, string> = {};

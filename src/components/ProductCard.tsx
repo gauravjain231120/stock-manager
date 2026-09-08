@@ -50,6 +50,7 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
   // add-variant fields
   const [vColor, setVColor] = useState('');
   const [vSize, setVSize] = useState('');
+  const [vSku, setVSku] = useState('');
   const [vQty, setVQty] = useState('');
 
   // Variants sorted by colour, then real size order (XS, S, M, L, XL, XXL).
@@ -129,6 +130,7 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
       title: 'Add variant?',
       details: [
         { label: 'Variant', value: [vColor, vSize].filter(Boolean).join(' / ') },
+        ...(vSku.trim() ? [{ label: 'SKU', value: vSku.trim().toUpperCase() }] : []),
         { label: 'Opening stock', value: vQty || '0' },
       ],
       confirmLabel: 'Add',
@@ -137,9 +139,10 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
     const done = await call(`/api/products/${group.code}/variant`, 'POST', {
       color: vColor || undefined,
       size: vSize || undefined,
+      sku: vSku.trim() || undefined,
       openingQty: vQty ? Number(vQty) : 0,
     });
-    if (done) { setVColor(''); setVSize(''); setVQty(''); }
+    if (done) { setVColor(''); setVSize(''); setVSku(''); setVQty(''); }
   }
 
   async function removeVariant(sku: string) {
@@ -267,6 +270,13 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
               <div className="flex flex-wrap items-center gap-2 border-t border-black/5 p-2 dark:border-white/5">
                 <input className="w-24 rounded-lg border border-black/15 bg-transparent px-2 py-1 text-xs dark:border-white/20" value={vColor} onChange={(e) => setVColor(e.target.value)} placeholder="Color" />
                 <input className="w-20 rounded-lg border border-black/15 bg-transparent px-2 py-1 text-xs dark:border-white/20" value={vSize} onChange={(e) => setVSize(e.target.value)} placeholder="Size" />
+                <input
+                  className="w-40 rounded-lg border border-black/15 bg-transparent px-2 py-1 font-mono text-xs dark:border-white/20"
+                  value={vSku}
+                  onChange={(e) => setVSku(e.target.value)}
+                  placeholder="SKU (optional)"
+                  title="Leave blank to auto-generate from colour + size"
+                />
                 <input className="w-16 rounded-lg border border-black/15 bg-transparent px-2 py-1 text-xs dark:border-white/20" type="number" min={0} value={vQty} onChange={(e) => setVQty(e.target.value)} placeholder="Qty" />
                 <button onClick={addVariant} disabled={busy || (!vColor && !vSize)} className="rounded-lg border border-black/15 px-2 py-1 text-xs font-medium hover:bg-black/5 disabled:opacity-50 dark:border-white/20 dark:hover:bg-white/10">+ Add variant</button>
               </div>
