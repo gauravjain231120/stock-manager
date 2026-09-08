@@ -89,4 +89,12 @@ body {
   tr {
     break-inside: avoid;
   }
+
+  /* Small per-group tables (e.g. one per colour) stay whole rather than
+     splitting across a page break mid-table — scoped to just those, not
+     every printed table (a long Ready-to-Ship queue should still be free
+     to span pages, just never mid-row). */
+  .print-group-table {
+    break-inside: avoid;
+  }
 }

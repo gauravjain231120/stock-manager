@@ -70,34 +70,36 @@ export default async function InventoryPrintPage({
           {category ? ` · ${category}` : ''}
         </p>
 
-        {groups.map((g) => {
-          const groupAvailable = g.rows.reduce((a, r) => a + r.available, 0);
-          return (
-            <table key={g.key} className="mb-4 w-full border-collapse text-[10px] leading-tight">
-              <thead>
-                <tr>
-                  <th colSpan={2} className={`${th} text-[11px]`}>{g.title}</th>
-                </tr>
-                <tr>
-                  <th className={th}>Size</th>
-                  <th className={thR}>Available</th>
-                </tr>
-              </thead>
-              <tbody>
-                {g.rows.map((r) => (
-                  <tr key={r.sku}>
-                    <td className={td}>{sizeFromSku(r.sku)}</td>
-                    <td className={`${tdR} ${r.available <= 0 ? 'print-short text-red-600' : ''}`}>{r.available}</td>
+        <div className="grid grid-cols-2 gap-x-4">
+          {groups.map((g) => {
+            const groupAvailable = g.rows.reduce((a, r) => a + r.available, 0);
+            return (
+              <table key={g.key} className="print-group-table mb-4 h-fit w-full border-collapse text-[10px] leading-tight">
+                <thead>
+                  <tr>
+                    <th colSpan={2} className={`${th} text-[11px]`}>{g.title}</th>
                   </tr>
-                ))}
-                <tr className="font-semibold">
-                  <td className={td}>Total</td>
-                  <td className={tdR}>{groupAvailable}</td>
-                </tr>
-              </tbody>
-            </table>
-          );
-        })}
+                  <tr>
+                    <th className={th}>Size</th>
+                    <th className={thR}>Available</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {g.rows.map((r) => (
+                    <tr key={r.sku}>
+                      <td className={td}>{sizeFromSku(r.sku)}</td>
+                      <td className={`${tdR} ${r.available <= 0 ? 'print-short text-red-600' : ''}`}>{r.available}</td>
+                    </tr>
+                  ))}
+                  <tr className="font-semibold">
+                    <td className={td}>Total</td>
+                    <td className={tdR}>{groupAvailable}</td>
+                  </tr>
+                </tbody>
+              </table>
+            );
+          })}
+        </div>
 
         {filtered.length === 0 ? (
           <p className="py-8 text-center text-sm text-neutral-400">
