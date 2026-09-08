@@ -84,10 +84,22 @@ export async function addPending(input: {
   noMerge?: boolean;
 }) {
   await connectDB();
-  const sku = input.sku.trim().toUpperCase();
+  let sku = input.sku.trim().toUpperCase();
   const qty = Math.floor(input.qty);
   if (!(qty >= 1)) throw new Error('Quantity must be at least 1');
-  if (!(await ProductModel.exists({ sku }))) throw new Error('Product not found');
+  if (!(await ProductModel.exists({ sku }))) {
+    // Marketplace SKUs use inconsistent brand prefixes for the same variant
+    // (RR-/R-/RRC- all mean the same product) — a caller normalizing to one
+    // of those (see canonicalSku in the alert bot) shouldn't fail just
+    // because this particular catalog entry happens to use a different one.
+    // Fall back to matching by everything after the first "-" before giving up.
+    const idx = sku.indexOf('-');
+    const suffix = idx === -1 ? sku : sku.slice(idx + 1);
+    const escaped = suffix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const match = await ProductModel.findOne({ sku: new RegExp(`-${escaped}$`, 'i') });
+    if (!match) throw new Error('Product not found');
+    sku = match.sku;
+  }
 
   const channel = input.channel || undefined;
   // Reserve on the physical stock SKU (a bundle reserves its component's units).
