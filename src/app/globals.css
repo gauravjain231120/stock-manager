@@ -97,4 +97,10 @@ body {
   .print-group-table {
     break-inside: avoid;
   }
+
+  /* Each category starts on its own page — applied to every category
+     section after the first, so the sheet doesn't open with a blank page. */
+  .print-category-page {
+    break-before: page;
+  }
 }

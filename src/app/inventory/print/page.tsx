@@ -26,11 +26,9 @@ const tdR = `${td} text-right tabular-nums`;
 
 /**
  * The whole inventory (or one category of it) on one printable sheet — one
- * table per colour, same grouping the on-screen Inventory page already uses
- * (groupVariants keys on everything but the size suffix), so a colour's
- * sizes read together instead of one long undifferentiated list. Screen
- * chrome carries `no-print`, so "Save as PDF" gives you just the sheet, same
- * pattern as the Ready-to-Ship print page.
+ * table per colour (two per row), grouped under a bold category heading, one
+ * category per page. Screen chrome carries `no-print`, so "Save as PDF"
+ * gives you just the sheet, same pattern as the Ready-to-Ship print page.
  */
 export default async function InventoryPrintPage({
   searchParams,
@@ -47,7 +45,19 @@ export default async function InventoryPrintPage({
       if (a.name !== b.name) return a.name.localeCompare(b.name);
       return compareVariant(a.sku, b.sku);
     });
-  const groups = groupVariants(filtered, (r) => sizeFromSku(r.sku));
+
+  // Grouped by category first (one page each), then by colour within it
+  // (groupVariants keys on everything but the size suffix) — `filtered` is
+  // already category-sorted, so insertion order keeps each category's rows
+  // together without needing a second sort pass.
+  const byCategory = new Map<string, typeof filtered>();
+  for (const r of filtered) {
+    const key = r.category || 'Uncategorized';
+    const list = byCategory.get(key);
+    if (list) list.push(r);
+    else byCategory.set(key, [r]);
+  }
+
   const totalAvailable = filtered.reduce((a, r) => a + Math.max(0, r.available), 0);
   const generated = dateTime(new Date());
 
@@ -70,36 +80,44 @@ export default async function InventoryPrintPage({
           {category ? ` · ${category}` : ''}
         </p>
 
-        <div className="grid grid-cols-2 gap-x-4">
-          {groups.map((g) => {
-            const groupAvailable = g.rows.reduce((a, r) => a + r.available, 0);
-            return (
-              <table key={g.key} className="print-group-table mb-4 h-fit w-full border-collapse text-[10px] leading-tight">
-                <thead>
-                  <tr>
-                    <th colSpan={2} className={`${th} text-[11px]`}>{g.title}</th>
-                  </tr>
-                  <tr>
-                    <th className={th}>Size</th>
-                    <th className={thR}>Available</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {g.rows.map((r) => (
-                    <tr key={r.sku}>
-                      <td className={td}>{sizeFromSku(r.sku)}</td>
-                      <td className={`${tdR} ${r.available <= 0 ? 'print-short text-red-600' : ''}`}>{r.available}</td>
-                    </tr>
-                  ))}
-                  <tr className="font-semibold">
-                    <td className={td}>Total</td>
-                    <td className={tdR}>{groupAvailable}</td>
-                  </tr>
-                </tbody>
-              </table>
-            );
-          })}
-        </div>
+        {[...byCategory.entries()].map(([catName, catRows], i) => {
+          const groups = groupVariants(catRows, (r) => sizeFromSku(r.sku));
+          return (
+            <section key={catName} className={i > 0 ? 'print-category-page' : undefined}>
+              <h2 className="mb-2 text-sm font-bold">{catName}</h2>
+              <div className="grid grid-cols-2 gap-x-4">
+                {groups.map((g) => {
+                  const groupAvailable = g.rows.reduce((a, r) => a + r.available, 0);
+                  return (
+                    <table key={g.key} className="print-group-table mb-4 h-fit w-full border-collapse text-[10px] leading-tight">
+                      <thead>
+                        <tr>
+                          <th colSpan={2} className={`${th} text-[11px]`}>{g.title}</th>
+                        </tr>
+                        <tr>
+                          <th className={th}>Size</th>
+                          <th className={thR}>Available</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {g.rows.map((r) => (
+                          <tr key={r.sku}>
+                            <td className={td}>{sizeFromSku(r.sku)}</td>
+                            <td className={`${tdR} ${r.available <= 0 ? 'print-short text-red-600' : ''}`}>{r.available}</td>
+                          </tr>
+                        ))}
+                        <tr className="font-semibold">
+                          <td className={td}>Total</td>
+                          <td className={tdR}>{groupAvailable}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  );
+                })}
+              </div>
+            </section>
+          );
+        })}
 
         {filtered.length === 0 ? (
           <p className="py-8 text-center text-sm text-neutral-400">
