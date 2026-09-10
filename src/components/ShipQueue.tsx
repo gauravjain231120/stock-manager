@@ -54,6 +54,12 @@ function stockStatus(n: number) {
   return { label: 'Good', tone: 'good' as const, color: 'text-emerald-600' };
 }
 
+function showCompanionInfo(r: QueueRow) {
+  // Halter with Salwar still uses shared stock, but its extra Co-ord Set
+  // reference line is more confusing than helpful in the queue.
+  return r.category !== 'Halter with Salwar';
+}
+
 const checkboxCls = 'size-4 accent-brand-600 disabled:cursor-not-allowed disabled:opacity-40';
 const filterCls = 'rounded-lg border border-black/15 bg-transparent px-3 py-1.5 text-sm text-neutral-900 dark:border-white/20 dark:text-white';
 
@@ -347,7 +353,7 @@ export function ShipQueue({
                 {p.stockSku !== p.sku ? (
                   <div className="text-[11px] text-amber-500">
                     shares stock — takes {p.qty} {p.stockName ?? 'unit'} ({p.stockSku})
-                    {p.info ? ` (${p.info.label}: ${p.info.onHand})` : ''}
+                      {p.info && showCompanionInfo(p) ? ` (${p.info.label}: ${p.info.onHand})` : ''}
                   </div>
                 ) : null}
               </Td>
