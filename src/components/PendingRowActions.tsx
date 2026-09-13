@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ShipButton } from '@/components/ShipButton';
-import { ProduceButton } from '@/components/ProduceButton';
 import { CancelButton } from '@/components/CancelButton';
 import { EditPendingButton } from '@/components/EditPendingButton';
 import { useToast } from '@/components/ToastProvider';
@@ -11,8 +10,8 @@ import { RowMenu, menuItemCls } from '@/components/RowMenu';
 import type { QueueRow } from '@/components/ShipQueue';
 
 /**
- * A queue row's Action cell: Ship and Produce stay out front, Edit and Cancel
- * move into the "⋯" menu.
+ * A queue row's Action cell: Ship stays out front, Edit and Cancel move into
+ * the "⋯" menu. (Producing more stock is done from the "To make" list instead.)
  *
  * The two dialogs are rendered here rather than inside the menu — the menu panel
  * unmounts the moment it closes, which would close the dialog with it. Mounting
@@ -65,9 +64,6 @@ export function PendingRowActions({
           trackingId={row.trackingId}
         />
       )}
-      {/* Sized against what's left for THIS row, so the box opens on the units
-          this order alone is missing — not the whole pile's shortfall. */}
-      <ProduceButton sku={row.sku} stockSku={row.stockSku} name={row.name} onHand={row.free} need={row.qty} />
 
       <button
         onClick={toggleReady}

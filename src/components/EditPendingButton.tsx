@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { PLATFORMS, PLATFORM_LABELS, Platform, MAX_TRACKING_LEN, normalizeTracking } from '@/lib/constants';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { useToast } from '@/components/ToastProvider';
+import { dayKey } from '@/lib/format';
 
 const input = 'w-full rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm text-neutral-900 dark:border-white/20 dark:text-white';
 
@@ -16,7 +17,7 @@ export function EditPendingButton({
   onOpenChange,
   hideTrigger,
 }: {
-  row: { id: string; sku: string; qty: number; channel: string | null; orderId: string | null; trackingId: string | null };
+  row: { id: string; sku: string; qty: number; channel: string | null; orderId: string | null; trackingId: string | null; shipByAt: string | null };
   products: { sku: string; name: string }[];
   /** Drive the dialog from a parent (so it can be opened from a menu that closes). */
   open?: boolean;
@@ -35,6 +36,7 @@ export function EditPendingButton({
   const [qty, setQty] = useState(String(row.qty));
   const [orderId, setOrderId] = useState(row.orderId ?? '');
   const [tracking, setTracking] = useState(row.trackingId ?? '');
+  const [shipBy, setShipBy] = useState(row.shipByAt ? dayKey(row.shipByAt) : '');
 
   const trackingLen = (normalizeTracking(tracking) ?? '').length;
   const trackingTooLong = trackingLen > MAX_TRACKING_LEN;
@@ -45,6 +47,7 @@ export function EditPendingButton({
     setQty(String(row.qty));
     setOrderId(row.orderId ?? '');
     setTracking(row.trackingId ?? '');
+    setShipBy(row.shipByAt ? dayKey(row.shipByAt) : '');
     setOpen(true);
   }
 
@@ -56,7 +59,15 @@ export function EditPendingButton({
       const res = await fetch(`/api/pending/${row.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sku, channel, qty: Number(qty), orderId, trackingId: tracking }),
+        body: JSON.stringify({
+          sku,
+          channel,
+          qty: Number(qty),
+          orderId,
+          trackingId: tracking,
+          // Keep the existing "due end of day, India time" convention.
+          shipByAt: shipBy ? `${shipBy}T23:59:59.999+05:30` : '',
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) toast.error(data?.error || 'Failed to save');
@@ -113,10 +124,16 @@ export function EditPendingButton({
                   <input className={input} type="number" min={1} value={qty} onChange={(e) => setQty(e.target.value)} required />
                 </label>
               </div>
-              <label className="flex flex-col gap-1 text-xs text-neutral-500">
-                Order no.
-                <input className={input} value={orderId} onChange={(e) => setOrderId(e.target.value)} placeholder="optional" />
-              </label>
+              <div className="flex gap-3">
+                <label className="flex flex-1 flex-col gap-1 text-xs text-neutral-500">
+                  Order no.
+                  <input className={input} value={orderId} onChange={(e) => setOrderId(e.target.value)} placeholder="optional" />
+                </label>
+                <label className="flex flex-1 flex-col gap-1 text-xs text-neutral-500">
+                  Ship by
+                  <input className={input} type="date" value={shipBy} onChange={(e) => setShipBy(e.target.value)} />
+                </label>
+              </div>
               <label className="flex flex-col gap-1 text-xs text-neutral-500">
                 <span className="flex items-center justify-between">
                   <span>Tracking / AWB</span>
