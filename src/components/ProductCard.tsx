@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui';
 import { useConfirm } from '@/components/ConfirmProvider';
 import { EditableStock } from '@/components/EditableStock';
 import { EditableSku } from '@/components/EditableSku';
+import { EditableVariantAttrs } from '@/components/EditableVariantAttrs';
 import { inr, num, compareVariant } from '@/lib/format';
 
 interface Variant {
@@ -13,6 +14,7 @@ interface Variant {
   color?: string;
   size?: string;
   onHand: number;
+  sharesStockWith?: string | null;
 }
 export interface CardGroup {
   code: string;
@@ -256,7 +258,13 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
                   {variants.map((v) => (
                     <tr key={v.sku} className="border-t border-black/5 dark:border-white/5">
                       <td className="py-1 pl-3">
-                        <div className="text-neutral-600 dark:text-neutral-300">{[v.color, v.size].filter(Boolean).join(' / ') || v.sku}</div>
+                        <EditableVariantAttrs
+                          code={group.code}
+                          sku={v.sku}
+                          color={v.color}
+                          size={v.size}
+                          sharesStockWith={v.sharesStockWith}
+                        />
                         <EditableSku code={group.code} sku={v.sku} />
                       </td>
                       <td className="py-1 text-right align-top"><EditableStock sku={v.sku} value={v.onHand} /></td>

@@ -50,47 +50,22 @@ export const PLATFORM_LABELS: Record<Platform, string> = {
 };
 
 /**
- * Bundle products that ship another SKU's physical stock. Keyed by SKU prefix:
- * a matching SKU keeps its own ledger entries (so its sales stay visible), but
- * every on-hand / reserved effect lands on the mapped SKU (same colour+size
- * suffix). RRC-012 "Halter with Palazzos" contains the RRC-002 Halter top —
- * shipping a set takes one halter from the halter pile. RRC-013 "V-Neck Kurti"
- * is the RRC-001 Co-ord Set sold on its own, so it draws on that same pile.
- */
-export const BUNDLE_STOCK_PREFIX: Record<string, string> = {
-  'RRC-012-': 'RRC-002-',
-  'RRC-013-': 'RRC-001-',
-};
-
-/**
- * RRC-012-CO-HI-GRN ("Halter with Salwar", Green) is NOT a Halter-with-Palazzos
- * bundle like every other RRC-012 colour — it's a standalone product with its
- * own stock. Its marketplace SKU can't be renumbered off "012" once listed, so
- * the exception lives here instead: checked before the prefix map applies.
- */
-const BUNDLE_STOCK_SKU_EXCEPTIONS = ['RRC-012-CO-HI-GRN-'];
-
-/** The SKU whose physical stock a given SKU uses (itself unless it's a bundle). */
-export function stockSkuFor(sku: string): string {
-  if (BUNDLE_STOCK_SKU_EXCEPTIONS.some((ex) => sku.startsWith(ex))) return sku;
-  for (const [prefix, target] of Object.entries(BUNDLE_STOCK_PREFIX)) {
-    if (sku.startsWith(prefix)) return target + sku.slice(prefix.length);
-  }
-  return sku;
-}
-
-/**
  * Info-only companion stock shown next to a bundle in the ship queue (never
- * deducted): the palazzo for a RRC-012 set comes from the matching Co-ord Set,
- * so its count is displayed for reference.
+ * deducted): the palazzo for a Halter-with-Palazzos set comes from the
+ * matching Co-ord Set, so its count is displayed for reference. Still
+ * prefix-based and hardcoded — a cosmetic reference display, not the actual
+ * stock-sharing relationship the Products page manages.
  */
 const BUNDLE_INFO_PREFIX: Record<string, { prefix: string; label: string }> = {
   'RRC-012-': { prefix: 'RRC-001-', label: 'Co-ord Set' },
 };
+// RRC-012-CO-HI-GRN ("Halter with Salwar") isn't a Halter-with-Palazzos set,
+// so it has no Co-ord Set companion to show.
+const BUNDLE_INFO_EXCLUDE = ['RRC-012-CO-HI-GRN-'];
 
 /** Companion SKU + label to display for a bundle SKU, or null for normal SKUs. */
 export function infoStockFor(sku: string): { sku: string; label: string } | null {
-  if (BUNDLE_STOCK_SKU_EXCEPTIONS.some((ex) => sku.startsWith(ex))) return null;
+  if (BUNDLE_INFO_EXCLUDE.some((ex) => sku.startsWith(ex))) return null;
   for (const [from, info] of Object.entries(BUNDLE_INFO_PREFIX)) {
     if (sku.startsWith(from)) return { sku: info.prefix + sku.slice(from.length), label: info.label };
   }

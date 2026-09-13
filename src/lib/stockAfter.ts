@@ -3,7 +3,8 @@ import { ProductModel } from '@/models/Product';
 import { ProductGroupModel } from '@/models/ProductGroup';
 import { SkuStockModel } from '@/models/SkuStock';
 import { PendingShipmentModel } from '@/models/PendingShipment';
-import { SystemLocation, stockSkuFor } from '@/lib/constants';
+import { SystemLocation } from '@/lib/constants';
+import { stockSkuFor } from '@/lib/stockShare';
 import { compareVariant } from '@/lib/format';
 import { variantMeta } from '@/lib/variants';
 
@@ -76,7 +77,7 @@ export async function stockAfterQueue(): Promise<StockAfterReport> {
   const queuedByPile = new Map<string, number>();
   const queuedBySku = new Map<string, number>();
   for (const p of pending) {
-    const pile = stockSkuFor(p.sku);
+    const pile = await stockSkuFor(p.sku);
     queuedByPile.set(pile, (queuedByPile.get(pile) ?? 0) + p.qty);
     queuedBySku.set(p.sku, (queuedBySku.get(p.sku) ?? 0) + p.qty);
   }
@@ -89,28 +90,30 @@ export async function stockAfterQueue(): Promise<StockAfterReport> {
     products.map((p) => [p.sku, (p.groupCode && groupNameBy.get(p.groupCode)) || p.name]),
   );
 
-  const rows: StockAfterRow[] = products
-    .map((p) => {
-      const pile = stockSkuFor(p.sku);
-      const meta = variantMeta(p, p.groupCode ? groupNameBy.get(p.groupCode) : undefined);
-      const onHand = onHandBy.get(pile) ?? 0;
-      const queued = queuedByPile.get(pile) ?? 0;
-      return {
-        sku: p.sku,
-        name: p.name,
-        category: meta.category ?? '',
-        color: meta.color ?? '',
-        size: meta.size ?? p.sku.split('-').pop() ?? '',
-        stockSku: pile,
-        stockName: pile === p.sku ? null : pileNameBy.get(pile) ?? null,
-        shared: pile !== p.sku,
-        onHand,
-        queuedOwn: queuedBySku.get(p.sku) ?? 0,
-        queued,
-        after: onHand - queued,
-      };
-    })
-    .sort((a, b) => compareVariant(a.sku, b.sku));
+  const rows: StockAfterRow[] = (
+    await Promise.all(
+      products.map(async (p) => {
+        const pile = await stockSkuFor(p.sku);
+        const meta = variantMeta(p, p.groupCode ? groupNameBy.get(p.groupCode) : undefined);
+        const onHand = onHandBy.get(pile) ?? 0;
+        const queued = queuedByPile.get(pile) ?? 0;
+        return {
+          sku: p.sku,
+          name: p.name,
+          category: meta.category ?? '',
+          color: meta.color ?? '',
+          size: meta.size ?? p.sku.split('-').pop() ?? '',
+          stockSku: pile,
+          stockName: pile === p.sku ? null : pileNameBy.get(pile) ?? null,
+          shared: pile !== p.sku,
+          onHand,
+          queuedOwn: queuedBySku.get(p.sku) ?? 0,
+          queued,
+          after: onHand - queued,
+        };
+      }),
+    )
+  ).sort((a, b) => compareVariant(a.sku, b.sku));
 
   // Count each pile once, or every bundle would double its component's garments.
   const counted = new Set<string>();

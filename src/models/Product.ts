@@ -19,6 +19,11 @@ const ProductSchema = new Schema(
     // Costing / pricing reference (in your base currency, e.g. INR).
     costPrice: { type: Number, min: 0 },
     mrp: { type: Number, min: 0 },
+    // When set, every on-hand/reserved effect for this SKU lands on this OTHER
+    // sku's stock instead of its own (e.g. a bundle that ships another
+    // product's unit). Configured per-variant from the Products page — see
+    // stockSkuFor in lib/stockShare.ts, which resolves this at read/write time.
+    sharesStockWith: { type: String, trim: true, uppercase: true, default: null },
     active: { type: Boolean, default: true },
   },
   { timestamps: true },

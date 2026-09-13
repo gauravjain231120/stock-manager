@@ -6,7 +6,8 @@ import { SkuStockModel } from '@/models/SkuStock';
 import { PendingShipmentModel } from '@/models/PendingShipment';
 import { StockMovementModel } from '@/models/StockMovement';
 import { postMovement } from '@/lib/stock';
-import { MovementType, SystemLocation, stockSkuFor, infoStockFor, cleanTracking } from '@/lib/constants';
+import { MovementType, SystemLocation, infoStockFor, cleanTracking } from '@/lib/constants';
+import { stockSkuFor } from '@/lib/stockShare';
 import { VariantMeta, variantMeta } from '@/lib/variants';
 
 const MAIN = SystemLocation.MAIN;
@@ -58,8 +59,9 @@ export async function shipProducts(): Promise<ShipProduct[]> {
   ]);
   const stockBy = new Map(stocks.map((s) => [s.sku, s]));
   const groupNameByCode = new Map(groups.map((g) => [g.code, g.name]));
+  const pileBySku = new Map(await Promise.all(products.map(async (p) => [p.sku, await stockSkuFor(p.sku)] as const)));
   return products.map((p) => {
-    const st = stockBy.get(stockSkuFor(p.sku));
+    const st = stockBy.get(pileBySku.get(p.sku)!);
     const onHand = st?.onHand ?? 0;
     return {
       ...variantMeta(p, p.groupCode ? groupNameByCode.get(p.groupCode) : undefined),
@@ -104,7 +106,7 @@ export async function addPending(input: {
   const channel = input.channel || undefined;
   // Reserve on the physical stock SKU (a bundle reserves its component's units).
   await SkuStockModel.updateOne(
-    { sku: stockSkuFor(sku), locationCode: MAIN },
+    { sku: await stockSkuFor(sku), locationCode: MAIN },
     { $inc: { reserved: qty }, $setOnInsert: { onHand: 0, buffer: 0 } },
     { upsert: true },
   );
@@ -144,8 +146,9 @@ export async function listPending(): Promise<PendingRow[]> {
   await connectDB();
   const items = await PendingShipmentModel.find().sort({ createdAt: 1 }).lean();
   const skus = [...new Set(items.map((i) => i.sku))];
+  const pileBySku = new Map(await Promise.all(skus.map(async (s) => [s, await stockSkuFor(s)] as const)));
   const infoSkus = items.map((i) => infoStockFor(i.sku)?.sku).filter((s): s is string => Boolean(s));
-  const stockSkus = [...new Set([...items.map((i) => stockSkuFor(i.sku)), ...infoSkus])];
+  const stockSkus = [...new Set([...skus.map((s) => pileBySku.get(s)!), ...infoSkus])];
   const [products, stockProducts, stocks] = await Promise.all([
     ProductModel.find({ sku: { $in: skus } }, { sku: 1, name: 1, category: 1 }).lean(),
     // Whose pile a bundle actually draws on, so the queue can name it.
@@ -166,7 +169,7 @@ export async function listPending(): Promise<PendingRow[]> {
   const categoryBy = new Map(products.map((p) => [p.sku, p.category?.trim() ?? '']));
   const stockBy = new Map(stocks.map((s) => [s.sku, s]));
   return items.map((i) => {
-    const stockSku = stockSkuFor(i.sku);
+    const stockSku = pileBySku.get(i.sku)!;
     const st = stockBy.get(stockSku);
     const onHand = st?.onHand ?? 0;
     const inf = infoStockFor(i.sku);
@@ -326,13 +329,14 @@ export async function shipPending(id: string, qty?: number, trackingId?: string,
   if (orderId?.trim() && orderId.trim() !== p.orderId) {
     await PendingShipmentModel.updateOne({ _id: p._id }, { $set: { orderId: orderId.trim() } });
   }
+  const pool = await stockSkuFor(p.sku);
   const session = await mongoose.startSession();
   try {
     await session.withTransaction(async () => {
       // Never let a shipment drive stock below zero, even when the API is called
       // directly — postMovement applies its delta unconditionally.
       const enough = await SkuStockModel.findOne(
-        { sku: stockSkuFor(p.sku), locationCode: MAIN, $expr: { $gte: [{ $subtract: ['$onHand', shipQty] }, 0] } },
+        { sku: pool, locationCode: MAIN, $expr: { $gte: [{ $subtract: ['$onHand', shipQty] }, 0] } },
         { _id: 1 },
         { session },
       );
@@ -355,7 +359,7 @@ export async function shipPending(id: string, qty?: number, trackingId?: string,
       if (p.shipByAt) {
         await StockMovementModel.collection.updateOne({ _id: movementId }, { $set: { createdAt: p.shipByAt } }, { session });
       }
-      await SkuStockModel.updateOne({ sku: stockSkuFor(p.sku), locationCode: MAIN }, { $inc: { reserved: -shipQty } }, { session });
+      await SkuStockModel.updateOne({ sku: pool, locationCode: MAIN }, { $inc: { reserved: -shipQty } }, { session });
       if (shipQty >= p.qty) await PendingShipmentModel.deleteOne({ _id: p._id }, { session });
       // What's left needs its own label: drop the AWB that just went out, so the
       // remainder doesn't sit in the queue looking like it already shipped.
@@ -408,8 +412,8 @@ export async function editPending(
   if (changes.shipByAt !== undefined) p.shipByAt = changes.shipByAt ? new Date(changes.shipByAt) : undefined;
 
   // Move the reservation: release everything held on the old pool, hold the new.
-  const oldPool = stockSkuFor(oldSku);
-  const newPool = stockSkuFor(p.sku);
+  const oldPool = await stockSkuFor(oldSku);
+  const newPool = await stockSkuFor(p.sku);
   if (oldPool === newPool) {
     const delta = p.qty - oldQty;
     if (delta !== 0) {
@@ -454,7 +458,7 @@ export async function cancelPending(id: string, qty?: number) {
   const p = await PendingShipmentModel.findById(id);
   if (!p) return { ok: true };
   const cancelQty = qty && qty > 0 ? Math.min(Math.floor(qty), p.qty) : p.qty;
-  await SkuStockModel.updateOne({ sku: stockSkuFor(p.sku), locationCode: MAIN }, { $inc: { reserved: -cancelQty } });
+  await SkuStockModel.updateOne({ sku: await stockSkuFor(p.sku), locationCode: MAIN }, { $inc: { reserved: -cancelQty } });
   if (cancelQty >= p.qty) await PendingShipmentModel.deleteOne({ _id: p._id });
   else await PendingShipmentModel.updateOne({ _id: p._id }, { $inc: { qty: -cancelQty } });
   return {
@@ -516,7 +520,7 @@ export async function reconcileReservedStock() {
   const pending = await PendingShipmentModel.find().lean();
   const actual = new Map<string, number>();
   for (const p of pending) {
-    const pool = stockSkuFor(p.sku);
+    const pool = await stockSkuFor(p.sku);
     actual.set(pool, (actual.get(pool) ?? 0) + p.qty);
   }
 

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { addVariant, removeVariant, renameVariantSku } from '@/lib/products';
+import { addVariant, removeVariant, renameVariantSku, editVariantAttributes, setSharesStockWith } from '@/lib/products';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,17 +10,40 @@ const AddVariant = z.object({
   sku: z.string().optional(),
 });
 
-const RenameSku = z.object({ sku: z.string().min(1), newSku: z.string().min(1) });
+// All fields but `sku` are optional — send only what you're changing.
+// `sharesStockWith: null` clears it back to "own stock"; omit it to leave alone.
+const EditVariant = z.object({
+  sku: z.string().min(1),
+  newSku: z.string().min(1).optional(),
+  color: z.string().optional(),
+  size: z.string().optional(),
+  sharesStockWith: z.string().nullable().optional(),
+});
 
-/** PATCH /api/products/[code]/variant -> rename a variant's SKU. */
+/** PATCH /api/products/[code]/variant -> rename a SKU and/or edit its colour, size, or stock-sharing. */
 export async function PATCH(req: Request) {
-  const parsed = RenameSku.safeParse(await req.json().catch(() => null));
+  const parsed = EditVariant.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
-    return Response.json({ error: 'Provide sku and newSku' }, { status: 400 });
+    return Response.json({ error: 'Provide sku' }, { status: 400 });
   }
+  const { sku, newSku, color, size, sharesStockWith } = parsed.data;
   try {
-    const res = await renameVariantSku(parsed.data.sku, parsed.data.newSku);
-    return Response.json({ ok: true, ...res });
+    let current = sku;
+    let result: Record<string, unknown> = { sku };
+    if (newSku && newSku.trim().toUpperCase() !== current.trim().toUpperCase()) {
+      const res = await renameVariantSku(current, newSku);
+      current = res.sku;
+      result = { ...result, ...res };
+    }
+    if (color !== undefined || size !== undefined) {
+      const res = await editVariantAttributes(current, { color, size });
+      result = { ...result, ...res };
+    }
+    if (sharesStockWith !== undefined) {
+      const res = await setSharesStockWith(current, sharesStockWith);
+      result = { ...result, ...res };
+    }
+    return Response.json({ ok: true, ...result });
   } catch (err) {
     return Response.json({ error: err instanceof Error ? err.message : String(err) }, { status: 400 });
   }

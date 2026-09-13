@@ -1,5 +1,6 @@
 import { connectDB } from '@/lib/db';
-import { MovementType, SystemLocation, stockSkuFor } from '@/lib/constants';
+import { MovementType, SystemLocation } from '@/lib/constants';
+import { stockSkuFor, invalidateStockShareCache } from '@/lib/stockShare';
 import { applyMovement } from '@/lib/stock';
 import { ProductModel } from '@/models/Product';
 import { ProductGroupModel } from '@/models/ProductGroup';
@@ -184,10 +185,116 @@ export async function addVariant(code: string, v: { color?: string; size?: strin
   return { sku };
 }
 
+/**
+ * Edit a variant's colour and/or size attributes (not its SKU string — use
+ * renameVariantSku for that). Updates the display name and keeps the parent
+ * group's colour/size dropdown lists in sync: adds the new value if it's new,
+ * and drops the old one from the list once no variant in the group uses it
+ * any more.
+ */
+export async function editVariantAttributes(sku: string, changes: { color?: string; size?: string }) {
+  await connectDB();
+  const s = sku.trim().toUpperCase();
+  const product = await ProductModel.findOne({ sku: s });
+  if (!product) throw new Error('Variant not found');
+
+  const attrs: Map<string, string> =
+    product.attributes instanceof Map ? product.attributes : new Map(Object.entries(product.attributes ?? {}));
+  const oldColor = attrs.get('color');
+  const oldSize = attrs.get('size');
+  const newColor = changes.color !== undefined ? changes.color.trim() : oldColor;
+  const newSize = changes.size !== undefined ? changes.size.trim() : oldSize;
+
+  if (newColor) attrs.set('color', newColor);
+  else attrs.delete('color');
+  if (newSize) attrs.set('size', newSize);
+  else attrs.delete('size');
+  product.attributes = attrs;
+
+  const group = product.groupCode ? await ProductGroupModel.findOne({ code: product.groupCode }) : null;
+  if (group) product.name = [group.name, newColor, newSize].filter(Boolean).join(' ');
+  await product.save();
+
+  if (group) {
+    let groupChanged = false;
+    if (newColor && !group.colors.includes(newColor)) {
+      group.colors.push(newColor);
+      groupChanged = true;
+    }
+    if (newSize && !group.sizes.includes(newSize)) {
+      group.sizes.push(newSize);
+      groupChanged = true;
+    }
+    // Mongoose's generated types don't expose dotted paths into a Map field
+    // ('attributes.color'), even though it's a perfectly valid query at
+    // runtime — cast just this filter rather than losing type-checking
+    // elsewhere in the function.
+    if (
+      oldColor &&
+      oldColor !== newColor &&
+      !(await ProductModel.exists({ groupCode: group.code, 'attributes.color': oldColor } as never))
+    ) {
+      group.colors = group.colors.filter((c) => c !== oldColor);
+      groupChanged = true;
+    }
+    if (
+      oldSize &&
+      oldSize !== newSize &&
+      !(await ProductModel.exists({ groupCode: group.code, 'attributes.size': oldSize } as never))
+    ) {
+      group.sizes = group.sizes.filter((sz) => sz !== oldSize);
+      groupChanged = true;
+    }
+    if (groupChanged) await group.save();
+  }
+
+  return { sku: s, color: newColor, size: newSize, name: product.name };
+}
+
+/**
+ * Point a variant at another SKU's physical stock (or clear it back to its
+ * own) — the same mechanism that already powers "Halter with Palazzos"
+ * sharing "Halter Neck"'s pile, now configurable per variant instead of
+ * hardcoded. Every on-hand/reserved effect for `sku` lands on `targetSku`
+ * from then on; `sku` keeps its own ledger rows so its sales stay visible.
+ * Chains are disallowed (the target must not itself share with something
+ * else) so stockSkuFor never has to resolve more than one hop.
+ */
+export async function setSharesStockWith(sku: string, targetSku: string | null) {
+  await connectDB();
+  const s = sku.trim().toUpperCase();
+  const product = await ProductModel.findOne({ sku: s });
+  if (!product) throw new Error('Variant not found');
+
+  if (!targetSku || !targetSku.trim()) {
+    product.sharesStockWith = undefined;
+    await product.save();
+    invalidateStockShareCache();
+    return { sku: s, sharesStockWith: null };
+  }
+
+  const t = targetSku.trim().toUpperCase();
+  if (t === s) throw new Error('A variant cannot share stock with itself');
+  const target = await ProductModel.findOne({ sku: t });
+  if (!target) throw new Error(`SKU ${t} not found`);
+  if (target.sharesStockWith) throw new Error(`${t} already shares stock with ${target.sharesStockWith} — point at that SKU instead`);
+
+  product.sharesStockWith = t;
+  await product.save();
+  invalidateStockShareCache();
+  return { sku: s, sharesStockWith: t };
+}
+
 /** Remove a single variant SKU and its stock/history. */
 export async function removeVariant(sku: string) {
   await connectDB();
   const s = sku.trim().toUpperCase();
+  const dependents = await ProductModel.find({ sharesStockWith: s }, { sku: 1 }).lean();
+  if (dependents.length > 0) {
+    throw new Error(
+      `Can't remove — ${dependents.map((d) => d.sku).join(', ')} still shares stock with this variant. Repoint or remove those first.`,
+    );
+  }
   await Promise.all([
     ProductModel.deleteOne({ sku: s }),
     SkuStockModel.deleteMany({ sku: s }),
@@ -228,7 +335,12 @@ export async function renameVariantSku(oldSku: string, newSku: string) {
     ProductionBatchModel.updateMany({ sku: o }, { $set: { sku: n } }),
     BomModel.updateMany({ sku: o }, { $set: { sku: n } }),
     ReorderPolicyModel.updateMany({ sku: o }, { $set: { sku: n } }),
+    // Any OTHER variant sharing stock with this one must keep pointing at it
+    // under its new name, or it silently falls back to tracking its own
+    // (empty) pile instead.
+    ProductModel.updateMany({ sharesStockWith: o }, { $set: { sharesStockWith: n } }),
   ]);
+  invalidateStockShareCache();
   return { sku: n };
 }
 
@@ -260,6 +372,8 @@ export interface GroupVariant {
   size?: string;
   color?: string;
   onHand: number;
+  /** The other SKU this variant's stock is actually tracked on, if any. */
+  sharesStockWith?: string | null;
 }
 export interface GroupView {
   code: string;
@@ -301,6 +415,8 @@ export async function getProductGroups(): Promise<{ groups: GroupView[]; ungroup
     productsByGroup.set(p.groupCode, arr);
   }
 
+  const pileBySku = new Map(await Promise.all(products.map(async (p) => [p.sku, await stockSkuFor(p.sku)] as const)));
+
   const views: GroupView[] = groups.map((g) => {
     const items = productsByGroup.get(g.code) ?? [];
     const variants: GroupVariant[] = items
@@ -309,7 +425,8 @@ export async function getProductGroups(): Promise<{ groups: GroupView[]; ungroup
         size: p.attributes?.get?.('size') ?? (p.attributes as unknown as Record<string, string>)?.size,
         color: p.attributes?.get?.('color') ?? (p.attributes as unknown as Record<string, string>)?.color,
         // Bundles show their component's pool (e.g. the set shows halter stock).
-        onHand: onHandBySku.get(stockSkuFor(p.sku)) ?? 0,
+        onHand: onHandBySku.get(pileBySku.get(p.sku)!) ?? 0,
+        sharesStockWith: p.sharesStockWith ?? null,
       }))
       .sort((a, b) => a.sku.localeCompare(b.sku));
     return {

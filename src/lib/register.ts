@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import { connectDB } from '@/lib/db';
-import { MovementType, SystemLocation, stockSkuFor, cleanTracking, ReturnCondition } from '@/lib/constants';
+import { MovementType, SystemLocation, cleanTracking, ReturnCondition } from '@/lib/constants';
+import { stockSkuFor } from '@/lib/stockShare';
 import { applyMovement, sellUnits } from '@/lib/stock';
 import { ProductModel } from '@/models/Product';
 import { ProductGroupModel } from '@/models/ProductGroup';
@@ -153,6 +154,7 @@ export async function editEntry(
     else set[key] = value;
   }
 
+  const pool = await stockSkuFor(mv.sku);
   const session = await mongoose.startSession();
   try {
     await session.withTransaction(async () => {
@@ -160,13 +162,13 @@ export async function editEntry(
         // Condition crossed the Good/Used <-> Wrong line: move the whole
         // quantity out of the old location and into the new one.
         const dec = await SkuStockModel.findOneAndUpdate(
-          { sku: stockSkuFor(mv.sku), locationCode: oldLocation, $expr: { $gte: [{ $subtract: ['$onHand', mv.qty] }, 0] } },
+          { sku: pool, locationCode: oldLocation, $expr: { $gte: [{ $subtract: ['$onHand', mv.qty] }, 0] } },
           { $inc: { onHand: -mv.qty } },
           { session, returnDocument: 'after' },
         );
         if (!dec) throw new Error('Cannot change condition — those units are no longer at their current location.');
         await SkuStockModel.updateOne(
-          { sku: stockSkuFor(mv.sku), locationCode: newLocation },
+          { sku: pool, locationCode: newLocation },
           { $inc: { onHand: newSignedQty } },
           { session, upsert: true },
         );
@@ -174,7 +176,7 @@ export async function editEntry(
         const delta = newSignedQty - mv.qty; // the only stock movement a same-location edit causes
         if (delta !== 0) {
           const upd = await SkuStockModel.findOneAndUpdate(
-            { sku: stockSkuFor(mv.sku), locationCode: mv.locationCode, $expr: { $gte: [{ $add: ['$onHand', delta] }, 0] } },
+            { sku: pool, locationCode: mv.locationCode, $expr: { $gte: [{ $add: ['$onHand', delta] }, 0] } },
             { $inc: { onHand: delta } },
             { session, returnDocument: 'after' },
           );
@@ -205,12 +207,13 @@ export async function deleteEntry(movementId: string) {
   if (!EDITABLE_TYPES.includes(mv.type)) throw new Error('This entry cannot be deleted here');
 
   const reverse = -mv.qty; // undo the original stock delta
+  const pool = await stockSkuFor(mv.sku);
   const session = await mongoose.startSession();
   try {
     await session.withTransaction(async () => {
       if (reverse !== 0) {
         const upd = await SkuStockModel.findOneAndUpdate(
-          { sku: stockSkuFor(mv.sku), locationCode: mv.locationCode, $expr: { $gte: [{ $add: ['$onHand', reverse] }, 0] } },
+          { sku: pool, locationCode: mv.locationCode, $expr: { $gte: [{ $add: ['$onHand', reverse] }, 0] } },
           { $inc: { onHand: reverse } },
           { session, returnDocument: 'after' },
         );
@@ -255,7 +258,7 @@ export async function moveShippedToQueue(movementId: string) {
   if (mv.type !== MovementType.SOLD) throw new Error('Only a shipment can be moved back to the queue');
 
   const qty = Math.abs(mv.qty);
-  const pool = stockSkuFor(mv.sku);
+  const pool = await stockSkuFor(mv.sku);
   const session = await mongoose.startSession();
   try {
     await session.withTransaction(async () => {
@@ -316,10 +319,10 @@ export async function restoreEntry(snap: EntrySnapshot) {
   if (!EDITABLE_TYPES.includes(snap.type)) throw new Error('This entry cannot be restored');
   const createdAt = new Date(snap.createdAt);
 
+  const pool = await stockSkuFor(snap.sku);
   const session = await mongoose.startSession();
   try {
     await session.withTransaction(async () => {
-      const pool = stockSkuFor(snap.sku);
       if (snap.qty > 0) {
         // Putting units back can never go negative, so upsert is safe here.
         await SkuStockModel.updateOne(
@@ -404,8 +407,11 @@ export async function registerTotals(): Promise<RegisterRow[]> {
     aggBySku.set(m._id.sku, a);
   }
 
+  const pileBySku = new Map(await Promise.all(products.map(async (p) => [p.sku, await stockSkuFor(p.sku)] as const)));
+
   return products.map((p) => {
     const a = aggBySku.get(p.sku) ?? { produced: 0, shipped: 0, returned: 0 };
+    const pool = pileBySku.get(p.sku)!;
     return {
       ...variantMeta(p, p.groupCode ? groupNameByCode.get(p.groupCode) : undefined),
       sku: p.sku,
@@ -413,8 +419,8 @@ export async function registerTotals(): Promise<RegisterRow[]> {
       produced: a.produced,
       shipped: a.shipped,
       returned: a.returned,
-      inStock: inStockBySku.get(stockSkuFor(p.sku)) ?? 0,
-      sharedStock: stockSkuFor(p.sku) !== p.sku || undefined,
+      inStock: inStockBySku.get(pool) ?? 0,
+      sharedStock: pool !== p.sku || undefined,
     };
   });
 }
