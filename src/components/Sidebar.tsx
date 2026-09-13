@@ -8,7 +8,7 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 
 const NAV = [
   { href: '/register', label: 'Stock Log', Icon: ClipboardList },
-  { href: '/dashboard', label: 'Notes', Icon: NotebookPen },
+  { href: '/notes', label: 'Notes', Icon: NotebookPen },
   { href: '/ship', label: 'Ready to Ship', Icon: Truck },
   { href: '/shipped', label: 'Shipped', Icon: PackageCheck },
   { href: '/returns', label: 'Returns', Icon: Undo2 },
