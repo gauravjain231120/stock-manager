@@ -32,6 +32,7 @@ export function EditMovementButton({ row, title }: { row: MovementRow; title: st
   const [qty, setQty] = useState(String(row.qty));
   const [date, setDate] = useState(row.at.slice(0, 10));
   const [condition, setCondition] = useState<ReturnCondition>((row.condition as ReturnCondition) ?? 'GOOD');
+  const [sku, setSku] = useState(row.sku);
 
   const trackingLen = (normalizeTracking(tracking) ?? '').length;
   const trackingTooLong = trackingLen > MAX_TRACKING_LEN;
@@ -43,6 +44,7 @@ export function EditMovementButton({ row, title }: { row: MovementRow; title: st
     setQty(String(row.qty));
     setDate(row.at.slice(0, 10));
     setCondition((row.condition as ReturnCondition) ?? 'GOOD');
+    setSku(row.sku);
     setOpen(true);
   }
 
@@ -60,7 +62,7 @@ export function EditMovementButton({ row, title }: { row: MovementRow; title: st
           channel,
           qty: Number(qty),
           date,
-          ...(isReturn ? { condition } : {}),
+          ...(isReturn ? { condition, sku } : {}),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -98,7 +100,16 @@ export function EditMovementButton({ row, title }: { row: MovementRow; title: st
                 {row.color ? ` — ${row.color}` : ''}
                 {row.size ? <span className="text-neutral-500"> · {row.size}</span> : null}
               </div>
-              <div className="font-mono text-xs text-neutral-500">{row.sku}</div>
+              {isReturn ? (
+                <input
+                  className={`${input} mt-1 font-mono text-xs`}
+                  value={sku}
+                  onChange={(e) => setSku(e.target.value)}
+                  title="Change this if the return was logged against the wrong product"
+                />
+              ) : (
+                <div className="font-mono text-xs text-neutral-500">{row.sku}</div>
+              )}
             </div>
 
             <div className="mt-4 flex flex-col gap-3">
@@ -160,7 +171,7 @@ export function EditMovementButton({ row, title }: { row: MovementRow; title: st
 
             <p className="mt-3 text-[11px] text-neutral-400">
               Changing the quantity adjusts stock to match.
-              {isReturn ? ' Changing condition across the Wrong-item line moves the stock between shelves too.' : ''}
+              {isReturn ? ' Changing condition across the Wrong-item line moves the stock between shelves too, and changing the product moves it off the old one’s pile onto the new one’s.' : ''}
             </p>
 
             <div className="mt-4 flex justify-end gap-2">

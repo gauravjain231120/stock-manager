@@ -275,6 +275,7 @@ export function MovementTable({
             <Th>{dateLabel}</Th><Th>Product</Th><Th>Tracking</Th><Th>Order no.</Th><Th>Platform</Th><Th right>Qty</Th>
             {allowMoveToQueue ? <Th right>Move back</Th> : null}
             <Th right>Edit</Th>
+            <Th right>Delete</Th>
           </>
         }
         empty={filtered.length === 0}
@@ -328,6 +329,25 @@ export function MovementTable({
               </Td>
             ) : null}
             <Td right><EditMovementButton row={r} title={dateLabel === 'Returned' ? 'return' : 'shipment'} /></Td>
+            <Td right>
+              <ActionButton
+                label="Delete"
+                endpoint={`/api/register/${r.id}`}
+                method="DELETE"
+                variant="danger"
+                confirmTitle={`Delete this ${dateLabel === 'Returned' ? 'return' : 'shipment'}?`}
+                confirm="The stock count will be adjusted back to reverse it."
+                confirmDetails={[
+                  { label: 'Product', value: r.name },
+                  { label: 'SKU', value: r.sku },
+                  { label: 'Quantity', value: String(r.qty) },
+                  ...(r.orderId ? [{ label: 'Order no.', value: r.orderId }] : []),
+                ]}
+                confirmLabel="Delete"
+                successMessage="Deleted ✓"
+                undoEndpoint="/api/register/restore"
+              />
+            </Td>
           </Tr>
         ))}
       </Table>

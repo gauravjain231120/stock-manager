@@ -5,6 +5,7 @@ import { PLATFORMS, RETURN_CONDITIONS } from '@/lib/constants';
 export const dynamic = 'force-dynamic';
 
 const Patch = z.object({
+  sku: z.string().optional(),
   qty: z.number().int().positive().optional(),
   channel: z.enum(PLATFORMS).nullable().optional(),
   date: z.string().optional(),
@@ -22,6 +23,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   }
   try {
     await editEntry(id, {
+      sku: parsed.data.sku,
       qty: parsed.data.qty,
       channel: parsed.data.channel,
       date: parsed.data.date ? new Date(parsed.data.date) : undefined,

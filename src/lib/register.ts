@@ -102,8 +102,9 @@ export async function recordEntry(
 }
 
 /**
- * Edit a Stock Log entry: quantity, platform, date, tracking, order number, or
- * (returns only) condition.
+ * Edit a Stock Log entry: quantity, platform, date, tracking, order number,
+ * (returns only) condition, or — also returns only — the product itself, for
+ * correcting a return logged against the wrong SKU.
  *
  * The row is updated in place and only the DIFFERENCE in quantity is applied to
  * stock. Editing just a tracking number touches no stock at all, and a quantity
@@ -113,10 +114,20 @@ export async function recordEntry(
  * A return's condition decides where its units live: a Wrong item is held in
  * DAMAGED (never resold), Good/Used both sit in MAIN. So changing condition
  * across that line moves the whole quantity between locations, not just a delta.
+ * Changing the SKU is the same idea one level up: the whole quantity moves off
+ * the old product's pile and onto the new one's, instead of a delta on one pile.
  */
 export async function editEntry(
   id: string,
-  changes: { qty?: number; channel?: string | null; date?: Date; trackingId?: string; orderId?: string; condition?: ReturnCondition },
+  changes: {
+    sku?: string;
+    qty?: number;
+    channel?: string | null;
+    date?: Date;
+    trackingId?: string;
+    orderId?: string;
+    condition?: ReturnCondition;
+  },
 ) {
   await connectDB();
   const mv = await StockMovementModel.findById(id).lean();
@@ -125,6 +136,12 @@ export async function editEntry(
   const isOutbound = mv.type === MovementType.SOLD;
   const hasPlatform = mv.type === MovementType.SOLD || mv.type === MovementType.RETURNED;
   const isReturn = mv.type === MovementType.RETURNED;
+
+  const newSku = changes.sku?.trim() ? changes.sku.trim().toUpperCase() : mv.sku;
+  if (newSku !== mv.sku) {
+    if (!isReturn) throw new Error('Only a return can be reassigned to a different product');
+    if (!(await ProductModel.exists({ sku: newSku }))) throw new Error(`SKU ${newSku} not found`);
+  }
 
   const newQty = changes.qty != null ? changes.qty : Math.abs(mv.qty);
   if (newQty <= 0) throw new Error('Quantity must be greater than 0');
@@ -144,6 +161,7 @@ export async function editEntry(
     condition: newCondition,
   };
   const set: Record<string, unknown> = {
+    sku: newSku,
     qty: newSignedQty,
     createdAt: changes.date ?? (mv.createdAt as unknown as Date),
     locationCode: newLocation,
@@ -154,21 +172,37 @@ export async function editEntry(
     else set[key] = value;
   }
 
-  const pool = await stockSkuFor(mv.sku);
+  const oldPool = await stockSkuFor(mv.sku);
+  const newPool = newSku === mv.sku ? oldPool : await stockSkuFor(newSku);
   const session = await mongoose.startSession();
   try {
     await session.withTransaction(async () => {
-      if (newLocation !== oldLocation) {
+      if (newSku !== mv.sku) {
+        // Reassigned to a different product: reverse the whole original effect
+        // on the old product's pile, then apply the (possibly re-quantified)
+        // new effect on the new one's — a full move, not a same-pile delta.
+        const dec = await SkuStockModel.findOneAndUpdate(
+          { sku: oldPool, locationCode: oldLocation, $expr: { $gte: [{ $subtract: ['$onHand', mv.qty] }, 0] } },
+          { $inc: { onHand: -mv.qty } },
+          { session, returnDocument: 'after' },
+        );
+        if (!dec) throw new Error('Cannot change the product — those units are no longer available to move.');
+        await SkuStockModel.updateOne(
+          { sku: newPool, locationCode: newLocation },
+          { $inc: { onHand: newSignedQty } },
+          { session, upsert: true },
+        );
+      } else if (newLocation !== oldLocation) {
         // Condition crossed the Good/Used <-> Wrong line: move the whole
         // quantity out of the old location and into the new one.
         const dec = await SkuStockModel.findOneAndUpdate(
-          { sku: pool, locationCode: oldLocation, $expr: { $gte: [{ $subtract: ['$onHand', mv.qty] }, 0] } },
+          { sku: oldPool, locationCode: oldLocation, $expr: { $gte: [{ $subtract: ['$onHand', mv.qty] }, 0] } },
           { $inc: { onHand: -mv.qty } },
           { session, returnDocument: 'after' },
         );
         if (!dec) throw new Error('Cannot change condition — those units are no longer at their current location.');
         await SkuStockModel.updateOne(
-          { sku: pool, locationCode: newLocation },
+          { sku: oldPool, locationCode: newLocation },
           { $inc: { onHand: newSignedQty } },
           { session, upsert: true },
         );
@@ -176,7 +210,7 @@ export async function editEntry(
         const delta = newSignedQty - mv.qty; // the only stock movement a same-location edit causes
         if (delta !== 0) {
           const upd = await SkuStockModel.findOneAndUpdate(
-            { sku: pool, locationCode: mv.locationCode, $expr: { $gte: [{ $add: ['$onHand', delta] }, 0] } },
+            { sku: oldPool, locationCode: mv.locationCode, $expr: { $gte: [{ $add: ['$onHand', delta] }, 0] } },
             { $inc: { onHand: delta } },
             { session, returnDocument: 'after' },
           );
