@@ -3,11 +3,12 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { ClipboardList, Truck, PackageCheck, Undo2, Shirt, Boxes, Factory, LogOut, Menu, X } from 'lucide-react';
+import { ClipboardList, Truck, PackageCheck, Undo2, Shirt, Boxes, Factory, NotebookPen, LogOut, Menu, X } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
 
 const NAV = [
   { href: '/register', label: 'Stock Log', Icon: ClipboardList },
+  { href: '/dashboard', label: 'Notes', Icon: NotebookPen },
   { href: '/ship', label: 'Ready to Ship', Icon: Truck },
   { href: '/shipped', label: 'Shipped', Icon: PackageCheck },
   { href: '/returns', label: 'Returns', Icon: Undo2 },
