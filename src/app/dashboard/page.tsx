@@ -1,16 +1,19 @@
 import Link from 'next/link';
 import { getInventoryOverview } from '@/lib/queries';
 import { replenishmentSuggestions } from '@/lib/replenishment';
+import { getNote } from '@/lib/notes';
 import { PageHeader, StatCard, Panel, Table, Th, Td, Tr, Badge } from '@/components/ui';
 import { ActionButton } from '@/components/ActionButton';
+import { NotesPanel } from '@/components/NotesPanel';
 import { num } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Dashboard() {
-  const [{ summary, totals, rows }, repl] = await Promise.all([
+  const [{ summary, totals, rows }, repl, note] = await Promise.all([
     getInventoryOverview(),
     replenishmentSuggestions(30),
+    getNote(),
   ]);
   const needsReorder = repl.filter((r) => r.needsReorder).length;
 
@@ -53,6 +56,10 @@ export default async function Dashboard() {
           ))}
         </Table>
       </Panel>
+
+      <div className="mt-8">
+        <NotesPanel initialText={note} />
+      </div>
     </main>
   );
 }
