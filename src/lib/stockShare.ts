@@ -15,20 +15,38 @@ import { ProductModel } from '@/models/Product';
  * set takes one halter off that pile, not its own.
  *
  * Short-TTL cache: stockSkuFor is called many times per request (often in
- * loops), so it can't hit the DB every time, but a change made in the UI
- * should take effect within a few seconds, not require a redeploy.
+ * a Promise.all over every product), so it can't hit the DB every time, but
+ * a change made in the UI should take effect within a few seconds, not
+ * require a redeploy.
+ *
+ * Single-flight: a cache miss is shared via `loading`, not just `stockShareCache`.
+ * Without this, hundreds of concurrent stockSkuFor calls (one per product, all
+ * firing before the first DB round trip returns) each saw an empty cache and
+ * each kicked off their own identical query — hundreds of redundant queries
+ * queued behind Mongoose's connection pool, which is exactly what made pages
+ * like Inventory feel like they'd hung. Now every caller in that window awaits
+ * the one query already in flight.
  */
 const STOCK_SHARE_CACHE_TTL_MS = 5000;
 let stockShareCache: { map: Map<string, string>; loadedAt: number } | null = null;
+let loading: Promise<Map<string, string>> | null = null;
 
 async function loadStockShareMap(): Promise<Map<string, string>> {
   const now = Date.now();
   if (stockShareCache && now - stockShareCache.loadedAt < STOCK_SHARE_CACHE_TTL_MS) return stockShareCache.map;
-  const docs = await ProductModel.find({ sharesStockWith: { $exists: true, $ne: null } }, { sku: 1, sharesStockWith: 1 }).lean();
-  const map = new Map<string, string>();
-  for (const d of docs) if (d.sharesStockWith) map.set(d.sku, d.sharesStockWith);
-  stockShareCache = { map, loadedAt: now };
-  return map;
+  if (loading) return loading;
+  loading = (async () => {
+    const docs = await ProductModel.find({ sharesStockWith: { $exists: true, $ne: null } }, { sku: 1, sharesStockWith: 1 }).lean();
+    const map = new Map<string, string>();
+    for (const d of docs) if (d.sharesStockWith) map.set(d.sku, d.sharesStockWith);
+    stockShareCache = { map, loadedAt: Date.now() };
+    return map;
+  })();
+  try {
+    return await loading;
+  } finally {
+    loading = null;
+  }
 }
 
 /** Call after any write to Product.sharesStockWith so the change is visible immediately. */
