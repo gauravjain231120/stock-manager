@@ -2,13 +2,17 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Check, Pencil, X } from 'lucide-react';
 import { useConfirm } from '@/components/ConfirmProvider';
 
 function color(n: number) {
-  if (n <= 0) return 'text-red-600';
-  if (n <= 5) return 'text-amber-600';
-  return 'text-emerald-600';
+  if (n <= 0) return 'text-red-600 dark:text-red-400';
+  if (n <= 5) return 'text-amber-600 dark:text-amber-400';
+  return 'text-emerald-600 dark:text-emerald-400';
 }
+
+const iconBtn =
+  'inline-flex size-6 items-center justify-center rounded-md transition hover:bg-black/5 dark:hover:bg-white/10';
 
 /** Click-to-edit current stock number. Saving records the change as an adjustment. */
 export function EditableStock({ sku, value }: { sku: string; value: number }) {
@@ -64,10 +68,14 @@ export function EditableStock({ sku, value }: { sku: string; value: number }) {
             if (e.key === 'Enter') save();
             if (e.key === 'Escape') setEditing(false);
           }}
-          className="w-20 rounded-lg border border-black/15 bg-transparent px-2 py-1 text-right text-sm text-neutral-900 dark:border-white/20 dark:text-white"
+          className="w-16 rounded-lg border border-black/15 bg-transparent px-2 py-1 text-right text-sm tabular-nums text-neutral-900 focus:border-brand-500 focus:outline-none dark:border-white/20 dark:text-white"
         />
-        <button onClick={save} disabled={busy} className="px-1 text-emerald-600 disabled:opacity-50" title="Save">✓</button>
-        <button onClick={() => setEditing(false)} className="px-1 text-neutral-400" title="Cancel">✕</button>
+        <button onClick={save} disabled={busy} className={`${iconBtn} text-emerald-600 disabled:opacity-50`} title="Save">
+          <Check size={14} />
+        </button>
+        <button onClick={() => setEditing(false)} className={`${iconBtn} text-neutral-400`} title="Cancel">
+          <X size={14} />
+        </button>
       </span>
     );
   }
@@ -78,10 +86,11 @@ export function EditableStock({ sku, value }: { sku: string; value: number }) {
         setVal(String(value));
         setEditing(true);
       }}
-      className={`font-semibold tabular-nums hover:underline ${color(value)}`}
+      className={`group inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-semibold tabular-nums transition hover:bg-black/5 dark:hover:bg-white/10 ${color(value)}`}
       title="Click to edit stock"
     >
-      {value} <span className="text-[10px] text-neutral-400">✎</span>
+      {value}
+      <Pencil size={11} className="text-neutral-400 opacity-0 transition group-hover:opacity-100" />
     </button>
   );
 }

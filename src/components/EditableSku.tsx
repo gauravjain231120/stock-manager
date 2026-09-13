@@ -2,8 +2,12 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Check, Pencil, X } from 'lucide-react';
 import { useConfirm } from '@/components/ConfirmProvider';
 import { useToast } from '@/components/ToastProvider';
+
+const iconBtn =
+  'inline-flex size-6 items-center justify-center rounded-md transition hover:bg-black/5 dark:hover:bg-white/10';
 
 /** Click-to-edit a variant's SKU. Saving carries its stock + history to the new code. */
 export function EditableSku({ code, sku }: { code: string; sku: string }) {
@@ -52,7 +56,7 @@ export function EditableSku({ code, sku }: { code: string; sku: string }) {
 
   if (editing) {
     return (
-      <span className="inline-flex items-center gap-1">
+      <span className="mt-0.5 inline-flex items-center gap-1">
         <input
           autoFocus
           value={val}
@@ -61,10 +65,14 @@ export function EditableSku({ code, sku }: { code: string; sku: string }) {
             if (e.key === 'Enter') save();
             if (e.key === 'Escape') setEditing(false);
           }}
-          className="w-44 rounded-lg border border-black/15 bg-transparent px-2 py-1 font-mono text-xs text-neutral-900 dark:border-white/20 dark:text-white"
+          className="w-36 rounded-lg border border-black/15 bg-transparent px-2 py-1 font-mono text-[11px] text-neutral-900 focus:border-brand-500 focus:outline-none dark:border-white/20 dark:text-white"
         />
-        <button onClick={save} disabled={busy} className="px-1 text-emerald-600 disabled:opacity-50" title="Save">✓</button>
-        <button onClick={() => { setVal(sku); setEditing(false); }} className="px-1 text-neutral-400" title="Cancel">✕</button>
+        <button onClick={save} disabled={busy} className={`${iconBtn} text-emerald-600 disabled:opacity-50`} title="Save">
+          <Check size={13} />
+        </button>
+        <button onClick={() => { setVal(sku); setEditing(false); }} className={`${iconBtn} text-neutral-400`} title="Cancel">
+          <X size={13} />
+        </button>
       </span>
     );
   }
@@ -72,10 +80,11 @@ export function EditableSku({ code, sku }: { code: string; sku: string }) {
   return (
     <button
       onClick={() => { setVal(sku); setEditing(true); }}
-      className="font-mono text-xs text-neutral-500 hover:text-brand-700 hover:underline dark:text-neutral-400"
+      className="group mt-0.5 inline-flex items-center gap-1 font-mono text-[11px] text-neutral-400 hover:text-brand-700 dark:text-neutral-500 dark:hover:text-brand-500"
       title="Click to edit SKU"
     >
-      {sku} <span className="text-[10px] text-neutral-400">✎</span>
+      {sku}
+      <Pencil size={10} className="opacity-0 transition group-hover:opacity-100" />
     </button>
   );
 }

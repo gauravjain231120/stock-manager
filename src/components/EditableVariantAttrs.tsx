@@ -2,10 +2,17 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Check, Link2, Pencil, X } from 'lucide-react';
 import { useConfirm } from '@/components/ConfirmProvider';
 import { useToast } from '@/components/ToastProvider';
 
-const fieldCls = 'rounded-lg border border-black/15 bg-transparent px-1.5 py-0.5 text-xs text-neutral-900 dark:border-white/20 dark:text-white';
+const fieldCls =
+  'rounded-lg border border-black/15 bg-transparent px-2 py-1 text-xs text-neutral-900 focus:border-brand-500 focus:outline-none dark:border-white/20 dark:text-white';
+const iconBtn =
+  'inline-flex size-6 items-center justify-center rounded-md transition hover:bg-black/5 dark:hover:bg-white/10';
+const segBtn = 'flex-1 rounded-md px-2 py-1 text-[11px] font-medium transition';
+const segOn = 'bg-white text-neutral-900 shadow-sm dark:bg-neutral-700 dark:text-white';
+const segOff = 'text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200';
 
 /**
  * Click-to-edit a variant's colour, size, and stock source. Colour/size never
@@ -94,47 +101,60 @@ export function EditableVariantAttrs({
 
   if (!editing) {
     return (
-      <button onClick={startEdit} className="text-left" title="Click to edit colour, size, or stock source">
-        <div className="text-neutral-600 hover:text-brand-700 hover:underline dark:text-neutral-300">
-          {[color, size].filter(Boolean).join(' / ') || sku} <span className="text-[10px] text-neutral-400">✎</span>
-        </div>
-        {sharesStockWith ? <div className="text-[10px] text-amber-500">(shares stock: {sharesStockWith})</div> : null}
+      <button onClick={startEdit} className="group flex flex-col items-start gap-1 text-left" title="Click to edit colour, size, or stock source">
+        <span className="inline-flex items-center gap-1 text-neutral-700 dark:text-neutral-200">
+          {[color, size].filter(Boolean).join(' / ') || sku}
+          <Pencil size={11} className="text-neutral-400 opacity-0 transition group-hover:opacity-100" />
+        </span>
+        {sharesStockWith ? (
+          <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+            <Link2 size={9} /> {sharesStockWith}
+          </span>
+        ) : null}
       </button>
     );
   }
 
   return (
-    <div className="flex flex-col gap-1 py-1">
-      <div className="flex gap-1">
+    <div className="flex flex-col gap-2 rounded-lg border border-black/10 bg-black/[0.02] p-2 dark:border-white/10 dark:bg-white/[0.03]">
+      <div className="flex gap-1.5">
         <input className={`${fieldCls} w-20`} value={vColor} onChange={(e) => setVColor(e.target.value)} placeholder="Colour" />
         <input className={`${fieldCls} w-14`} value={vSize} onChange={(e) => setVSize(e.target.value)} placeholder="Size" />
       </div>
-      <div className="flex items-center gap-1">
-        <select value={shareMode} onChange={(e) => setShareMode(e.target.value as 'own' | 'shared')} className={fieldCls}>
-          <option value="own">Own stock</option>
-          <option value="shared">Shared stock</option>
-        </select>
-        {shareMode === 'shared' ? (
+
+      <div className="flex rounded-lg bg-black/5 p-0.5 dark:bg-white/10">
+        <button type="button" onClick={() => setShareMode('own')} className={`${segBtn} ${shareMode === 'own' ? segOn : segOff}`}>
+          Own stock
+        </button>
+        <button type="button" onClick={() => setShareMode('shared')} className={`${segBtn} ${shareMode === 'shared' ? segOn : segOff}`}>
+          Shared stock
+        </button>
+      </div>
+
+      {shareMode === 'shared' ? (
+        <div className="flex flex-col gap-1.5">
           <input
-            className={`${fieldCls} w-32 font-mono`}
+            className={`${fieldCls} w-full font-mono`}
             value={shareTarget}
             onChange={(e) => setShareTarget(e.target.value)}
-            placeholder="Shares with SKU"
+            placeholder="Shares stock with SKU…"
           />
-        ) : null}
-      </div>
-      {shareMode === 'shared' ? (
-        <label className="flex items-center gap-1 text-[10px] text-neutral-500" title="Sets Red/M, Red/L etc. to share with the same target SKU, size-swapped, instead of just this one">
-          <input type="checkbox" checked={applyToColorGroup} onChange={(e) => setApplyToColorGroup(e.target.checked)} className="size-3 accent-brand-600" />
-          Apply to every size of this colour
-        </label>
+          <label
+            className="flex items-center gap-1.5 text-[10px] text-neutral-500 dark:text-neutral-400"
+            title="Sets Red/M, Red/L etc. to share with the same target SKU, size-swapped, instead of just this one"
+          >
+            <input type="checkbox" checked={applyToColorGroup} onChange={(e) => setApplyToColorGroup(e.target.checked)} className="size-3 accent-brand-600" />
+            Apply to every size of this colour
+          </label>
+        </div>
       ) : null}
-      <div className="flex gap-2">
-        <button onClick={save} disabled={busy} className="text-[11px] font-medium text-emerald-600 disabled:opacity-50">
-          ✓ Save
+
+      <div className="flex justify-end gap-1">
+        <button onClick={() => setEditing(false)} className={`${iconBtn} text-neutral-400`} title="Cancel">
+          <X size={14} />
         </button>
-        <button onClick={() => setEditing(false)} className="text-[11px] text-neutral-400">
-          ✕ Cancel
+        <button onClick={save} disabled={busy} className={`${iconBtn} text-emerald-600 disabled:opacity-50`} title="Save">
+          <Check size={14} />
         </button>
       </div>
     </div>

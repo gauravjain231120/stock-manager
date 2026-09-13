@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Pencil, Trash2, Upload } from 'lucide-react';
 import { Badge } from '@/components/ui';
 import { useConfirm } from '@/components/ConfirmProvider';
 import { EditableStock } from '@/components/EditableStock';
@@ -28,7 +29,13 @@ export interface CardGroup {
   variants: Variant[];
 }
 
-const input = 'w-full rounded-lg border border-black/15 bg-transparent px-3 py-1.5 text-sm text-neutral-900 dark:border-white/20 dark:text-white';
+const input =
+  'w-full rounded-lg border border-black/15 bg-transparent px-3 py-1.5 text-sm text-neutral-900 transition focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/15 dark:border-white/20 dark:text-white';
+const label = 'text-xs font-medium text-neutral-500';
+const sectionLabel = 'text-[11px] font-semibold uppercase tracking-wide text-neutral-400';
+const chip = 'rounded-full border px-2.5 py-1 text-xs font-medium transition';
+const chipOn = 'border-brand-600 bg-brand-600 text-white';
+const chipOff = 'border-black/15 text-neutral-500 hover:bg-black/5 dark:border-white/20 dark:text-neutral-400 dark:hover:bg-white/10';
 
 function qtyColor(n: number) {
   if (n <= 0) return 'text-red-600';
@@ -235,92 +242,138 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
               </tbody>
             </table>
             <div className="mt-auto flex items-center justify-end gap-2 pt-3">
-              <button onClick={startEdit} className="rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">Edit</button>
-              <button onClick={deleteProduct} disabled={busy} className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50">Delete</button>
+              <button
+                onClick={startEdit}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium transition hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+              >
+                <Pencil size={14} /> Edit
+              </button>
+              <button
+                onClick={deleteProduct}
+                disabled={busy}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-red-700 disabled:opacity-50"
+              >
+                <Trash2 size={14} /> Delete
+              </button>
             </div>
           </>
         ) : (
-          <div className="flex flex-col gap-3">
-            <label className="flex flex-col gap-1 text-xs text-neutral-500">
-              Product name
-              <input className={input} value={name} onChange={(e) => setName(e.target.value)} placeholder="Product name" />
-            </label>
-            <div className="flex gap-2">
-              <label className="flex flex-1 flex-col gap-1 text-xs text-neutral-500">
-                Category
-                <input className={input} list={`cat-${group.code}`} value={category} onChange={(e) => setCategory(e.target.value)} placeholder="e.g. Halter Neck" />
-                <datalist id={`cat-${group.code}`}>
-                  {categories.map((c) => <option key={c} value={c} />)}
-                </datalist>
+          <div className="flex flex-col gap-5">
+            <div className="flex flex-col gap-3">
+              <label className="flex flex-col gap-1.5">
+                <span className={label}>Product name</span>
+                <input className={input} value={name} onChange={(e) => setName(e.target.value)} placeholder="Product name" />
               </label>
-              <label className="flex w-28 flex-col gap-1 text-xs text-neutral-500">
-                MRP ₹
-                <input className={input} type="number" min={0} value={mrp} onChange={(e) => setMrp(e.target.value)} placeholder="999" />
-              </label>
+              <div className="flex gap-3">
+                <label className="flex flex-1 flex-col gap-1.5">
+                  <span className={label}>Category</span>
+                  <input className={input} list={`cat-${group.code}`} value={category} onChange={(e) => setCategory(e.target.value)} placeholder="e.g. Halter Neck" />
+                  <datalist id={`cat-${group.code}`}>
+                    {categories.map((c) => <option key={c} value={c} />)}
+                  </datalist>
+                </label>
+                <label className="flex w-24 flex-col gap-1.5">
+                  <span className={label}>MRP ₹</span>
+                  <input className={input} type="number" min={0} value={mrp} onChange={(e) => setMrp(e.target.value)} placeholder="999" />
+                </label>
+              </div>
             </div>
-            <label className="flex flex-col gap-1 text-xs text-neutral-500">
-              Photo
-              <div className="flex items-center gap-2">
-                <input type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} className="text-xs" />
-                {uploading ? <span>uploading…</span> : null}
-              </div>
-            </label>
-            <input className={input} value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} placeholder="…or image URL" />
 
-            <div className="rounded-lg border border-black/10 dark:border-white/10">
-              <div className="px-3 py-1.5 text-xs font-medium text-neutral-500">Variants</div>
-              <table className="w-full text-xs">
-                <tbody>
-                  {variants.map((v) => (
-                    <tr key={v.sku} className="border-t border-black/5 dark:border-white/5">
-                      <td className="py-1 pl-3">
-                        <EditableVariantAttrs
-                          code={group.code}
-                          sku={v.sku}
-                          color={v.color}
-                          size={v.size}
-                          sharesStockWith={v.sharesStockWith}
-                        />
-                        <EditableSku code={group.code} sku={v.sku} />
-                      </td>
-                      <td className="py-1 text-right align-top"><EditableStock sku={v.sku} value={v.onHand} /></td>
-                      <td className="py-1 pr-2 text-right align-top">
-                        <button onClick={() => removeVariant(v.sku)} disabled={busy} className="px-1 text-red-600 hover:text-red-700" title="Remove variant">×</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <div className="flex flex-wrap items-center gap-2 border-t border-black/5 p-2 dark:border-white/5">
-                <input className="w-24 rounded-lg border border-black/15 bg-transparent px-2 py-1 text-xs dark:border-white/20" value={vColor} onChange={(e) => setVColor(e.target.value)} placeholder="Color" />
-                <input className="w-20 rounded-lg border border-black/15 bg-transparent px-2 py-1 text-xs dark:border-white/20" value={vSize} onChange={(e) => setVSize(e.target.value)} placeholder="Size" />
-                <input
-                  className="w-40 rounded-lg border border-black/15 bg-transparent px-2 py-1 font-mono text-xs dark:border-white/20"
-                  value={vSku}
-                  onChange={(e) => setVSku(e.target.value)}
-                  placeholder="SKU (optional)"
-                  title="Leave blank to auto-generate from colour + size"
-                />
-                <input className="w-16 rounded-lg border border-black/15 bg-transparent px-2 py-1 text-xs dark:border-white/20" type="number" min={0} value={vQty} onChange={(e) => setVQty(e.target.value)} placeholder="Qty" />
-                <button onClick={addVariant} disabled={busy || (!vColor && !vSize)} className="rounded-lg border border-black/15 px-2 py-1 text-xs font-medium hover:bg-black/5 disabled:opacity-50 dark:border-white/20 dark:hover:bg-white/10">+ Add variant</button>
-              </div>
-              {vSku.trim() ? (
-                <div className="flex flex-wrap items-center gap-2 border-t border-black/5 px-2 pb-2 pt-1 dark:border-white/5">
-                  <span className="text-[10px] text-neutral-400">Also add sizes (swaps the size in the SKU above):</span>
-                  {STANDARD_SIZES.filter((sz) => sz !== vSize.trim().toUpperCase()).map((sz) => (
-                    <label key={sz} className="flex items-center gap-1 text-xs text-neutral-600 dark:text-neutral-300">
-                      <input type="checkbox" checked={vExtraSizes.has(sz)} onChange={() => toggleExtraSize(sz)} className="size-3.5 accent-brand-600" />
-                      {sz}
-                    </label>
-                  ))}
+            <div className="flex flex-col gap-2 rounded-xl border border-dashed border-black/15 p-3 dark:border-white/15">
+              <span className={label}>Photo</span>
+              <div className="flex items-center gap-3">
+                <div className="size-12 shrink-0 overflow-hidden rounded-lg bg-neutral-100 dark:bg-neutral-800">
+                  {imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={imageUrl} alt="" className="h-full w-full object-cover object-top" />
+                  ) : null}
                 </div>
-              ) : null}
+                <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-black/15 px-3 py-1.5 text-xs font-medium transition hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">
+                  <Upload size={13} />
+                  {uploading ? 'Uploading…' : 'Choose file'}
+                  <input type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} className="hidden" disabled={uploading} />
+                </label>
+              </div>
+              <input className={`${input} text-xs`} value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} placeholder="…or paste an image URL" />
+            </div>
+
+            <div className="overflow-hidden rounded-xl border border-black/10 dark:border-white/10">
+              <div className="flex items-center justify-between bg-black/[0.025] px-3 py-2 dark:bg-white/[0.04]">
+                <span className={sectionLabel}>Variants</span>
+                <span className="text-[11px] text-neutral-400">{variants.length}</span>
+              </div>
+
+              <div className="divide-y divide-black/5 dark:divide-white/5">
+                {variants.map((v) => (
+                  <div key={v.sku} className="flex items-start gap-2 px-3 py-2 transition hover:bg-black/[0.015] dark:hover:bg-white/[0.02]">
+                    <div className="min-w-0 flex-1">
+                      <EditableVariantAttrs
+                        code={group.code}
+                        sku={v.sku}
+                        color={v.color}
+                        size={v.size}
+                        sharesStockWith={v.sharesStockWith}
+                      />
+                      <EditableSku code={group.code} sku={v.sku} />
+                    </div>
+                    <div className="shrink-0 pt-0.5"><EditableStock sku={v.sku} value={v.onHand} /></div>
+                    <button
+                      onClick={() => removeVariant(v.sku)}
+                      disabled={busy}
+                      className="inline-flex size-6 shrink-0 items-center justify-center rounded-md text-neutral-400 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-50 dark:hover:bg-red-900/20"
+                      title="Remove variant"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="border-t border-black/10 bg-black/[0.015] p-3 dark:border-white/10 dark:bg-white/[0.02]">
+                <div className={`mb-2 ${sectionLabel}`}>Add a variant</div>
+                <div className="grid grid-cols-2 gap-2">
+                  <input className={`${input} px-2 py-1.5 text-xs`} value={vColor} onChange={(e) => setVColor(e.target.value)} placeholder="Colour" />
+                  <input className={`${input} px-2 py-1.5 text-xs`} value={vSize} onChange={(e) => setVSize(e.target.value)} placeholder="Size" />
+                  <input
+                    className={`${input} px-2 py-1.5 font-mono text-xs`}
+                    value={vSku}
+                    onChange={(e) => setVSku(e.target.value)}
+                    placeholder="SKU (optional)"
+                    title="Leave blank to auto-generate from colour + size"
+                  />
+                  <input className={`${input} px-2 py-1.5 text-xs`} type="number" min={0} value={vQty} onChange={(e) => setVQty(e.target.value)} placeholder="Opening qty" />
+                </div>
+
+                {vSku.trim() ? (
+                  <div className="mt-2.5 flex flex-col gap-1.5">
+                    <span className="text-[10px] text-neutral-400">Also add sizes (swaps the size in the SKU above):</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {STANDARD_SIZES.filter((sz) => sz !== vSize.trim().toUpperCase()).map((sz) => {
+                        const on = vExtraSizes.has(sz);
+                        return (
+                          <button type="button" key={sz} onClick={() => toggleExtraSize(sz)} className={`${chip} ${on ? chipOn : chipOff}`}>
+                            {sz}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
+
+                <button
+                  onClick={addVariant}
+                  disabled={busy || (!vColor && !vSize)}
+                  className="mt-3 w-full rounded-lg border border-black/15 py-1.5 text-xs font-medium transition hover:bg-black/5 disabled:opacity-50 dark:border-white/20 dark:hover:bg-white/10"
+                >
+                  + Add variant
+                </button>
+              </div>
             </div>
 
             <div className="flex items-center justify-end gap-2">
               {msg ? <span className="mr-auto text-xs text-neutral-500">{msg}</span> : null}
-              <button onClick={() => setEditing(false)} className="rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">Cancel</button>
-              <button onClick={save} disabled={busy || uploading || !name} className="rounded-lg bg-brand-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">{busy ? 'Saving…' : 'Save'}</button>
+              <button onClick={() => setEditing(false)} className="rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium transition hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">Cancel</button>
+              <button onClick={save} disabled={busy || uploading || !name} className="rounded-lg bg-brand-600 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-brand-700 disabled:opacity-50">{busy ? 'Saving…' : 'Save'}</button>
             </div>
           </div>
         )}
