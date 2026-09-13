@@ -9,6 +9,7 @@ import { ActionButton } from '@/components/ActionButton';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
 import { toCsv, text, csvDateStamp, csvDateTime } from '@/lib/csv';
 import type { MovementRow } from '@/lib/movements';
+import type { ProductOption } from '@/lib/products';
 
 const filterCls = 'rounded-lg border border-black/15 bg-transparent px-3 py-1.5 text-sm text-neutral-900 dark:border-white/20 dark:text-white';
 const pagerBtnCls =
@@ -48,6 +49,7 @@ export function MovementTable({
   withCondition = false,
   returnRows,
   allowMoveToQueue = false,
+  products,
 }: {
   rows: MovementRow[];
   title: string;
@@ -59,6 +61,8 @@ export function MovementTable({
   returnRows?: MovementRow[];
   /** Shipped only: offer "Move to Ready to Ship" to undo a shipment marked by mistake. */
   allowMoveToQueue?: boolean;
+  /** Returns only: every active product, so a return can be reassigned to a different one. */
+  products?: ProductOption[];
 }) {
   const [q, setQ] = useState('');
   const [fCategory, setFCategory] = useState('all');
@@ -328,7 +332,7 @@ export function MovementTable({
                 />
               </Td>
             ) : null}
-            <Td right><EditMovementButton row={r} title={dateLabel === 'Returned' ? 'return' : 'shipment'} /></Td>
+            <Td right><EditMovementButton row={r} title={dateLabel === 'Returned' ? 'return' : 'shipment'} products={products} /></Td>
             <Td right>
               <ActionButton
                 label="Delete"

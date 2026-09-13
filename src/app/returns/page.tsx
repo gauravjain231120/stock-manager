@@ -1,5 +1,6 @@
 import { listMovementRows, movementStats } from '@/lib/movements';
 import { listReturnReports } from '@/lib/returnReports';
+import { listProductOptions } from '@/lib/products';
 import { MovementType, PLATFORM_LABELS, Platform } from '@/lib/constants';
 import { PageHeader, StatCard } from '@/components/ui';
 import { MovementTable } from '@/components/MovementTable';
@@ -11,10 +12,11 @@ import { num } from '@/lib/format';
 export const dynamic = 'force-dynamic';
 
 export default async function ReturnsPage() {
-  const [rows, stats, reports] = await Promise.all([
+  const [rows, stats, reports, products] = await Promise.all([
     listMovementRows(MovementType.RETURNED),
     movementStats(MovementType.RETURNED),
     listReturnReports(),
+    listProductOptions(),
   ]);
   const outstanding = reports.reduce((a, r) => a + r.missing, 0);
 
@@ -70,7 +72,7 @@ export default async function ReturnsPage() {
         <ReturnReports reports={reports} today={stats.today} />
       </div>
 
-      <MovementTable rows={rows} title="Returns" dateLabel="Returned" verb="returned" csvName="returns" withCondition />
+      <MovementTable rows={rows} title="Returns" dateLabel="Returned" verb="returned" csvName="returns" withCondition products={products} />
     </main>
   );
 }

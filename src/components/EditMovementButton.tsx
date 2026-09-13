@@ -14,12 +14,23 @@ import {
   ReturnCondition,
 } from '@/lib/constants';
 import { useToast } from '@/components/ToastProvider';
+import { SearchableSelect } from '@/components/SearchableSelect';
 import type { MovementRow } from '@/lib/movements';
+import type { ProductOption } from '@/lib/products';
 
 const input = 'w-full rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm text-neutral-900 dark:border-white/20 dark:text-white';
 
 /** Fix a shipment or return after the fact — tracking, order number, platform, quantity, date, or (returns only) condition. */
-export function EditMovementButton({ row, title }: { row: MovementRow; title: string }) {
+export function EditMovementButton({
+  row,
+  title,
+  products,
+}: {
+  row: MovementRow;
+  title: string;
+  /** Returns only: every active product, so the return can be reassigned to a different one. */
+  products?: ProductOption[];
+}) {
   const router = useRouter();
   const toast = useToast();
   const [open, setOpen] = useState(false);
@@ -36,6 +47,19 @@ export function EditMovementButton({ row, title }: { row: MovementRow; title: st
 
   const trackingLen = (normalizeTracking(tracking) ?? '').length;
   const trackingTooLong = trackingLen > MAX_TRACKING_LEN;
+
+  // What the header should describe — the product currently picked in the
+  // dropdown, not necessarily the one this return was originally logged
+  // against. Falls back to the row's own details if the list doesn't have it
+  // (e.g. the product was made inactive since).
+  const skuOptions = products?.map((p) => ({
+    value: p.sku,
+    label: `${p.sku} — ${p.name}${p.color ? ` — ${p.color}` : ''}${p.size ? ` · ${p.size}` : ''}`,
+  })) ?? [];
+  const selectedProduct = products?.find((p) => p.sku === sku);
+  const headerName = selectedProduct?.name ?? row.name;
+  const headerColor = selectedProduct ? selectedProduct.color : row.color;
+  const headerSize = selectedProduct ? selectedProduct.size : row.size;
 
   function start() {
     setTracking(row.trackingId ?? '');
@@ -96,17 +120,23 @@ export function EditMovementButton({ row, title }: { row: MovementRow; title: st
             <h3 className="text-base font-semibold">Edit {title}</h3>
             <div className="mt-2 text-sm">
               <div className="font-medium">
-                {row.name}
-                {row.color ? ` — ${row.color}` : ''}
-                {row.size ? <span className="text-neutral-500"> · {row.size}</span> : null}
+                {headerName}
+                {headerColor ? ` — ${headerColor}` : ''}
+                {headerSize ? <span className="text-neutral-500"> · {headerSize}</span> : null}
               </div>
               {isReturn ? (
-                <input
-                  className={`${input} mt-1 font-mono text-xs`}
-                  value={sku}
-                  onChange={(e) => setSku(e.target.value)}
-                  title="Change this if the return was logged against the wrong product"
-                />
+                skuOptions.length > 0 ? (
+                  <div className="mt-1" title="Change this if the return was logged against the wrong product">
+                    <SearchableSelect options={skuOptions} value={sku} onChange={setSku} placeholder="Search SKU or product…" />
+                  </div>
+                ) : (
+                  <input
+                    className={`${input} mt-1 font-mono text-xs`}
+                    value={sku}
+                    onChange={(e) => setSku(e.target.value)}
+                    title="Change this if the return was logged against the wrong product"
+                  />
+                )
               ) : (
                 <div className="font-mono text-xs text-neutral-500">{row.sku}</div>
               )}

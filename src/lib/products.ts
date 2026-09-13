@@ -16,6 +16,7 @@ import { ReturnShipmentModel } from '@/models/ReturnShipment';
 import { ProductionBatchModel } from '@/models/ProductionBatch';
 import { BomModel } from '@/models/Bom';
 import { ReorderPolicyModel } from '@/models/ReorderPolicy';
+import { attrsOf } from '@/lib/variants';
 
 /** Uppercase alphanumeric slug for building SKUs. */
 function slug(s: string) {
@@ -527,4 +528,21 @@ export async function getProductGroups(): Promise<{ groups: GroupView[]; ungroup
   });
 
   return { groups: views, ungrouped };
+}
+
+export interface ProductOption {
+  sku: string;
+  name: string;
+  color?: string;
+  size?: string;
+}
+
+/** Every active product's SKU, name, colour and size — for pickers such as the "change product" dropdown on a return. */
+export async function listProductOptions(): Promise<ProductOption[]> {
+  await connectDB();
+  const products = await ProductModel.find({ active: true }, { sku: 1, name: 1, attributes: 1 }).sort({ sku: 1 }).lean();
+  return products.map((p) => {
+    const attrs = attrsOf(p.attributes);
+    return { sku: p.sku, name: p.name, color: attrs.color?.trim() || undefined, size: attrs.size?.trim() || undefined };
+  });
 }
