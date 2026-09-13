@@ -96,7 +96,14 @@ scripts/           setup-locations, import, verify-phase0
 data/              sample CSV
 ```
 
-## Status — all phases built ✅
+## Status — all phases built, but see the caveat below
+
+> **Reality check**: the automated multichannel sync described below (Phases 2–4) is built but
+> **not actually wired up in production** — no scheduler calls `/api/cron/poll`, and the real
+> Amazon/Flipkart/Myntra adapters are unimplemented skeletons. Real orders today flow entirely
+> through a separate sister project (`myntra-order-alert-web`) straight into the Ready-to-Ship
+> queue over HTTP. See `PROJECT.md` §7 for the full detail before assuming `/orders`/`/reports`
+> reflect real sales.
 
 - **Phase 0** Single source of truth: schemas, ledger engine, import, dashboard.
 - **Phase 1** Manufacturing: raw materials, BOM, production batches (`PRODUCED`).

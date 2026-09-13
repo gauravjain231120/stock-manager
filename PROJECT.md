@@ -36,7 +36,7 @@ The stock/production/shipping core:
 | Model | Key fields | Purpose |
 |---|---|---|
 | `ProductGroup` | `code` (unique — the SKU prefix), `name`, `category`, `colors[]`, `sizes[]`, `mrp`, `costPrice` | A parent "style"; variants are `code-COLOR-SIZE` |
-| `Product` | `sku` (unique), `groupCode`, `attributes` (Map: size/color), `imageUrl`, `costPrice`, `mrp`, `active` | One row per real sellable SKU/variant |
+| `Product` | `sku` (unique), `groupCode`, `attributes` (Map: size/color), `imageUrl`, `costPrice`, `mrp`, `active`, `sharesStockWith` (string\|null) | One row per real sellable SKU/variant. `sharesStockWith` replaces the old hardcoded bundle map — editable per-variant from the Products page, resolved via `stockSkuFor` (§4) |
 | `SkuStock` | `(sku, locationCode)` unique compound, `onHand`, `reserved`, `buffer`; virtual `available = onHand - reserved` | Live stock cache, kept in sync with the ledger |
 | `StockMovement` | `sku`, `locationCode`, `qty` (**signed**), `type`, `channel`, `refType/refId`, `orderId`, `trackingId`, `condition` | **Append-only ledger — the actual source of truth.** Never updated/deleted; corrections are compensating `ADJUSTED` rows |
 | `Location` | `code` (unique), `kind` (`SELLABLE`\|`QUARANTINE`\|`DAMAGED`) | Only `SELLABLE` locations count toward publishable/available stock |
@@ -46,6 +46,7 @@ The stock/production/shipping core:
 | `RawMaterialMovement` | `materialCode`, `qty` (signed), `type` (`PURCHASED`\|`CONSUMED`\|`ADJUSTED`) | Append-only ledger, mirrors StockMovement, for raw materials |
 | `ProductionBatch` | `sku`, `qty`, `locationCode`, `materialsConsumed[]` | One manufacturing run — posts a PRODUCED movement + CONSUMED raw-material movements, one transaction |
 | `ReorderPolicy` | `sku` (unique), `safetyStock`, `leadTimeDays` (default 7) | Drives the replenishment reorder-point formula |
+| `Note` | `_id: 'main'`, `text` | A single free-text scratchpad shown on the Dashboard — no structure, just whatever's currently typed |
 
 The multichannel-sync / automated-order half (dormant in production, §7):
 
@@ -68,21 +69,46 @@ The manual returns workflow actually used day-to-day:
 ## 4. Core business logic (`src/lib/`)
 
 **`constants.ts`** — the domain vocabulary. Exact values worth knowing:
-- `BUNDLE_STOCK_PREFIX = { 'RRC-012-': 'RRC-002-', 'RRC-013-': 'RRC-001-' }` — a bundle SKU
-  (e.g. "Halter with Palazzos") keeps its own sales ledger but its on-hand/reserved effects land
-  on the mapped SKU (same colour+size suffix), via `stockSkuFor(sku)`. **This is the exact
-  mapping the sister order-alert project duplicates in its own `lib/stock.js` — if this ever
-  changes, that file must be updated by hand too.**
-  - `infoStockFor(sku)` — a **display-only** companion stock shown next to a bundle line
-    (`BUNDLE_INFO_PREFIX`), never actually deducted.
 - `Channel` (AMAZON/FLIPKART/MYNTRA — the sync pipeline) vs. the broader `PLATFORMS`
   (…+ `OWN_SITE` — used by Stock Log/Returns/PendingShipment's free-text channel field). Don't
   confuse the two enums.
 - `MovementType`: PRODUCED/SOLD/RETURNED/ADJUSTED/TRANSFERRED (all real ledger rows) plus
   RESERVED/RELEASED (counter-only in practice — reservation today is inline `SkuStock.reserved`
   math, not its own ledger row).
-- `SIZE_ORDER` sort helper; `MAX_TRACKING_LEN=20` + `normalizeTracking` (strip non-alnum,
-  uppercase) so a scanned tracking number always matches a typed one.
+- `SIZE_ORDER` sort helper; `STANDARD_SIZES = [XS..3XL]` (client-safe, pure array — used by the
+  Products page's "also add sizes" chips); `MAX_TRACKING_LEN=20` + `normalizeTracking` (strip
+  non-alnum, uppercase) so a scanned tracking number always matches a typed one.
+- `infoStockFor(sku)` (still here, pure/no DB) — a **display-only** companion stock shown next to
+  a bundle line, never actually deducted.
+- **`BUNDLE_STOCK_PREFIX` no longer exists.** Bundle/shared-stock mapping used to be this
+  hardcoded constant; it's now `Product.sharesStockWith` (DB field, editable per-variant from the
+  Products page) resolved via **`lib/stockShare.ts`**'s `stockSkuFor(sku)` — see below. **The
+  sister order-alert project's own duplicated copy (`BUNDLE_CODE_MAP` in its `lib/stock.js`) is
+  now a static guess at what used to be a static source of truth — it is not automatically kept
+  in sync with this DB field, and there is currently no code that reconciles them.** If sharing
+  configuration changes on this side (adding/removing a shared-stock pairing via the Products
+  page), the sister project's hardcoded map must still be updated by hand, or — better — that
+  project should be changed to read `sharesStockWith` from its existing read-only DB connection
+  instead of hardcoding it (see PROJECT.md's improvement list / ask the user).
+
+**`stockShare.ts`** — `stockSkuFor(sku): Promise<string>`, the single place that resolves which
+physical pile a SKU's stock actually lives in (itself, unless `sharesStockWith` points elsewhere;
+follows chains, e.g. A→B→C resolves to C). Used by ~30 call sites across `stock.ts`,
+`shipping.ts`, `register.ts`, `queries.ts`, `products.ts` — anywhere stock is read or written.
+**Server-only on purpose**: it's kept out of `constants.ts` specifically so a `'use client'`
+component importing `constants.ts` for pure exports (PLATFORMS etc.) never pulls Mongoose into
+the browser bundle.
+- 5-second in-memory cache (`loadStockShareMap`), invalidated explicitly
+  (`invalidateStockShareCache()`) after any write to `sharesStockWith`.
+- **Single-flight, not just cached** — a real bug found and fixed in production: a cache miss
+  used to let *every* concurrent caller (e.g. all ~400+ products in one `Promise.all` on the
+  Inventory/Register/Ship pages) independently kick off its own identical DB query before the
+  first one returned, flooding Mongoose's connection pool (`maxPoolSize: 10` in `db.ts`) with
+  hundreds of redundant queries and making those pages feel hung. Fixed by making a cache miss
+  share one in-flight promise across all concurrent callers. **If a page ever feels slow again,
+  check for this exact pattern first** (a `Promise.all(items.map(async i => ... await
+  someCachedLookup(i) ...))` where the cache doesn't dedupe concurrent misses) before assuming
+  it's a genuinely slow query.
 
 **`stock.ts`** ("StockService") — **the only code allowed to mutate stock.** Every other module
 goes through this:
@@ -106,7 +132,15 @@ to over HTTP — never call these functions' underlying writes any other way fro
 - `addPending({sku, qty, channel, orderId, trackingId, placedAt, shipByAt})` — reserves stock on
   `stockSkuFor(sku)`; **merges** into an existing row only on an exact `(sku, channel, orderId)`
   match — different customers buying the same SKU never merge, and rows without an `orderId`
-  never merge either.
+  never merge either. If the exact SKU doesn't exist, falls back to matching by **suffix**
+  (everything after the first `-`) so `RR-`/`R-`/`RRC-` are treated as the same brand prefix — a
+  marketplace-listed SKU with an inconsistent prefix still resolves instead of failing with
+  "Product not found."
+- `reconcileReservedStock()` — recomputes every `SkuStock.reserved` from the actual sum of
+  `PendingShipment.qty` per pool, correcting drift and creating any missing `SkuStock` doc.
+  Exposed via `POST /api/stock/reconcile`. Written after `reserved` counters were found to have
+  drifted on 19 SKUs with no audit trail (orphaned reservations) — run this if "on hand" and
+  "available" ever disagree with what's actually in the queue.
 - `listPending()` / `queueRows(pending)` — builds display rows with **FIFO stock allocation per
   physical pile** (`stockSku`): whoever queued first gets the stock; only the leftover is
   flagged `short`. **Must always run over the full unfiltered queue before narrowing by
@@ -114,8 +148,10 @@ to over HTTP — never call these functions' underlying writes any other way fro
 - `shipPending(id, qty?, trackingId?, orderId?)` — packs/ships (default: the whole row): posts a
   SOLD movement, decrements `reserved`, deletes the row on a full ship or reduces `qty` on a
   partial one (**and clears `trackingId`** on partial — the remainder needs its own label).
-- `editPending(id, changes)` — fix sku/qty/channel/orderId/trackingId on a still-queued row;
-  moves the reservation to the new `stockSkuFor` pool if a SKU edit crosses bundle pools.
+- `editPending(id, changes)` — fix sku/qty/channel/orderId/trackingId/**shipByAt** on a
+  still-queued row; moves the reservation to the new `stockSkuFor` pool if a SKU edit crosses
+  bundle pools. The queue's per-row Produce button was removed (producing more stock now happens
+  from the Ready-to-Ship page's "To make" list only, individually or via "Produce all").
 - `setPendingReady(id, ready)` — pure "packed & set aside" print-list flag, no stock effect.
 - `cancelPending(id, qty?)` — releases the reservation by qty; full or partial; returns an
   `undo` payload so the UI can offer one-click re-add.
@@ -131,11 +167,26 @@ double-counted. Flags `unlisted` queued stock against SKUs with no active produc
 retired variant still sitting in the queue).
 
 **`products.ts`** — Product/ProductGroup CRUD. Notable: `removeVariant` **hard-deletes** that
-SKU's SkuStock/StockMovement/ChannelListing/ChannelInventoryState history; `renameVariantSku`
-propagates the rename across **11 collections** (PendingShipment, MarketplaceOrder, ReturnRecord,
-ReturnShipment, ProductionBatch, Bom, ReorderPolicy, and more) via separate `updateMany` calls —
-**not wrapped in one transaction**, so a mid-operation failure could leave some collections
-renamed and others not. Same caveat likely applies to `deleteProductGroup`.
+SKU's SkuStock/StockMovement/ChannelListing/ChannelInventoryState history (also now refuses if
+another variant's `sharesStockWith` points at it — deleting the target would leave that variant's
+stock resolving nowhere); `renameVariantSku` propagates the rename across **11 collections**
+(PendingShipment, MarketplaceOrder, ReturnRecord, ReturnShipment, ProductionBatch, Bom,
+ReorderPolicy, and more, including now `Product.sharesStockWith` pointers) via separate
+`updateMany` calls — **not wrapped in one transaction**, so a mid-operation failure could leave
+some collections renamed and others not. Same caveat likely applies to `deleteProductGroup`.
+- `editVariantAttributes(sku, {color, size})` — edits colour/size (not the SKU string itself),
+  keeping the parent group's colour/size dropdown lists in sync.
+- `setSharesStockWith(sku, targetSku|null)` — points a variant at another SKU's physical pile, or
+  clears it back to its own. Chains are allowed (any number of variants pointing through each
+  other, `stockSkuFor` follows the whole chain); only an actual loop is blocked.
+- `setSharesStockWithForColorGroup(sku, targetSku)` — applies the above to every sibling size of
+  the same colour in one call, size-swapping the target SKU per sibling; sizes with no matching
+  target are skipped and reported back, not failed.
+- `addVariantsForColor(code, {color, size, sku, openingQty, extraSizes})` — creates one variant,
+  then loops `extraSizes`, swapping the given SKU's size segment per size — the "add colour, tick
+  the sizes you want, one SKU auto-fills the rest" flow on the Products page.
+- `listProductOptions()` — flat `{sku, name, color, size}[]` of every active product, used to
+  populate the searchable SKU picker when reassigning a return to a different product.
 
 **`variants.ts`** — `variantMeta(product, groupName?)`: shared picker-field helper (color/size/
 image) used by both the Stock Log and Ready-to-Ship "+Add" forms.
@@ -177,6 +228,17 @@ surfaces instead of a raw Mongo duplicate-key error.
 `sellUnits`, refused if insufficient)/RETURN (+stock). An exchange is logged as one Return + one
 Ship entry. Only PRODUCED/SOLD/RETURNED show in "All entries" (opening-balance ADJUSTED rows are
 hidden); PRODUCED/SOLD/RETURNED/ADJUSTED are editable/deletable from the log.
+- `deleteEntry`/`restoreEntry` — delete-with-undo, now also exposed from the Shipped and Returns
+  list pages (`MovementTable`'s Delete column), not just the Stock Log itself.
+- `editEntry` accepts an optional `sku` — **only on a RETURNED row** — to reassign a return to a
+  different product, moving the whole quantity off the old product's pile onto the new one's. The
+  UI picks the new SKU from a searchable dropdown (`SearchableSelect` + `listProductOptions()`),
+  and the dialog's header re-derives from whichever SKU is currently selected instead of staying
+  pinned to the row's original product.
+- `registerTotals(range?: {from?, to?})` — per-product shipped/produced/returned totals; `range`
+  narrows shipped/returned/produced to that window (used by the Inventory page's date filter).
+  **On-hand/available are never date-filtered** — they're the current physical count, not a
+  historical quantity, so they ignore `range` entirely.
 
 **`movements.ts`** — powers the Shipped/Returns list pages; resolves product name/color/size per
 ledger row; "today" is pinned to India time for the day-picker default.
@@ -218,6 +280,7 @@ pinned to `Asia/Kolkata` (never rely on server-local time for "today").
 | `/api/health` | GET | Basic healthcheck |
 | `/api/login` | POST | Sets the `auth` cookie |
 | `/api/logout` | POST | Clears the `auth` cookie |
+| `/api/notes` | GET, PATCH | Read/replace the Dashboard's free-text scratchpad (`Note` model) |
 | `/api/orders` | GET | Recent `MarketplaceOrder` history (automated-pipeline data only) |
 | `/api/orders/ingest` | POST | Manually trigger `ingestAllOrders` |
 | `/api/orders/simulate` | POST | Seed a fake order via the SimulatedEvent queue |
@@ -230,7 +293,7 @@ pinned to `Asia/Kolkata` (never rely on server-local time for "today").
 | `/api/production` | GET, POST | List / create production batches |
 | `/api/products` | GET, POST | Product groups with per-variant stock / create a group |
 | `/api/products/[code]` | PATCH, DELETE | Edit / delete a product group |
-| `/api/products/[code]/variant` | PATCH, POST, DELETE | Rename / add / remove one variant SKU |
+| `/api/products/[code]/variant` | PATCH, POST, DELETE | PATCH handles `newSku` (rename), `color`/`size` (attributes), and `sharesStockWith`/`applyToColorGroup` (stock sharing) in one request, applied in that order. POST handles a single variant or, with `extraSizes[]`, a whole batch of sizes at once. DELETE removes one variant (refused if something shares its stock) |
 | `/api/raw-materials` | GET, POST | List / create raw materials |
 | `/api/raw-materials/receive` | POST | Receive stock from a supplier |
 | `/api/register` | POST | Record one Stock Log entry |
@@ -249,15 +312,28 @@ pinned to `Asia/Kolkata` (never rely on server-local time for "today").
 | `/api/returns/simulate` | POST | Seed a fake return |
 | `/api/skus` | GET, POST | Flat SKU list/lookup + create |
 | `/api/stock` | GET, PATCH | Read stock / manually set on-hand |
+| `/api/stock/reconcile` | POST | Recompute every `SkuStock.reserved` from actual `PendingShipment` sums, fixing drift |
 | `/api/sync` | GET, POST | What's last published per channel / trigger a full resync |
 | `/api/upload` | POST | Product image upload |
 
 ## 6. Pages (`src/app/`)
 
 **Sidebar nav (day-to-day use)**: `/register` "Stock Log", `/ship` "Ready to Ship" (queue,
-pack/ship, ship-by filter), `/shipped` (SOLD ledger), `/returns` (manual ReturnShipment
-workflow), `/products` (manage groups/variants/photos), `/inventory` (stock levels), `/produce`
-(create a production batch).
+pack/ship, ship-by filter, "To make" list with per-item and "Produce all" buttons),
+`/shipped`/`/returns` (SOLD/RETURNED ledgers — both support delete-with-undo; Returns also
+supports reassigning a return to a different product), `/products` (manage groups/variants/
+photos/stock-sharing), `/inventory` (stock levels — category filter reveals a colour filter
+scoped to that category, plus a from/to date range that narrows Shipped/Returned only; on-hand/
+available always show the current count), `/produce` (create a production batch).
+
+- `/inventory/print` — printable inventory sheet (one category per page, two colour-tables per
+  row), reachable from Inventory's Print button; carries the same category/colour filter as
+  `&category=`/`&color=` query params.
+- The Shipped, Returns, Stock Log, and Inventory pages all hide their headline numbers behind a
+  "Show numbers" toggle by default (`RevealableStats` — pure client state, no request either way)
+  — every fresh page load starts hidden.
+- The Dashboard has a free-text Notes scratchpad (`NotesPanel` / `Note` model) at the bottom —
+  no structure, just whatever's typed, saved on demand.
 
 **Reachable by direct URL, not in the sidebar** (secondary/dev tools): `/dashboard`, `/orders`
 (MarketplaceOrder history — automated pipeline), `/channels` (ChannelListing management),
@@ -320,9 +396,13 @@ codebase or database directly.
   first call reserves correctly but a naive dup-check on the caller's side can incorrectly block
   the second call instead of letting it merge — this exact bug happened once and was fixed on
   the sister project's side (see that project's `PROJECT.md` §12), not here.
-- **If `BUNDLE_STOCK_PREFIX` in `src/lib/constants.ts` (§4) is ever changed**, the sister
-  project's own duplicated copy in `lib/stock.js`'s `BUNDLE_CODE_MAP` must be updated by hand —
-  it is deliberately not imported across projects.
+- **Stock-sharing is now DB-driven here (`Product.sharesStockWith`, §4), but the sister
+  project still hardcodes its own guess** (`BUNDLE_CODE_MAP` in its `lib/stock.js`). These two are
+  no longer generated from the same source and nothing keeps them in sync — if sharing is
+  reconfigured on this side (e.g. via the Products page), the sister project's hardcoded map goes
+  stale silently. Worth fixing properly on that side (it already has read-only access to this
+  app's DB via `STOCK_MONGODB_URI` — it could just read `sharesStockWith` directly instead of
+  hardcoding).
 
 ## 9. File map
 
@@ -330,7 +410,8 @@ codebase or database directly.
 src/models/           one file per Mongoose model (§3)
 src/lib/
   db.ts                 Mongoose connection caching + transaction sessions
-  constants.ts           PLATFORMS/CHANNELS, BUNDLE_STOCK_PREFIX, MovementType, etc. (§4)
+  constants.ts           PLATFORMS/CHANNELS, MovementType, STANDARD_SIZES, etc. — client-safe, no DB (§4)
+  stockShare.ts           stockSkuFor() — DB-backed, single-flight-cached stock-sharing resolution (§4)
   stock.ts                StockService — the only code allowed to mutate stock (§4)
   shipping.ts             Ready-to-Ship queue lifecycle — the sister project's integration surface (§4, §8)
   stockAfter.ts           "what's left after the queue ships" projections
@@ -350,6 +431,7 @@ src/lib/
   cron.ts                    isAuthorizedCron() bearer-token check
   csv.ts                     Excel-safe CSV export
   format.ts                  IST-pinned date/number formatting
+  notes.ts                   the Dashboard scratchpad's read/write (§3)
 src/app/
   api/                    one folder per route (§5)
   register|ship|shipped|returns|products|inventory|produce/   sidebar pages (§6)
