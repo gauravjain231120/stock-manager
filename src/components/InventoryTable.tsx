@@ -7,6 +7,7 @@ import { Pencil, Printer } from 'lucide-react';
 import { Panel, Table, Th, Td, Tr, Badge } from '@/components/ui';
 import { EditableStock } from '@/components/EditableStock';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
+import { RevealableStats } from '@/components/RevealableStats';
 import { toCsv, csvDateStamp } from '@/lib/csv';
 import { compareVariant, groupVariants, matchesSearch, num } from '@/lib/format';
 
@@ -173,18 +174,20 @@ export function InventoryTable({
               Shipped/Returned: {dateFrom || dateTo ? `${dateFrom || 'start'} – ${dateTo || 'now'}` : 'all time'} · On hand/Available: current
             </div>
           </div>
-          <div className="flex gap-8">
-            <div>
-              <div className="text-xs text-neutral-500">Total shipped</div>
-              <div className="mt-0.5 text-2xl font-semibold tabular-nums">{num(totals.shipped)}</div>
-            </div>
-            <div>
-              <div className="text-xs text-neutral-500">Total returned</div>
-              <div className={`mt-0.5 text-2xl font-semibold tabular-nums ${totals.returned > 0 ? 'text-amber-500' : ''}`}>
-                {num(totals.returned)}
+          <RevealableStats>
+            <div className="flex gap-8">
+              <div>
+                <div className="text-xs text-neutral-500">Total shipped</div>
+                <div className="mt-0.5 text-2xl font-semibold tabular-nums">{num(totals.shipped)}</div>
+              </div>
+              <div>
+                <div className="text-xs text-neutral-500">Total returned</div>
+                <div className={`mt-0.5 text-2xl font-semibold tabular-nums ${totals.returned > 0 ? 'text-amber-500' : ''}`}>
+                  {num(totals.returned)}
+                </div>
               </div>
             </div>
-          </div>
+          </RevealableStats>
         </div>
       </div>
 

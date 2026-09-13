@@ -2,6 +2,7 @@ import { registerTotals, recentEntries, channelBreakdown, productInfoBySku } fro
 import { PageHeader, Panel, Table, Th, Td, Tr, StatCard } from '@/components/ui';
 import { RegisterEntryForm } from '@/components/RegisterEntryForm';
 import { RecentEntriesTable } from '@/components/RecentEntriesTable';
+import { RevealableStats } from '@/components/RevealableStats';
 import { num } from '@/lib/format';
 import { PLATFORM_LABELS, Platform } from '@/lib/constants';
 
@@ -50,27 +51,29 @@ export default async function RegisterPage() {
         />
       </div>
 
-      <section className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3">
-        <StatCard label="In stock" value={num(totals.inStock)} />
-        <StatCard label="Shipped" value={num(totals.shipped)} />
-        <StatCard label="Returned" value={num(totals.returned)} tone={totals.returned ? 'warn' : 'default'} />
-      </section>
+      <RevealableStats className="mb-6">
+        <section className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+          <StatCard label="In stock" value={num(totals.inStock)} />
+          <StatCard label="Shipped" value={num(totals.shipped)} />
+          <StatCard label="Returned" value={num(totals.returned)} tone={totals.returned ? 'warn' : 'default'} />
+        </section>
 
-      {byPlatform.length > 0 ? (
-        <div className="mt-6">
-          <Panel title="Shipped by platform">
-            <Table head={<><Th>Platform</Th><Th right>Shipped</Th><Th right>Returned</Th></>}>
-              {byPlatform.map((p) => (
-                <Tr key={p.channel}>
-                  <Td>{platformLabel(p.channel)}</Td>
-                  <Td right>{num(p.shipped)}</Td>
-                  <Td right>{num(p.returned)}</Td>
-                </Tr>
-              ))}
-            </Table>
-          </Panel>
-        </div>
-      ) : null}
+        {byPlatform.length > 0 ? (
+          <div className="mt-4">
+            <Panel title="Shipped by platform">
+              <Table head={<><Th>Platform</Th><Th right>Shipped</Th><Th right>Returned</Th></>}>
+                {byPlatform.map((p) => (
+                  <Tr key={p.channel}>
+                    <Td>{platformLabel(p.channel)}</Td>
+                    <Td right>{num(p.shipped)}</Td>
+                    <Td right>{num(p.returned)}</Td>
+                  </Tr>
+                ))}
+              </Table>
+            </Panel>
+          </div>
+        ) : null}
+      </RevealableStats>
 
       <div className="mt-6">
         <RecentEntriesTable
