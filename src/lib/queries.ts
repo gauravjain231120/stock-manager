@@ -5,6 +5,7 @@ import { ChannelListingModel } from '@/models/ChannelListing';
 import { LocationModel } from '@/models/Location';
 import { movementSummary } from '@/lib/stock';
 import { stockSkuFor } from '@/lib/stockShare';
+import { attrsOf } from '@/lib/variants';
 
 export interface InventoryRow {
   sku: string;
@@ -13,6 +14,7 @@ export interface InventoryRow {
   onHand: number;
   available: number;
   channels: number;
+  color?: string;
 }
 
 export interface InventoryOverview {
@@ -78,6 +80,7 @@ export async function getInventoryOverview(): Promise<InventoryOverview> {
       onHand: s.onHand,
       available: s.onHand - s.reserved,
       channels: listingsBySku.get(p.sku) ?? 0,
+      color: attrsOf(p.attributes).color?.trim() || undefined,
     };
   });
 

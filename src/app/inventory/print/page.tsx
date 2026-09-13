@@ -7,9 +7,10 @@ import { compareVariant, dateTime, groupVariants } from '@/lib/format';
 export const dynamic = 'force-dynamic';
 
 // Chrome names the saved file after the document title, so put the filter in it.
-export async function generateMetadata({ searchParams }: { searchParams: Promise<{ category?: string }> }) {
+export async function generateMetadata({ searchParams }: { searchParams: Promise<{ category?: string; color?: string }> }) {
   const sp = await searchParams;
-  return { title: `Rangrooh Inventory${sp.category ? ` — ${sp.category}` : ''}` };
+  const filter = [sp.category, sp.color].filter(Boolean).join(' — ');
+  return { title: `Rangrooh Inventory${filter ? ` — ${filter}` : ''}` };
 }
 
 function sizeFromSku(sku: string) {
@@ -33,13 +34,14 @@ const tdR = `${td} text-right tabular-nums`;
 export default async function InventoryPrintPage({
   searchParams,
 }: {
-  searchParams: Promise<{ print?: string; category?: string }>;
+  searchParams: Promise<{ print?: string; category?: string; color?: string }>;
 }) {
   const sp = await searchParams;
   const category = sp.category?.trim() || null;
+  const color = sp.color?.trim() || null;
   const { rows } = await getInventoryOverview();
   const filtered = rows
-    .filter((r) => !category || r.category === category)
+    .filter((r) => (!category || r.category === category) && (!color || r.color === color))
     .sort((a, b) => {
       if (a.category !== b.category) return a.category.localeCompare(b.category);
       if (a.name !== b.name) return a.name.localeCompare(b.name);
@@ -78,6 +80,7 @@ export default async function InventoryPrintPage({
         <p className="mb-3 text-[10px] text-neutral-500 print-muted">
           {filtered.length} SKU{filtered.length === 1 ? '' : 's'} · {totalAvailable} available · {generated}
           {category ? ` · ${category}` : ''}
+          {color ? ` · ${color}` : ''}
         </p>
 
         {[...byCategory.entries()].map(([catName, catRows], i) => {
@@ -121,7 +124,7 @@ export default async function InventoryPrintPage({
 
         {filtered.length === 0 ? (
           <p className="py-8 text-center text-sm text-neutral-400">
-            {category ? `No products in ${category}.` : 'No products yet.'}
+            {category ? `No products in ${[category, color].filter(Boolean).join(' — ')}.` : 'No products yet.'}
           </p>
         ) : null}
       </div>

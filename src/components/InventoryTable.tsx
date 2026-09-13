@@ -48,6 +48,14 @@ export function InventoryTable({
   const searchParams = useSearchParams();
   const [q, setQ] = useState('');
   const [cat, setCat] = useState('');
+  const [color, setColor] = useState('');
+
+  // A colour picked under one category rarely exists in another, so changing
+  // category clears it rather than silently filtering to nothing.
+  function selectCategory(next: string) {
+    setCat(next);
+    setColor('');
+  }
 
   function setDateRange(next: { from?: string; to?: string }) {
     const params = new URLSearchParams(searchParams.toString());
@@ -60,10 +68,14 @@ export function InventoryTable({
   }
 
   const categories = [...new Set(rows.map((r) => r.category).filter(Boolean))].sort();
+  // Only the colours actually present in the chosen category — picking "All
+  // categories" first shows every colour in the whole inventory instead.
+  const colorsInCategory = [...new Set(rows.filter((r) => !cat || r.category === cat).map((r) => r.color).filter(Boolean))].sort() as string[];
 
   const filtered = rows
     .filter((r) => {
       if (cat && r.category !== cat) return false;
+      if (color && r.color !== color) return false;
       if (q.trim() && !matchesSearch(`${r.sku} ${r.name} ${r.category}`, q, r.sku)) return false;
       return true;
     })
@@ -105,7 +117,7 @@ export function InventoryTable({
         <div className="flex flex-wrap items-center gap-2">
           <select
             value={cat}
-            onChange={(e) => setCat(e.target.value)}
+            onChange={(e) => selectCategory(e.target.value)}
             className="w-full rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm text-neutral-900 dark:border-white/20 dark:text-white sm:w-auto"
           >
             <option value="">All categories</option>
@@ -113,6 +125,18 @@ export function InventoryTable({
               <option key={c} value={c}>{c}</option>
             ))}
           </select>
+          {cat && colorsInCategory.length > 0 ? (
+            <select
+              value={color}
+              onChange={(e) => setColor(e.target.value)}
+              className="w-full rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm text-neutral-900 dark:border-white/20 dark:text-white sm:w-auto"
+            >
+              <option value="">All colours</option>
+              {colorsInCategory.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          ) : null}
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
@@ -152,9 +176,9 @@ export function InventoryTable({
             build={buildCsv}
           />
           <Link
-            href={`/inventory/print?print=1${cat ? `&category=${encodeURIComponent(cat)}` : ''}`}
+            href={`/inventory/print?print=1${cat ? `&category=${encodeURIComponent(cat)}` : ''}${color ? `&color=${encodeURIComponent(color)}` : ''}`}
             target="_blank"
-            title={cat ? `Print just ${cat}` : 'Print the whole inventory — product, size, available'}
+            title={cat ? `Print just ${[cat, color].filter(Boolean).join(' — ')}` : 'Print the whole inventory — product, size, available'}
             className="flex items-center gap-1.5 rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium text-neutral-600 transition hover:bg-black/5 dark:border-white/20 dark:text-neutral-300 dark:hover:bg-white/10"
           >
             <Printer size={14} />
@@ -166,7 +190,7 @@ export function InventoryTable({
       <div className="rounded-xl border border-black/10 bg-white px-5 py-4 shadow-sm dark:border-white/10 dark:bg-neutral-900">
         <div className="flex flex-wrap items-center justify-between gap-x-8 gap-y-3">
           <div className="text-sm">
-            <div className="font-medium">{cat || 'All categories'}</div>
+            <div className="font-medium">{[cat || 'All categories', color].filter(Boolean).join(' — ')}</div>
             <div className="text-xs text-neutral-400">
               {filtered.length} {filtered.length === 1 ? 'variant' : 'variants'} — every colour and size added together
             </div>
