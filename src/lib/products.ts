@@ -257,8 +257,11 @@ export async function editVariantAttributes(sku: string, changes: { color?: stri
  * sharing "Halter Neck"'s pile, now configurable per variant instead of
  * hardcoded. Every on-hand/reserved effect for `sku` lands on `targetSku`
  * from then on; `sku` keeps its own ledger rows so its sales stay visible.
- * Chains are disallowed (the target must not itself share with something
- * else) so stockSkuFor never has to resolve more than one hop.
+ *
+ * Chains are allowed — any number of variants can point at the same target,
+ * and a target can itself point further on (stockSkuFor follows the whole
+ * chain to the real pile). The only thing blocked is a loop, since that would
+ * leave nothing with real stock to resolve to.
  */
 export async function setSharesStockWith(sku: string, targetSku: string | null) {
   await connectDB();
@@ -277,7 +280,17 @@ export async function setSharesStockWith(sku: string, targetSku: string | null) 
   if (t === s) throw new Error('A variant cannot share stock with itself');
   const target = await ProductModel.findOne({ sku: t });
   if (!target) throw new Error(`SKU ${t} not found`);
-  if (target.sharesStockWith) throw new Error(`${t} already shares stock with ${target.sharesStockWith} — point at that SKU instead`);
+
+  // Follow the chain onward from the target — pointing sku -> t must never
+  // loop back to sku itself, however many hops it takes to get there.
+  let cursor: string | null | undefined = target.sharesStockWith;
+  let hops = 0;
+  while (cursor) {
+    if (cursor === s) throw new Error(`That would create a loop — ${t} eventually leads back to ${s}`);
+    if (++hops > 20) throw new Error('That sharing chain is too long — check for a loop');
+    const next = await ProductModel.findOne({ sku: cursor }, { sharesStockWith: 1 }).lean();
+    cursor = next?.sharesStockWith;
+  }
 
   product.sharesStockWith = t;
   await product.save();

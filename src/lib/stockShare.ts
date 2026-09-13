@@ -36,8 +36,21 @@ export function invalidateStockShareCache() {
   stockShareCache = null;
 }
 
-/** The SKU whose physical stock a given SKU uses (itself unless it shares stock with another). */
+/**
+ * The SKU whose physical stock a given SKU uses (itself unless it shares
+ * stock with another). Follows the whole chain — A sharing with B, which
+ * itself shares with C, resolves straight to C — since setSharesStockWith
+ * allows chains and only blocks actual loops. The seen-set is a defensive
+ * backstop in case a loop ever gets in some other way; it should never
+ * trigger given that guard.
+ */
 export async function stockSkuFor(sku: string): Promise<string> {
   const map = await loadStockShareMap();
-  return map.get(sku) ?? sku;
+  let current = sku;
+  const seen = new Set<string>();
+  while (map.has(current) && !seen.has(current)) {
+    seen.add(current);
+    current = map.get(current)!;
+  }
+  return current;
 }
