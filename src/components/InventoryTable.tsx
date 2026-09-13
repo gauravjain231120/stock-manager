@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
-import { Printer } from 'lucide-react';
+import { Pencil, Printer } from 'lucide-react';
 import { Panel, Table, Th, Td, Tr, Badge } from '@/components/ui';
 import { EditableStock } from '@/components/EditableStock';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
@@ -219,11 +219,18 @@ export function InventoryTable({
                     </Tr>
                   );
                 })}
-                <Tr className="bg-black/[0.03] font-semibold dark:bg-white/[0.04]">
+                <Tr className="bg-brand-50 font-semibold text-brand-900 dark:bg-brand-500/10 dark:text-brand-100">
                   <Td>Total</Td>
                   <Td right>{gt.shipped}</Td>
                   <Td right>{gt.returned}</Td>
-                  <Td right>{gt.onHand}</Td>
+                  <Td right>
+                    {/* Matches EditableStock's layout (incl. its reserved icon space)
+                        so this plain total lines up under the editable values above it. */}
+                    <span className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 tabular-nums">
+                      {gt.onHand}
+                      <Pencil size={11} className="invisible" />
+                    </span>
+                  </Td>
                   <Td right>{gt.available}</Td>
                   <Td right />
                 </Tr>
