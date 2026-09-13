@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { Printer } from 'lucide-react';
 import { Panel, Table, Th, Td, Tr, Badge } from '@/components/ui';
 import { EditableStock } from '@/components/EditableStock';
@@ -31,9 +32,31 @@ function stockStatus(onHand: number) {
   return { label: 'Good', tone: 'good' as const, color: 'text-emerald-600' };
 }
 
-export function InventoryTable({ rows }: { rows: InvRow[] }) {
+export function InventoryTable({
+  rows,
+  dateFrom = '',
+  dateTo = '',
+}: {
+  rows: InvRow[];
+  /** Shipped/Returned narrowed to this window server-side — on-hand stays current. */
+  dateFrom?: string;
+  dateTo?: string;
+}) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [q, setQ] = useState('');
   const [cat, setCat] = useState('');
+
+  function setDateRange(next: { from?: string; to?: string }) {
+    const params = new URLSearchParams(searchParams.toString());
+    const nf = next.from !== undefined ? next.from : dateFrom;
+    const nt = next.to !== undefined ? next.to : dateTo;
+    if (nf) params.set('from', nf); else params.delete('from');
+    if (nt) params.set('to', nt); else params.delete('to');
+    const qs = params.toString();
+    router.push(qs ? `${pathname}?${qs}` : pathname);
+  }
 
   const categories = [...new Set(rows.map((r) => r.category).filter(Boolean))].sort();
 
@@ -95,6 +118,33 @@ export function InventoryTable({ rows }: { rows: InvRow[] }) {
             placeholder="Search SKU, name or category…"
             className="w-full flex-1 rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm text-neutral-900 dark:border-white/20 dark:text-white sm:w-auto sm:min-w-[16rem]"
           />
+          <label className="flex items-center gap-1.5 text-sm text-neutral-500">
+            From
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateRange({ from: e.target.value })}
+              className="rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm text-neutral-900 dark:border-white/20 dark:text-white"
+            />
+          </label>
+          <label className="flex items-center gap-1.5 text-sm text-neutral-500">
+            To
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateRange({ to: e.target.value })}
+              className="rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm text-neutral-900 dark:border-white/20 dark:text-white"
+            />
+          </label>
+          {dateFrom || dateTo ? (
+            <button
+              type="button"
+              onClick={() => setDateRange({ from: '', to: '' })}
+              className="text-xs font-medium text-neutral-500 underline hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200"
+            >
+              Clear dates
+            </button>
+          ) : null}
           <ExportCsvButton
             count={filtered.length}
             filename={() => `inventory-${csvDateStamp()}.csv`}
@@ -118,6 +168,9 @@ export function InventoryTable({ rows }: { rows: InvRow[] }) {
             <div className="font-medium">{cat || 'All categories'}</div>
             <div className="text-xs text-neutral-400">
               {filtered.length} {filtered.length === 1 ? 'variant' : 'variants'} — every colour and size added together
+            </div>
+            <div className="text-xs text-neutral-400">
+              Shipped/Returned: {dateFrom || dateTo ? `${dateFrom || 'start'} – ${dateTo || 'now'}` : 'all time'} · On hand/Available: current
             </div>
           </div>
           <div className="flex gap-8">

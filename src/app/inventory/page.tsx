@@ -6,8 +6,17 @@ import { num } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
 
-export default async function InventoryPage() {
-  const [{ totals, rows }, regRows] = await Promise.all([getInventoryOverview(), registerTotals()]);
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+export default async function InventoryPage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string }> }) {
+  const sp = await searchParams;
+  const from = sp.from && DATE_RE.test(sp.from) ? sp.from : '';
+  const to = sp.to && DATE_RE.test(sp.to) ? sp.to : '';
+  // A plain YYYY-MM-DD is parsed as UTC midnight — good enough for "from", but
+  // "to" needs to reach the end of that calendar day to include its movements.
+  const range = from || to ? { from: from ? new Date(`${from}T00:00:00.000Z`) : undefined, to: to ? new Date(`${to}T23:59:59.999Z`) : undefined } : undefined;
+
+  const [{ totals, rows }, regRows] = await Promise.all([getInventoryOverview(), registerTotals(range)]);
   const flowBySku = new Map(regRows.map((r) => [r.sku, r]));
   const toMake = rows.filter((r) => r.onHand <= 0).length;
   const low = rows.filter((r) => r.onHand > 0 && r.onHand <= 5).length;
@@ -24,6 +33,8 @@ export default async function InventoryPage() {
       </section>
 
       <InventoryTable
+        dateFrom={from}
+        dateTo={to}
         rows={rows.map((r) => {
           const flow = flowBySku.get(r.sku);
           return {

@@ -409,12 +409,20 @@ export interface RegisterRow extends VariantMeta {
   sharedStock?: boolean;
 }
 
-/** Per-product totals for the three actions + current stock. */
-export async function registerTotals(): Promise<RegisterRow[]> {
+/**
+ * Per-product totals for the three actions + current stock. `range` narrows
+ * shipped/returned/produced to movements posted in that window (on-hand stays
+ * the current physical count either way — it's not a historical quantity).
+ */
+export async function registerTotals(range?: { from?: Date; to?: Date }): Promise<RegisterRow[]> {
   await connectDB();
+  const dateMatch: Record<string, Date> = {};
+  if (range?.from) dateMatch.$gte = range.from;
+  if (range?.to) dateMatch.$lte = range.to;
   const [products, byType, stock, locations, groups] = await Promise.all([
     ProductModel.find({ active: true }).sort({ sku: 1 }).lean(),
     StockMovementModel.aggregate<{ _id: { sku: string; type: string }; qty: number }>([
+      ...(Object.keys(dateMatch).length ? [{ $match: { createdAt: dateMatch } }] : []),
       { $group: { _id: { sku: '$sku', type: '$type' }, qty: { $sum: '$qty' } } },
     ]),
     SkuStockModel.find().lean(),
