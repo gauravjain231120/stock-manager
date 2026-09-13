@@ -86,7 +86,7 @@ export function EditableVariantAttrs({
         <div className="text-neutral-600 hover:text-brand-700 hover:underline dark:text-neutral-300">
           {[color, size].filter(Boolean).join(' / ') || sku} <span className="text-[10px] text-neutral-400">✎</span>
         </div>
-        <div className="text-[10px] text-amber-500">{sharesStockWith ? `shares stock with ${sharesStockWith}` : 'own stock'}</div>
+        {sharesStockWith ? <div className="text-[10px] text-amber-500">(shares stock: {sharesStockWith})</div> : null}
       </button>
     );
   }
