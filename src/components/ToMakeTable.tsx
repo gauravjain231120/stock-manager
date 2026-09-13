@@ -1,5 +1,6 @@
 import { Panel, Table, Th, Td, Tr } from '@/components/ui';
 import { ProduceButton } from '@/components/ProduceButton';
+import { ProduceAllButton } from '@/components/ProduceAllButton';
 
 /** One physical garment pile that's short of what the queue has promised. */
 export interface MakeRow {
@@ -39,7 +40,10 @@ export function ToMakeTable({ rows }: { rows: MakeRow[] }) {
   }
 
   return (
-    <Panel title={`To make (${rows.length} item${rows.length === 1 ? '' : 's'} · ${units} unit${units === 1 ? '' : 's'})`}>
+    <Panel
+      title={`To make (${rows.length} item${rows.length === 1 ? '' : 's'} · ${units} unit${units === 1 ? '' : 's'})`}
+      actions={<ProduceAllButton rows={rows} />}
+    >
       <Table
         head={
           <>
