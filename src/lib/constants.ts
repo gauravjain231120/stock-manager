@@ -49,6 +49,9 @@ export const PLATFORM_LABELS: Record<Platform, string> = {
   OWN_SITE: 'Own Site',
 };
 
+/** The usual size range offered when adding a new colour to a product. */
+export const STANDARD_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'] as const;
+
 /**
  * Info-only companion stock shown next to a bundle in the ship queue (never
  * deducted): the palazzo for a Halter-with-Palazzos set comes from the

@@ -34,6 +34,7 @@ export function EditableVariantAttrs({
   const [vSize, setVSize] = useState(size ?? '');
   const [shareMode, setShareMode] = useState<'own' | 'shared'>(sharesStockWith ? 'shared' : 'own');
   const [shareTarget, setShareTarget] = useState(sharesStockWith ?? '');
+  const [applyToColorGroup, setApplyToColorGroup] = useState(false);
   const [busy, setBusy] = useState(false);
 
   function startEdit() {
@@ -41,6 +42,7 @@ export function EditableVariantAttrs({
     setVSize(size ?? '');
     setShareMode(sharesStockWith ? 'shared' : 'own');
     setShareTarget(sharesStockWith ?? '');
+    setApplyToColorGroup(false);
     setEditing(true);
   }
 
@@ -56,6 +58,9 @@ export function EditableVariantAttrs({
         { label: 'Colour', value: vColor || '—' },
         { label: 'Size', value: vSize || '—' },
         { label: 'Stock', value: nextShare ? `Shares with ${nextShare}` : 'Own stock' },
+        ...(nextShare && applyToColorGroup
+          ? [{ label: 'Also applies to', value: `every other size of ${vColor || 'this colour'} (size-matched)` }]
+          : []),
       ],
       confirmLabel: 'Save',
     });
@@ -65,13 +70,20 @@ export function EditableVariantAttrs({
       const res = await fetch(`/api/products/${code}/variant`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sku, color: vColor, size: vSize, sharesStockWith: nextShare }),
+        body: JSON.stringify({
+          sku,
+          color: vColor,
+          size: vSize,
+          sharesStockWith: nextShare,
+          applyToColorGroup: nextShare ? applyToColorGroup : undefined,
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         toast.error(data?.error || 'Failed to save');
       } else {
-        toast.success('Variant updated ✓');
+        const skippedCount = Array.isArray(data?.skipped) ? data.skipped.length : 0;
+        toast.success(skippedCount ? `Variant updated ✓ (${skippedCount} size(s) left on own stock — no matching target)` : 'Variant updated ✓');
         setEditing(false);
         router.refresh();
       }
@@ -111,6 +123,12 @@ export function EditableVariantAttrs({
           />
         ) : null}
       </div>
+      {shareMode === 'shared' ? (
+        <label className="flex items-center gap-1 text-[10px] text-neutral-500" title="Sets Red/M, Red/L etc. to share with the same target SKU, size-swapped, instead of just this one">
+          <input type="checkbox" checked={applyToColorGroup} onChange={(e) => setApplyToColorGroup(e.target.checked)} className="size-3 accent-brand-600" />
+          Apply to every size of this colour
+        </label>
+      ) : null}
       <div className="flex gap-2">
         <button onClick={save} disabled={busy} className="text-[11px] font-medium text-emerald-600 disabled:opacity-50">
           ✓ Save

@@ -8,6 +8,7 @@ import { EditableStock } from '@/components/EditableStock';
 import { EditableSku } from '@/components/EditableSku';
 import { EditableVariantAttrs } from '@/components/EditableVariantAttrs';
 import { inr, num, compareVariant } from '@/lib/format';
+import { STANDARD_SIZES } from '@/lib/constants';
 
 interface Variant {
   sku: string;
@@ -54,6 +55,7 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
   const [vSize, setVSize] = useState('');
   const [vSku, setVSku] = useState('');
   const [vQty, setVQty] = useState('');
+  const [vExtraSizes, setVExtraSizes] = useState<Set<string>>(new Set());
 
   // Variants sorted by colour, then real size order (XS, S, M, L, XL, XXL).
   const variants = [...group.variants].sort((a, b) => compareVariant(a.sku, b.sku));
@@ -126,14 +128,27 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
     if (done) setEditing(false);
   }
 
+  function toggleExtraSize(size: string) {
+    setVExtraSizes((s) => {
+      const next = new Set(s);
+      if (next.has(size)) next.delete(size);
+      else next.add(size);
+      return next;
+    });
+  }
+
   async function addVariant() {
     if (!vColor && !vSize) return;
+    // The primary size (if it's one of the checkboxes) shouldn't also be
+    // requested as an "extra" — it's already the one the typed SKU is for.
+    const extra = [...vExtraSizes].filter((s) => s !== vSize.trim().toUpperCase());
     const ok = await ask({
       title: 'Add variant?',
       details: [
         { label: 'Variant', value: [vColor, vSize].filter(Boolean).join(' / ') },
         ...(vSku.trim() ? [{ label: 'SKU', value: vSku.trim().toUpperCase() }] : []),
         { label: 'Opening stock', value: vQty || '0' },
+        ...(extra.length ? [{ label: 'Also add sizes', value: extra.join(', ') }] : []),
       ],
       confirmLabel: 'Add',
     });
@@ -143,8 +158,9 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
       size: vSize || undefined,
       sku: vSku.trim() || undefined,
       openingQty: vQty ? Number(vQty) : 0,
+      extraSizes: extra.length ? extra : undefined,
     });
-    if (done) { setVColor(''); setVSize(''); setVSku(''); setVQty(''); }
+    if (done) { setVColor(''); setVSize(''); setVSku(''); setVQty(''); setVExtraSizes(new Set()); }
   }
 
   async function removeVariant(sku: string) {
@@ -288,6 +304,17 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
                 <input className="w-16 rounded-lg border border-black/15 bg-transparent px-2 py-1 text-xs dark:border-white/20" type="number" min={0} value={vQty} onChange={(e) => setVQty(e.target.value)} placeholder="Qty" />
                 <button onClick={addVariant} disabled={busy || (!vColor && !vSize)} className="rounded-lg border border-black/15 px-2 py-1 text-xs font-medium hover:bg-black/5 disabled:opacity-50 dark:border-white/20 dark:hover:bg-white/10">+ Add variant</button>
               </div>
+              {vSku.trim() ? (
+                <div className="flex flex-wrap items-center gap-2 border-t border-black/5 px-2 pb-2 pt-1 dark:border-white/5">
+                  <span className="text-[10px] text-neutral-400">Also add sizes (swaps the size in the SKU above):</span>
+                  {STANDARD_SIZES.filter((sz) => sz !== vSize.trim().toUpperCase()).map((sz) => (
+                    <label key={sz} className="flex items-center gap-1 text-xs text-neutral-600 dark:text-neutral-300">
+                      <input type="checkbox" checked={vExtraSizes.has(sz)} onChange={() => toggleExtraSize(sz)} className="size-3.5 accent-brand-600" />
+                      {sz}
+                    </label>
+                  ))}
+                </div>
+              ) : null}
             </div>
 
             <div className="flex items-center justify-end gap-2">

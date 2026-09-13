@@ -186,6 +186,78 @@ export async function addVariant(code: string, v: { color?: string; size?: strin
 }
 
 /**
+ * Add one variant, then fill in the rest of `extraSizes` for the same colour
+ * by swapping the size segment of `sku` (its last "-"-separated part) — one
+ * SKU typed in gives you the whole size run instead of adding each by hand.
+ * A size that already exists for this colour is left alone, not overwritten.
+ */
+export async function addVariantsForColor(
+  code: string,
+  v: { color?: string; size?: string; sku: string; openingQty?: number; extraSizes?: string[] },
+) {
+  const primary = await addVariant(code, { color: v.color, size: v.size, sku: v.sku, openingQty: v.openingQty });
+  const sku = primary.sku;
+  const idx = sku.lastIndexOf('-');
+  const prefix = idx === -1 ? sku : sku.slice(0, idx);
+
+  const created: string[] = [primary.sku];
+  const skipped: { size: string; reason: string }[] = [];
+  for (const size of v.extraSizes ?? []) {
+    const extraSku = `${prefix}-${size.trim().toUpperCase()}`;
+    try {
+      const res = await addVariant(code, { color: v.color, size, sku: extraSku, openingQty: 0 });
+      created.push(res.sku);
+    } catch (err) {
+      skipped.push({ size, reason: err instanceof Error ? err.message : String(err) });
+    }
+  }
+  return { created, skipped };
+}
+
+/**
+ * Apply one variant's stock-sharing target to every other size of the same
+ * colour in its product, swapping the target's size segment to match each
+ * one — set Red/S to share with RRC-002-...-RED-S once, and Red/M, Red/L etc.
+ * pick up RRC-002-...-RED-M, RRC-002-...-RED-L automatically instead of being
+ * configured one size at a time. A size whose swapped target doesn't exist is
+ * left on its own stock rather than failing the whole batch.
+ */
+export async function setSharesStockWithForColorGroup(sku: string, targetSku: string) {
+  await connectDB();
+  const s = sku.trim().toUpperCase();
+  const t = targetSku.trim().toUpperCase();
+  const product = await ProductModel.findOne({ sku: s });
+  if (!product) throw new Error('Variant not found');
+
+  const primary = await setSharesStockWith(s, t);
+  const updated = [primary.sku];
+  const skipped: { sku: string; reason: string }[] = [];
+
+  const color = product.attributes instanceof Map ? product.attributes.get('color') : (product.attributes as unknown as Record<string, string>)?.color;
+  const tIdx = t.lastIndexOf('-');
+  const tPrefix = tIdx === -1 ? t : t.slice(0, tIdx);
+
+  if (color && product.groupCode) {
+    const siblings = await ProductModel.find({ groupCode: product.groupCode, 'attributes.color': color, sku: { $ne: s } } as never).lean();
+    for (const sib of siblings) {
+      const sibIdx = sib.sku.lastIndexOf('-');
+      const sibSize = sibIdx === -1 ? '' : sib.sku.slice(sibIdx + 1);
+      if (!sibSize) continue;
+      const sibTarget = `${tPrefix}-${sibSize}`;
+      if (sibTarget === sib.sku) continue; // would point at itself — leave it alone
+      try {
+        await setSharesStockWith(sib.sku, sibTarget);
+        updated.push(sib.sku);
+      } catch (err) {
+        skipped.push({ sku: sib.sku, reason: err instanceof Error ? err.message : String(err) });
+      }
+    }
+  }
+
+  return { updated, skipped };
+}
+
+/**
  * Edit a variant's colour and/or size attributes (not its SKU string — use
  * renameVariantSku for that). Updates the display name and keeps the parent
  * group's colour/size dropdown lists in sync: adds the new value if it's new,
