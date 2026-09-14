@@ -1,22 +1,15 @@
-import { z } from 'zod';
-import { getNote, saveNote } from '@/lib/notes';
+import { listNotes, createNote } from '@/lib/notes';
 
 export const dynamic = 'force-dynamic';
 
-/** GET /api/notes -> the current scratchpad text. */
+/** GET /api/notes -> every note, most recently edited first. */
 export async function GET() {
-  const text = await getNote();
-  return Response.json({ text });
+  const notes = await listNotes();
+  return Response.json({ notes });
 }
 
-const Patch = z.object({ text: z.string().max(20000) });
-
-/** PATCH /api/notes -> replace the scratchpad text. */
-export async function PATCH(req: Request) {
-  const parsed = Patch.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) {
-    return Response.json({ error: 'Validation failed', issues: parsed.error.issues }, { status: 400 });
-  }
-  await saveNote(parsed.data.text);
-  return Response.json({ ok: true });
+/** POST /api/notes -> create a new, empty note. */
+export async function POST() {
+  const note = await createNote();
+  return Response.json({ note });
 }

@@ -1,9 +1,9 @@
 import mongoose, { Schema, InferSchemaType, Model } from 'mongoose';
 
-/** A single free-text scratchpad — one document, just whatever's currently typed in it. */
+/** One free-text note in the notes list — title is optional, just for telling them apart. */
 const NoteSchema = new Schema(
   {
-    _id: { type: String },
+    title: { type: String, default: '', trim: true },
     text: { type: String, default: '' },
   },
   { timestamps: true },

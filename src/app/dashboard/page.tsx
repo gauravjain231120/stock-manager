@@ -1,19 +1,18 @@
 import Link from 'next/link';
 import { getInventoryOverview } from '@/lib/queries';
 import { replenishmentSuggestions } from '@/lib/replenishment';
-import { getNote } from '@/lib/notes';
+import { listNotes } from '@/lib/notes';
 import { PageHeader, StatCard, Panel, Table, Th, Td, Tr, Badge } from '@/components/ui';
 import { ActionButton } from '@/components/ActionButton';
-import { NotesPanel } from '@/components/NotesPanel';
 import { num } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Dashboard() {
-  const [{ summary, totals, rows }, repl, note] = await Promise.all([
+  const [{ summary, totals, rows }, repl, notes] = await Promise.all([
     getInventoryOverview(),
     replenishmentSuggestions(30),
-    getNote(),
+    listNotes(),
   ]);
   const needsReorder = repl.filter((r) => r.needsReorder).length;
 
@@ -58,7 +57,23 @@ export default async function Dashboard() {
       </Panel>
 
       <div className="mt-8">
-        <NotesPanel initialText={note} />
+        <Panel
+          title={`Notes (${notes.length})`}
+          actions={<Link href="/notes" className="text-xs text-neutral-500 hover:underline">Open →</Link>}
+        >
+          {notes.length === 0 ? (
+            <div className="px-5 py-6 text-center text-sm text-neutral-400">No notes yet.</div>
+          ) : (
+            <ul className="divide-y divide-black/5 dark:divide-white/5">
+              {notes.slice(0, 5).map((n) => (
+                <li key={n.id} className="px-5 py-2">
+                  <div className="text-sm font-medium">{n.title.trim() || 'Untitled note'}</div>
+                  <div className="truncate text-xs text-neutral-400">{n.text.trim() || '(empty)'}</div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
       </div>
     </main>
   );
