@@ -3,11 +3,13 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
-import { Pencil, Printer } from 'lucide-react';
+import { Check, Pencil, Printer, X } from 'lucide-react';
 import { Panel, Table, Th, Td, Tr, Badge } from '@/components/ui';
 import { EditableStock } from '@/components/EditableStock';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
 import { RevealableStats } from '@/components/RevealableStats';
+import { useConfirm } from '@/components/ConfirmProvider';
+import { useToast } from '@/components/ToastProvider';
 import { toCsv, csvDateStamp } from '@/lib/csv';
 import { compareVariant, groupVariants, matchesSearch, num } from '@/lib/format';
 
@@ -46,9 +48,72 @@ export function InventoryTable({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const ask = useConfirm();
+  const toast = useToast();
   const [q, setQ] = useState('');
   const [cat, setCat] = useState('');
   const [color, setColor] = useState('');
+
+  // Bulk-editing one colour group at a time: which group (by key) is in edit
+  // mode, and the in-progress on-hand values for its rows keyed by SKU.
+  const [editingGroup, setEditingGroup] = useState<string | null>(null);
+  const [edits, setEdits] = useState<Record<string, string>>({});
+  const [savingGroup, setSavingGroup] = useState(false);
+
+  function startEditGroup(g: { key: string; rows: InvRow[] }) {
+    setEditingGroup(g.key);
+    setEdits(Object.fromEntries(g.rows.map((r) => [r.sku, String(r.onHand)])));
+  }
+
+  function cancelEditGroup() {
+    setEditingGroup(null);
+    setEdits({});
+  }
+
+  async function saveEditGroup(g: { key: string; rows: InvRow[] }) {
+    const changes = g.rows
+      .map((r) => ({ sku: r.sku, name: r.sku.split('-').pop() ?? r.sku, from: r.onHand, to: Number(edits[r.sku]) }))
+      .filter((c) => Number.isFinite(c.to) && c.to >= 0 && c.to !== c.from);
+    if (changes.length === 0) {
+      cancelEditGroup();
+      return;
+    }
+    const ok = await ask({
+      title: `Update ${changes.length} size${changes.length === 1 ? '' : 's'}?`,
+      details: changes.map((c) => ({ label: c.name, value: `${c.from} → ${c.to}` })),
+      confirmLabel: 'Update',
+    });
+    if (!ok) return;
+    setSavingGroup(true);
+    try {
+      const results = await Promise.all(
+        changes.map(async (c) => {
+          try {
+            const res = await fetch('/api/stock', {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ sku: c.sku, onHand: c.to }),
+            });
+            if (res.ok) return { ok: true as const };
+            const data = await res.json().catch(() => ({}));
+            return { ok: false as const, name: c.name, error: data?.error as string | undefined };
+          } catch (e) {
+            return { ok: false as const, name: c.name, error: e instanceof Error ? e.message : undefined };
+          }
+        }),
+      );
+      const failed = results.filter((r): r is { ok: false; name: string; error?: string } => !r.ok);
+      if (failed.length === 0) {
+        toast.success(`Updated ${changes.length} size${changes.length === 1 ? '' : 's'} ✓`);
+        cancelEditGroup();
+      } else {
+        toast.error(`${failed.length} of ${changes.length} failed — ${failed.map((f) => f.name).join(', ')}`);
+      }
+      router.refresh();
+    } finally {
+      setSavingGroup(false);
+    }
+  }
 
   // A colour picked under one category rarely exists in another, so changing
   // category clears it rather than silently filtering to nothing.
@@ -229,8 +294,43 @@ export function InventoryTable({
             }),
             { shipped: 0, returned: 0, onHand: 0, available: 0 },
           );
+          const editingThis = editingGroup === g.key;
           return (
-            <Panel key={g.key} title={g.title} actions={<span className="text-xs text-neutral-400">{gt.onHand} on hand</span>}>
+            <Panel
+              key={g.key}
+              title={g.title}
+              actions={
+                editingThis ? (
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => saveEditGroup(g)}
+                      disabled={savingGroup}
+                      className="inline-flex items-center gap-1 rounded-md bg-brand-600 px-2 py-1 text-xs font-medium text-white transition hover:bg-brand-700 disabled:opacity-50"
+                    >
+                      <Check size={12} /> {savingGroup ? 'Saving…' : 'Save'}
+                    </button>
+                    <button
+                      onClick={cancelEditGroup}
+                      disabled={savingGroup}
+                      className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-neutral-500 transition hover:bg-black/5 disabled:opacity-50 dark:hover:bg-white/10"
+                    >
+                      <X size={12} /> Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-neutral-400">{gt.onHand} on hand</span>
+                    <button
+                      onClick={() => startEditGroup(g)}
+                      className="inline-flex items-center gap-1 rounded-md border border-black/15 px-2 py-1 text-xs font-medium text-neutral-600 transition hover:bg-black/5 dark:border-white/20 dark:text-neutral-300 dark:hover:bg-white/10"
+                      title="Edit on-hand for every size at once"
+                    >
+                      <Pencil size={12} /> Edit
+                    </button>
+                  </div>
+                )
+              }
+            >
               <Table head={<><Th>Size</Th><Th right>Shipped</Th><Th right>Returned</Th><Th right>On hand</Th><Th right>Available</Th><Th right>Status</Th></>}>
                 {g.rows.map((r) => {
                   const s = stockStatus(r.onHand);
@@ -240,7 +340,22 @@ export function InventoryTable({
                       <Td>{r.sku.split('-').pop()}</Td>
                       <Td right>{r.shipped}</Td>
                       <Td right>{r.returned}</Td>
-                      <Td right><EditableStock sku={r.sku} value={r.onHand} /></Td>
+                      <Td right>
+                        {editingThis ? (
+                          <input
+                            type="number"
+                            min={0}
+                            value={edits[r.sku] ?? ''}
+                            onChange={(e) => setEdits((prev) => ({ ...prev, [r.sku]: e.target.value }))}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Escape') cancelEditGroup();
+                            }}
+                            className="w-16 rounded-lg border border-black/15 bg-transparent px-2 py-1 text-right text-sm tabular-nums text-neutral-900 focus:border-brand-500 focus:outline-none dark:border-white/20 dark:text-white"
+                          />
+                        ) : (
+                          <EditableStock sku={r.sku} value={r.onHand} />
+                        )}
+                      </Td>
                       <Td right className={avail < r.onHand ? 'text-amber-600' : undefined}>{avail}</Td>
                       <Td right><Badge tone={s.tone}>{s.label}</Badge></Td>
                     </Tr>
