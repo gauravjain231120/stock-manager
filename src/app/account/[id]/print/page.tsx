@@ -38,12 +38,9 @@ export default async function AccountPrintPage({
   const generated = dateTime(new Date());
   const rangeLabel = to ? `${dateOnly(from)} – ${dateOnly(to)}` : `${dateOnly(from)} – ongoing`;
 
-  // Chronological (oldest first) with a running balance, like a bank statement.
-  const chrono = [...entries].sort((a, b) => a.date.localeCompare(b.date));
-  const rows = chrono.reduce<(typeof chrono[number] & { running: number })[]>((acc, e) => {
-    const running = (acc.at(-1)?.running ?? 0) + (e.type === 'RECEIVED' ? e.amount : -e.amount);
-    return [...acc, { ...e, running }];
-  }, []);
+  // Chronological (oldest first) — balance is a single figure at the end, not a
+  // per-row running total.
+  const rows = [...entries].sort((a, b) => a.date.localeCompare(b.date));
 
   return (
     <main className="px-4 py-6 sm:px-6 sm:py-8 print:p-0">
@@ -73,7 +70,6 @@ export default async function AccountPrintPage({
               <th className={th}>Description</th>
               <th className={thR}>Expense</th>
               <th className={thR}>Received</th>
-              <th className={thR}>Balance</th>
             </tr>
           </thead>
           <tbody>
@@ -83,7 +79,6 @@ export default async function AccountPrintPage({
                 <td className={td}>{r.name}</td>
                 <td className={tdR}>{r.type === 'EXPENSE' ? inr(r.amount) : '—'}</td>
                 <td className={tdR}>{r.type === 'RECEIVED' ? inr(r.amount) : '—'}</td>
-                <td className={`${tdR} font-semibold`}>{inr(r.running)}</td>
               </tr>
             ))}
           </tbody>
@@ -94,7 +89,6 @@ export default async function AccountPrintPage({
               </td>
               <td className="px-2 pt-2 text-right text-xs font-semibold tabular-nums">{inr(totals.expense)}</td>
               <td className="px-2 pt-2 text-right text-xs font-semibold tabular-nums">{inr(totals.received)}</td>
-              <td className="px-2 pt-2 text-right text-xs font-semibold tabular-nums">{inr(totals.net)}</td>
             </tr>
           </tfoot>
         </table>
