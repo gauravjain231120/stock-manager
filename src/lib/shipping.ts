@@ -8,7 +8,7 @@ import { StockMovementModel } from '@/models/StockMovement';
 import { postMovement } from '@/lib/stock';
 import { MovementType, SystemLocation, infoStockFor, cleanTracking } from '@/lib/constants';
 import { stockSkuFor } from '@/lib/stockShare';
-import { VariantMeta, variantMeta } from '@/lib/variants';
+import { VariantMeta, variantMeta, attrsOf } from '@/lib/variants';
 
 const MAIN = SystemLocation.MAIN;
 
@@ -22,6 +22,8 @@ export interface PendingRow {
   name: string;
   /** The product's category, e.g. "Coord set" — empty when it has none. */
   category: string;
+  /** The variant's colour attribute, e.g. "Blue-Bandhej" — empty when it has none. */
+  color: string;
   qty: number;
   channel: string | null;
   orderId: string | null;
@@ -150,7 +152,7 @@ export async function listPending(): Promise<PendingRow[]> {
   const infoSkus = items.map((i) => infoStockFor(i.sku)?.sku).filter((s): s is string => Boolean(s));
   const stockSkus = [...new Set([...skus.map((s) => pileBySku.get(s)!), ...infoSkus])];
   const [products, stockProducts, stocks] = await Promise.all([
-    ProductModel.find({ sku: { $in: skus } }, { sku: 1, name: 1, category: 1 }).lean(),
+    ProductModel.find({ sku: { $in: skus } }, { sku: 1, name: 1, category: 1, attributes: 1 }).lean(),
     // Whose pile a bundle actually draws on, so the queue can name it.
     ProductModel.find({ sku: { $in: stockSkus } }, { sku: 1, name: 1, groupCode: 1 }).lean(),
     SkuStockModel.find({ sku: { $in: stockSkus }, locationCode: MAIN }).lean(),
@@ -167,6 +169,7 @@ export async function listPending(): Promise<PendingRow[]> {
   );
   const nameBy = new Map(products.map((p) => [p.sku, p.name]));
   const categoryBy = new Map(products.map((p) => [p.sku, p.category?.trim() ?? '']));
+  const colorBy = new Map(products.map((p) => [p.sku, attrsOf(p.attributes).color?.trim() ?? '']));
   const stockBy = new Map(stocks.map((s) => [s.sku, s]));
   return items.map((i) => {
     const stockSku = pileBySku.get(i.sku)!;
@@ -180,6 +183,7 @@ export async function listPending(): Promise<PendingRow[]> {
       stockName: stockSku === i.sku ? null : stockNameBy.get(stockSku) ?? null,
       name: nameBy.get(i.sku) ?? i.sku,
       category: categoryBy.get(i.sku) ?? '',
+      color: colorBy.get(i.sku) ?? '',
       qty: i.qty,
       channel: i.channel ?? null,
       orderId: i.orderId ?? null,
@@ -202,6 +206,7 @@ export interface QueueRow {
   stockName: string | null;
   name: string;
   category: string;
+  color: string;
   qty: number;
   channel: string | null;
   /** Units of this row's pile still free for it, once the orders queued ahead of
@@ -237,6 +242,7 @@ export function queueRows(pending: PendingRow[]): QueueRow[] {
       stockName: p.stockName,
       name: p.name,
       category: p.category,
+      color: p.color,
       qty: p.qty,
       channel: p.channel,
       free,

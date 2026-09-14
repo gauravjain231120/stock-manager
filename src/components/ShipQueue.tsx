@@ -21,6 +21,8 @@ export interface QueueRow {
   name: string;
   /** The product's category, e.g. "Coord set" — empty when it has none. */
   category: string;
+  /** The variant's colour attribute, e.g. "Blue-Bandhej" — empty when it has none. */
+  color: string;
   qty: number;
   channel: string | null;
   /**
@@ -77,6 +79,7 @@ export function ShipQueue({
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [fCategory, setFCategory] = useState('all');
+  const [fColor, setFColor] = useState('all');
   const [fReady, setFReady] = useState<'all' | 'ready' | 'not-ready'>('all');
   const [fShipDate, setFShipDate] = useState<'all' | 'today' | 'tomorrow' | 'overdue'>('all');
   // A SET of exact calendar dates, picked via ShipDateFilter, lives in the URL
@@ -85,6 +88,15 @@ export function ShipQueue({
   const exactDates = (useSearchParams().get('dates') ?? '').split(',').filter(Boolean);
 
   const categories = [...new Set(rows.map((r) => r.category).filter(Boolean))].sort();
+  // Only the colours actually present in the chosen category — picking "All
+  // categories" first hides the colour picker entirely (see selectCategory).
+  const colorsInCategory = [...new Set(rows.filter((r) => fCategory === 'all' || r.category === fCategory).map((r) => r.color).filter(Boolean))].sort();
+  // A colour picked under one category rarely exists in another, so changing
+  // category clears it rather than silently filtering to nothing.
+  function selectCategory(next: string) {
+    setFCategory(next);
+    setFColor('all');
+  }
   const todayKey = dayKey(new Date());
   const tomorrowKey = dayKey(new Date(Date.now() + 86400_000));
   function matchesShipDate(r: QueueRow) {
@@ -103,7 +115,9 @@ export function ShipQueue({
   // "" is a real choice here — the queued products that have no category at all.
   // Filtered by everything EXCEPT the ready/not-ready dropdown, so its own
   // options can show counts for what picking each one would leave visible.
-  const visibleBeforeReady = rows.filter((r) => (fCategory === 'all' || r.category === fCategory) && matchesShipDate(r));
+  const visibleBeforeReady = rows.filter(
+    (r) => (fCategory === 'all' || r.category === fCategory) && (fColor === 'all' || r.color === fColor) && matchesShipDate(r),
+  );
   const readyCount = visibleBeforeReady.filter((r) => r.ready).length;
   const notReadyCount = visibleBeforeReady.length - readyCount;
   const visible = visibleBeforeReady.filter(matchesReady);
@@ -146,18 +160,19 @@ export function ShipQueue({
   const shownUnits = visible.reduce((a, r) => a + r.qty, 0);
   const shownShort = visible.some((r) => r.short);
   const categoryLabel = fCategory === 'all' ? null : fCategory || 'No category';
+  const colorLabel = fColor === 'all' ? null : fColor;
   const shipDateLabel = exactDates.length > 0 ? exactDates.join(', ') : fShipDate !== 'all' ? fShipDate : null;
   const readyLabel = fReady === 'all' ? null : fReady === 'ready' ? 'Ready' : 'Not ready';
-  // Anything beyond the platform filter (category, ship date, ready) narrows
-  // the view client-side, so "Ship all" in that case must ship exactly the
-  // visible rows by id — the server-side /api/pending/ship-all endpoint only
-  // knows how to filter by platform, so it can't be trusted to also respect
-  // these. Previously only categoryLabel was checked here, so ship-all with
-  // just a date filter active silently shipped the WHOLE queue instead of
-  // the filtered date — a real incident, not hypothetical.
-  const hasNarrowFilter = Boolean(categoryLabel) || Boolean(shipDateLabel) || Boolean(readyLabel);
+  // Anything beyond the platform filter (category, colour, ship date, ready)
+  // narrows the view client-side, so "Ship all" in that case must ship exactly
+  // the visible rows by id — the server-side /api/pending/ship-all endpoint
+  // only knows how to filter by platform, so it can't be trusted to also
+  // respect these. Previously only categoryLabel was checked here, so
+  // ship-all with just a date filter active silently shipped the WHOLE queue
+  // instead of the filtered date — a real incident, not hypothetical.
+  const hasNarrowFilter = Boolean(categoryLabel) || Boolean(colorLabel) || Boolean(shipDateLabel) || Boolean(readyLabel);
   // What "all" currently means, spelled out on the Ship all button.
-  const scope = [platform ? PLATFORM_LABELS[platform] : null, categoryLabel, shipDateLabel, readyLabel]
+  const scope = [platform ? PLATFORM_LABELS[platform] : null, categoryLabel, colorLabel, shipDateLabel, readyLabel]
     .filter(Boolean)
     .join(' · ');
 
@@ -181,7 +196,7 @@ export function ShipQueue({
         <div className="flex flex-wrap items-center justify-end gap-2">
           <select
             value={fCategory}
-            onChange={(e) => setFCategory(e.target.value)}
+            onChange={(e) => selectCategory(e.target.value)}
             aria-label="Filter by category"
             className={filterCls}
           >
@@ -189,6 +204,17 @@ export function ShipQueue({
             {categories.map((c) => <option key={c} value={c}>{c}</option>)}
             {rows.some((r) => !r.category) ? <option value="">No category</option> : null}
           </select>
+          {fCategory !== 'all' && colorsInCategory.length > 0 ? (
+            <select
+              value={fColor}
+              onChange={(e) => setFColor(e.target.value)}
+              aria-label="Filter by colour"
+              className={filterCls}
+            >
+              <option value="all">All colours</option>
+              {colorsInCategory.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          ) : null}
           <PlatformFilter />
           <select
             value={fReady}
@@ -251,6 +277,7 @@ export function ShipQueue({
                 confirm={`All ${visible.length} item(s)${scope ? ` on ${scope}` : ''} will be marked shipped and their stock deducted.`}
                 confirmDetails={[
                   ...(categoryLabel ? [{ label: 'Category', value: categoryLabel }] : []),
+                  ...(colorLabel ? [{ label: 'Colour', value: colorLabel }] : []),
                   ...(shipDateLabel ? [{ label: 'Ship date', value: shipDateLabel }] : []),
                   ...(readyLabel ? [{ label: 'Status', value: readyLabel }] : []),
                   { label: 'Items', value: String(visible.length) },
