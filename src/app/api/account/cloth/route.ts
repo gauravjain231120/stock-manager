@@ -10,6 +10,7 @@ export async function GET() {
 }
 
 const AddPurchase = z.object({
+  category: z.string().trim().max(200).optional(),
   name: z.string().trim().min(1).max(200),
   meters: z.number().positive(),
   price: z.number().positive(),
@@ -23,6 +24,6 @@ export async function POST(req: Request) {
   if (!parsed.success) {
     return Response.json({ error: 'Validation failed', issues: parsed.error.issues }, { status: 400 });
   }
-  const item = await addClothPurchase({ ...parsed.data, shop: parsed.data.shop ?? '' });
+  const item = await addClothPurchase({ ...parsed.data, category: parsed.data.category ?? '', shop: parsed.data.shop ?? '' });
   return Response.json({ item });
 }

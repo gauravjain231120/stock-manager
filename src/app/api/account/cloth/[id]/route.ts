@@ -4,6 +4,7 @@ import { updateClothPurchase, deleteClothPurchase } from '@/lib/clothPurchases';
 export const dynamic = 'force-dynamic';
 
 const Patch = z.object({
+  category: z.string().trim().max(200).optional(),
   name: z.string().trim().min(1).max(200).optional(),
   meters: z.number().positive().optional(),
   price: z.number().positive().optional(),

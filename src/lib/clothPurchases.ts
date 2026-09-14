@@ -3,6 +3,7 @@ import { ClothPurchaseModel } from '@/models/ClothPurchase';
 
 export interface ClothPurchaseItem {
   id: string;
+  category: string;
   name: string;
   meters: number;
   price: number;
@@ -12,6 +13,7 @@ export interface ClothPurchaseItem {
 
 function toItem(doc: {
   _id: unknown;
+  category?: string | null;
   name: string;
   meters: number;
   price: number;
@@ -20,6 +22,7 @@ function toItem(doc: {
 }): ClothPurchaseItem {
   return {
     id: String(doc._id),
+    category: doc.category ?? '',
     name: doc.name,
     meters: doc.meters,
     price: doc.price,
@@ -36,6 +39,7 @@ export async function listClothPurchases(): Promise<ClothPurchaseItem[]> {
 }
 
 export async function addClothPurchase(input: {
+  category: string;
   name: string;
   meters: number;
   price: number;
@@ -44,6 +48,7 @@ export async function addClothPurchase(input: {
 }): Promise<ClothPurchaseItem> {
   await connectDB();
   const doc = await ClothPurchaseModel.create({
+    category: input.category.trim(),
     name: input.name.trim(),
     meters: input.meters,
     price: input.price,
@@ -55,10 +60,11 @@ export async function addClothPurchase(input: {
 
 export async function updateClothPurchase(
   id: string,
-  changes: Partial<{ name: string; meters: number; price: number; shop: string; date: string }>,
+  changes: Partial<{ category: string; name: string; meters: number; price: number; shop: string; date: string }>,
 ): Promise<void> {
   await connectDB();
   const set: Record<string, string | number | Date> = {};
+  if (changes.category !== undefined) set.category = changes.category.trim();
   if (changes.name !== undefined) set.name = changes.name.trim();
   if (changes.meters !== undefined) set.meters = changes.meters;
   if (changes.price !== undefined) set.price = changes.price;

@@ -16,6 +16,7 @@ const iconBtn =
   'inline-flex size-7 items-center justify-center rounded-md transition hover:bg-black/5 dark:hover:bg-white/10';
 
 interface Draft {
+  category: string;
   name: string;
   meters: string;
   price: string;
@@ -24,16 +25,97 @@ interface Draft {
 }
 
 function draftOf(c: ClothPurchaseItem): Draft {
-  return { name: c.name, meters: String(c.meters), price: String(c.price), shop: c.shop, date: c.date.slice(0, 10) };
+  return { category: c.category, name: c.name, meters: String(c.meters), price: String(c.price), shop: c.shop, date: c.date.slice(0, 10) };
 }
 
-/** Permanent running log of fabric purchases — name/meters/price/shop/date. Not tied to the expense cycles. */
+/**
+ * A pick-from-history-or-type-new field: a <select> of everything used
+ * before, with "+ Add new…" to switch to a plain text box (and a way back).
+ * Falls back to the text box automatically whenever there's nothing to pick
+ * from yet, so the very first purchase (or first under a brand-new category)
+ * never gets stuck with an empty dropdown.
+ */
+function ComboField({
+  label,
+  value,
+  options,
+  onChange,
+  onPick,
+  placeholder,
+  optional,
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  onChange: (v: string) => void;
+  /** Called only when an existing option is chosen from the dropdown (not while typing a new one). */
+  onPick?: (v: string) => void;
+  placeholder: string;
+  optional?: boolean;
+}) {
+  const [manual, setManual] = useState(false);
+  const showSelect = !manual && options.length > 0;
+
+  if (showSelect) {
+    return (
+      <label className="flex flex-col gap-1 text-xs text-neutral-500">
+        {label} {optional ? <span className="text-[10px] text-neutral-400">optional</span> : null}
+        <select
+          value={options.includes(value) ? value : ''}
+          onChange={(e) => {
+            if (e.target.value === '__new__') {
+              setManual(true);
+              onChange('');
+            } else {
+              onChange(e.target.value);
+              onPick?.(e.target.value);
+            }
+          }}
+          className={input}
+        >
+          <option value="">{placeholder}</option>
+          {options.map((o) => (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ))}
+          <option value="__new__">+ Add new…</option>
+        </select>
+      </label>
+    );
+  }
+
+  return (
+    <label className="flex flex-col gap-1 text-xs text-neutral-500">
+      {label} {optional ? <span className="text-[10px] text-neutral-400">optional</span> : null}
+      <div className="flex gap-1">
+        <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={input} required={!optional} />
+        {options.length > 0 ? (
+          <button
+            type="button"
+            onClick={() => {
+              setManual(false);
+              onChange('');
+            }}
+            title="Pick from existing instead"
+            className="rounded-lg border border-black/15 px-2 text-xs text-neutral-500 transition hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+          >
+            ↩
+          </button>
+        ) : null}
+      </div>
+    </label>
+  );
+}
+
+/** Permanent running log of fabric purchases — category/name/meters/price/shop/date. Not tied to the expense cycles. */
 export function ClothPurchasesPanel({ initialItems }: { initialItems: ClothPurchaseItem[] }) {
   const ask = useConfirm();
   const toast = useToast();
   const [items, setItems] = useState(initialItems);
   const [q, setQ] = useState('');
 
+  const [category, setCategory] = useState('');
   const [name, setName] = useState('');
   const [meters, setMeters] = useState('');
   const [price, setPrice] = useState('');
@@ -45,7 +127,11 @@ export function ClothPurchasesPanel({ initialItems }: { initialItems: ClothPurch
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  const filtered = items.filter((c) => matchesSearch(`${c.name} ${c.shop}`, q));
+  const categories = [...new Set(items.map((c) => c.category).filter(Boolean))].sort();
+  // Names used under the chosen category — or every name ever used, until a category is picked.
+  const namesForCategory = [...new Set(items.filter((c) => !category || c.category === category).map((c) => c.name).filter(Boolean))].sort();
+
+  const filtered = items.filter((c) => matchesSearch(`${c.category} ${c.name} ${c.shop}`, q));
   const totals = filtered.reduce((a, c) => ({ meters: a.meters + c.meters, price: a.price + c.price }), { meters: 0, price: 0 });
 
   async function addPurchase(e: FormEvent) {
@@ -58,7 +144,7 @@ export function ClothPurchasesPanel({ initialItems }: { initialItems: ClothPurch
       const res = await fetch('/api/account/cloth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), meters: m, price: p, shop: shop.trim(), date }),
+        body: JSON.stringify({ category: category.trim(), name: name.trim(), meters: m, price: p, shop: shop.trim(), date }),
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
@@ -99,13 +185,20 @@ export function ClothPurchasesPanel({ initialItems }: { initialItems: ClothPurch
       const res = await fetch(`/api/account/cloth/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: draft.name.trim(), meters: m, price: p, shop: draft.shop.trim(), date: draft.date }),
+        body: JSON.stringify({
+          category: draft.category.trim(),
+          name: draft.name.trim(),
+          meters: m,
+          price: p,
+          shop: draft.shop.trim(),
+          date: draft.date,
+        }),
       });
       if (res.ok) {
         setItems((prev) =>
           prev.map((c) =>
             c.id === id
-              ? { ...c, name: draft.name.trim(), meters: m, price: p, shop: draft.shop.trim(), date: new Date(draft.date).toISOString() }
+              ? { ...c, category: draft.category.trim(), name: draft.name.trim(), meters: m, price: p, shop: draft.shop.trim(), date: new Date(draft.date).toISOString() }
               : c,
           ),
         );
@@ -124,6 +217,7 @@ export function ClothPurchasesPanel({ initialItems }: { initialItems: ClothPurch
       title: 'Delete this purchase?',
       description: 'This cannot be undone.',
       details: [
+        ...(c.category ? [{ label: 'Category', value: c.category }] : []),
         { label: 'Cloth', value: c.name },
         { label: 'Meters', value: num(c.meters) },
         { label: 'Price', value: inr(c.price) },
@@ -165,17 +259,21 @@ export function ClothPurchasesPanel({ initialItems }: { initialItems: ClothPurch
         onSubmit={addPurchase}
         className="rounded-xl border border-black/10 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-neutral-900"
       >
-        <div className="grid gap-4 sm:grid-cols-[2fr_auto_auto_1fr_auto_auto] sm:items-end">
-          <label className="flex flex-col gap-1 text-xs text-neutral-500">
-            Cloth name
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Cotton Bandhej"
-              className={input}
-              required
-            />
-          </label>
+        <div className="grid gap-4 sm:grid-cols-[1fr_1fr_auto_auto_1fr_auto_auto] sm:items-end">
+          {/* Keyed by category so switching category resets whether the name
+              field shows a dropdown or a text box, based on THAT category's
+              own history rather than stale state from the previous one. */}
+          <ComboField
+            key="category"
+            label="Category"
+            value={category}
+            options={categories}
+            onChange={setCategory}
+            onPick={() => setName('')}
+            placeholder="e.g. Cotton"
+            optional
+          />
+          <ComboField key={`name-${category}`} label="Cloth name" value={name} options={namesForCategory} onChange={setName} placeholder="e.g. Bandhej" />
           <label className="flex flex-col gap-1 text-xs text-neutral-500">
             Meters
             <input
@@ -223,8 +321,8 @@ export function ClothPurchasesPanel({ initialItems }: { initialItems: ClothPurch
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search cloth or shop…"
-            className={`${input} w-56`}
+            placeholder="Search category, cloth or shop…"
+            className={`${input} w-64`}
           />
         }
       >
@@ -233,7 +331,20 @@ export function ClothPurchasesPanel({ initialItems }: { initialItems: ClothPurch
             {items.length === 0 ? 'No purchases logged yet.' : 'No matches.'}
           </div>
         ) : (
-          <Table head={<><Th>Date</Th><Th>Cloth</Th><Th right>Meters</Th><Th right>Price</Th><Th right>Rate/m</Th><Th>Shop</Th><Th right>Action</Th></>}>
+          <Table
+            head={
+              <>
+                <Th>Date</Th>
+                <Th>Category</Th>
+                <Th>Cloth</Th>
+                <Th right>Meters</Th>
+                <Th right>Price</Th>
+                <Th right>Rate/m</Th>
+                <Th>Shop</Th>
+                <Th right>Action</Th>
+              </>
+            }
+          >
             {filtered.map((c) => {
               const editing = editingId === c.id;
               const busy = busyId === c.id;
@@ -242,6 +353,9 @@ export function ClothPurchasesPanel({ initialItems }: { initialItems: ClothPurch
                   <Tr key={c.id}>
                     <Td>
                       <input type="date" value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value })} className={cellInput} />
+                    </Td>
+                    <Td>
+                      <input value={draft.category} onChange={(e) => setDraft({ ...draft, category: e.target.value })} className={cellInput} />
                     </Td>
                     <Td>
                       <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} className={cellInput} autoFocus />
@@ -286,6 +400,7 @@ export function ClothPurchasesPanel({ initialItems }: { initialItems: ClothPurch
               return (
                 <Tr key={c.id}>
                   <Td>{dateOnly(c.date)}</Td>
+                  <Td>{c.category || '—'}</Td>
                   <Td>{c.name}</Td>
                   <Td right>{num(c.meters)}</Td>
                   <Td right>{inr(c.price)}</Td>
