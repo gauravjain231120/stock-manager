@@ -97,8 +97,9 @@ export function ShipQueue({
     setFCategory(next);
     setFColor('all');
   }
-  const todayKey = dayKey(new Date());
-  const tomorrowKey = dayKey(new Date(Date.now() + 86400_000));
+  const now = new Date();
+  const todayKey = dayKey(now);
+  const tomorrowKey = dayKey(new Date(now.getTime() + 86400_000));
   function matchesShipDate(r: QueueRow) {
     if (exactDates.length > 0) return exactDates.includes(dayKey(r.shipByAt));
     if (fShipDate === 'all') return true;
