@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import { cookies } from 'next/headers';
 import { connectDB } from '@/lib/db';
+import { getCurrentSession } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -9,15 +10,24 @@ export const maxDuration = 60;
 const KEEP_DAYS = 30;
 
 /**
- * Allowed callers: Vercel Cron (Bearer CRON_SECRET), a logged-in user hitting
- * /api/backup in the browser, or local dev with no secret configured. Never
- * open in production — the dump contains the whole database.
+ * Allowed callers: Vercel Cron (Bearer CRON_SECRET), a logged-in Owner
+ * hitting /api/backup in the browser, the legacy shared-secret cookie (kept
+ * for the sister order-alert bot's old integration, if it's ever pointed at
+ * this route directly), or local dev with no secret configured. Never open
+ * in production — the dump contains the whole database.
+ *
+ * This route sits in proxy.ts's PUBLIC_PATHS (it guards itself), so a real
+ * per-account session cookie is never a random string matching AUTH_TOKEN —
+ * it has to be looked up here explicitly. Restricted to Owner, same as any
+ * other full-database operation.
  */
 async function authorized(req: Request): Promise<boolean> {
   const secret = process.env.CRON_SECRET;
   if (secret && req.headers.get('authorization') === `Bearer ${secret}`) return true;
   const cookie = (await cookies()).get('auth')?.value;
   if (cookie === (process.env.AUTH_TOKEN ?? 'rangrooh-stock-authed-9c4458')) return true;
+  const session = await getCurrentSession();
+  if (session?.role === 'OWNER') return true;
   return !secret && process.env.NODE_ENV !== 'production';
 }
 

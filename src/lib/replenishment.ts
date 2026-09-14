@@ -22,8 +22,11 @@ async function salesVelocity(days: number): Promise<Map<string, number>> {
   return map;
 }
 
-/** Sellable on-hand per SKU (sum across SELLABLE locations). */
-async function sellableOnHand(): Promise<Map<string, number>> {
+/** Sellable available (on-hand minus reserved) per SKU, summed across SELLABLE
+ *  locations — NOT raw on-hand. A pile with more queued than physically in
+ *  stock (oversold) legitimately shows negative here, same concept as
+ *  stockAfter.ts's "unlisted"/oversold flag elsewhere in the app. */
+async function sellableAvailable(): Promise<Map<string, number>> {
   const sellable = new Set((await LocationModel.find({ kind: 'SELLABLE' }).lean()).map((l) => l.code));
   const rows = await SkuStockModel.find().lean();
   const map = new Map<string, number>();
@@ -37,7 +40,9 @@ async function sellableOnHand(): Promise<Map<string, number>> {
 export interface ReplenishmentRow {
   sku: string;
   name: string;
-  onHand: number;
+  /** Sellable available (on-hand minus reserved) — NOT raw on-hand. Can go
+   *  negative for an oversold pile; that's real, not a bug. */
+  available: number;
   avgDailySales: number;
   leadTimeDays: number;
   safetyStock: number;
@@ -53,10 +58,10 @@ export interface ReplenishmentRow {
  */
 export async function replenishmentSuggestions(velocityDays = 30): Promise<ReplenishmentRow[]> {
   await connectDB();
-  const [products, velocity, onHandMap, policies] = await Promise.all([
+  const [products, velocity, availableMap, policies] = await Promise.all([
     ProductModel.find({ active: true }).lean(),
     salesVelocity(velocityDays),
-    sellableOnHand(),
+    sellableAvailable(),
     ReorderPolicyModel.find().lean(),
   ]);
   const policyBySku = new Map(policies.map((p) => [p.sku, p]));
@@ -66,20 +71,20 @@ export async function replenishmentSuggestions(velocityDays = 30): Promise<Reple
     const leadTimeDays = policy?.leadTimeDays ?? DEFAULT_LEAD_DAYS;
     const safetyStock = policy?.safetyStock ?? DEFAULT_SAFETY;
     const avgDailySales = velocity.get(p.sku) ?? 0;
-    const onHand = onHandMap.get(p.sku) ?? 0;
+    const available = availableMap.get(p.sku) ?? 0;
 
     const reorderPoint = Math.ceil(avgDailySales * leadTimeDays + safetyStock);
-    const needsReorder = onHand <= reorderPoint && (avgDailySales > 0 || safetyStock > 0);
+    const needsReorder = available <= reorderPoint && (avgDailySales > 0 || safetyStock > 0);
 
     // Produce enough to reach reorderPoint plus one more lead cycle of demand.
     const target = reorderPoint + Math.ceil(avgDailySales * leadTimeDays);
-    const suggestedQty = needsReorder ? Math.max(0, target - onHand) : 0;
-    const daysOfCover = avgDailySales > 0 ? Math.round(onHand / avgDailySales) : null;
+    const suggestedQty = needsReorder ? Math.max(0, target - available) : 0;
+    const daysOfCover = avgDailySales > 0 ? Math.round(available / avgDailySales) : null;
 
     return {
       sku: p.sku,
       name: p.name,
-      onHand,
+      available,
       avgDailySales: Math.round(avgDailySales * 100) / 100,
       leadTimeDays,
       safetyStock,

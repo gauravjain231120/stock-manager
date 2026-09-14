@@ -62,7 +62,13 @@ export default async function Dashboard() {
         </Panel>
       </div>
 
-      <Panel title={`Fast movers — last ${report.windowDays}d`} actions={<Link href="/reports" className="text-xs text-neutral-500 hover:underline">Full report →</Link>}>
+      <Panel
+        title={`Fast movers — last ${report.windowDays}d`}
+        // /reports is Owner-only and not a grantable section — showing this
+        // link to a Manager/Viewer with only Dashboard granted would be a
+        // dead end (blocked page).
+        actions={isOwner ? <Link href="/reports" className="text-xs text-neutral-500 hover:underline">Full report →</Link> : undefined}
+      >
         <Table head={<><Th>SKU</Th><Th>Name</Th><Th>Category</Th><Th right>Sold</Th></>} empty={report.fastMovers.length === 0}>
           {report.fastMovers.map((m) => {
             const product = productBySku.get(m.sku);

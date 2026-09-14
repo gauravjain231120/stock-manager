@@ -201,7 +201,7 @@ export function EditMovementButton({
 
             <p className="mt-3 text-[11px] text-neutral-400">
               Changing the quantity adjusts stock to match.
-              {isReturn ? ' Changing condition across the Wrong-item line moves the stock between shelves too, and changing the product moves it off the old one’s pile onto the new one’s.' : ''}
+              {isReturn ? ' Changing condition between Good/Used and Wrong item/Defective moves the stock between shelves too, and changing the product moves it off the old one’s pile onto the new one’s.' : ''}
             </p>
 
             <div className="mt-4 flex justify-end gap-2">

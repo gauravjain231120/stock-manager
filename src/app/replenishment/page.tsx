@@ -23,14 +23,14 @@ export default async function ReplenishmentPage() {
 
       <Panel title="Reorder suggestions (most urgent first)">
         <Table
-          head={<><Th>SKU</Th><Th>Name</Th><Th right>On hand</Th><Th right>Avg/day</Th><Th right>Cover</Th><Th right>Reorder pt</Th><Th right>Produce</Th></>}
+          head={<><Th>SKU</Th><Th>Name</Th><Th right>Available</Th><Th right>Avg/day</Th><Th right>Cover</Th><Th right>Reorder pt</Th><Th right>Produce</Th></>}
           empty={rows.length === 0}
         >
           {rows.map((r) => (
             <Tr key={r.sku}>
               <Td mono>{r.sku}</Td>
               <Td>{r.name}</Td>
-              <Td right>{num(r.onHand)}</Td>
+              <Td right>{num(r.available)}</Td>
               <Td right>{r.avgDailySales}</Td>
               <Td right>{r.daysOfCover == null ? '—' : `${r.daysOfCover}d`}</Td>
               <Td right>{num(r.reorderPoint)}</Td>

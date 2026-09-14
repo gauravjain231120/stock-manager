@@ -4,9 +4,12 @@ import { connectDB } from '@/lib/db';
 import { SessionModel } from '@/models/Session';
 import { isPathAllowed, sectionsForRole, NO_ACCESS_PATH, type Role } from '@/lib/permissions';
 
-// Public routes (login screen + its API). /api/backup guards itself with
-// CRON_SECRET / the auth cookie so Vercel Cron can reach it.
-const PUBLIC_PATHS = new Set(['/login', '/api/login', '/api/logout', '/api/backup']);
+// Public routes (login screen + its API). /api/backup and /api/cron/poll
+// guard themselves with CRON_SECRET (or an Owner session, for /api/backup)
+// so Vercel Cron can reach them without ever carrying a session cookie —
+// otherwise this gate would 401 Cron's bearer-token request before it ever
+// reached that route's own check.
+const PUBLIC_PATHS = new Set(['/login', '/api/login', '/api/logout', '/api/backup', '/api/cron/poll']);
 
 // The order-alert integration (a SEPARATE app — Myntra/Amazon order events
 // adding/removing rows in the Ready-to-Ship queue) is a server calling

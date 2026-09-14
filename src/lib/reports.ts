@@ -141,8 +141,11 @@ export async function dailySoldTrend(days = 14): Promise<DailyPoint[]> {
   return dailyMovementTrend(MovementType.SOLD, days, true);
 }
 
-/** Units returned per day (GOOD/BAD grades that actually posted back to the ledger — WRONG-condition
- *  returns don't restock, so they never show here, matching what physically happened to stock). */
+/** Units returned per day — every condition (Good/Used/Wrong item/Defective)
+ *  counts here, since a RETURNED movement is posted for all of them
+ *  (register.ts only varies which location it lands in, never the type).
+ *  This is a "how many returns came in" volume chart, not a "how much
+ *  restocked" one — see dailySoldTrend's sibling logic above. */
 export async function dailyReturnedTrend(days = 14): Promise<DailyPoint[]> {
   return dailyMovementTrend(MovementType.RETURNED, days, false);
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { Check, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { Panel, StatCard, Table, Th, Td, Tr } from '@/components/ui';
 import { useConfirm } from '@/components/ConfirmProvider';
@@ -130,8 +130,13 @@ export function ClothPurchasesPanel({ initialItems }: { initialItems: ClothPurch
   const [price, setPrice] = useState('');
   const [shop, setShop] = useState('');
   const [billNumber, setBillNumber] = useState('');
-  const [date, setDate] = useState(() => dayKey(new Date()));
+  const [date, setDate] = useState('');
   const [adding, setAdding] = useState(false);
+
+  // Default the date to today on the client (after mount, to avoid an SSR
+  // hydration mismatch straddling a midnight-IST render/hydrate race).
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => setDate(dayKey(new Date())), []);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);

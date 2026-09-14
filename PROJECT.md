@@ -215,6 +215,11 @@ silently dropping it.
 
 **`replenishment.ts`** — `reorderPoint = avgDailySales(SOLD movements) × leadTimeDays +
 safetyStock` (defaults: 7-day lead, 0 safety stock without a `ReorderPolicy` row).
+`ReplenishmentRow.available` is on-hand **minus reserved**, not raw on-hand — it can
+legitimately go negative for an oversold pile (more queued than physically in stock, same
+concept as `stockAfter.ts`'s oversold flag). Was named `onHand` and labeled "On hand" on the
+`/replenishment` page until a code review caught it — a negative "on hand" reads as an
+impossible/broken number even though the data was correct; renamed to `available` everywhere.
 
 **`production.ts`** — `receiveRawMaterial` (+onHand, PURCHASED ledger row); creating a
 `ProductionBatch` consumes BOM materials (CONSUMED rows, guarded by
@@ -320,10 +325,10 @@ re-login.
 
 | Route | Methods | Purpose |
 |---|---|---|
-| `/api/backup` | GET | Dumps every collection to JSON (Vercel Blob in prod, local `backups/` folder in dev); guarded by CRON_SECRET bearer OR the `auth` cookie OR (dev-only, no secret set) always-allow. Prunes blobs >30 days old. Also one of the few `PUBLIC_PATHS` in `proxy.ts` since it guards itself. |
+| `/api/backup` | GET | Dumps every collection to JSON (Vercel Blob in prod, local `backups/` folder in dev). Sits in `proxy.ts`'s `PUBLIC_PATHS` and guards itself: CRON_SECRET bearer, OR a logged-in **Owner** session (checked explicitly via `getCurrentSession()` — a real per-account session cookie is a random token, never equal to the legacy shared secret below, so this route can't just compare cookie strings like it used to pre-RBAC), OR the legacy shared-secret cookie (`AUTH_TOKEN`), OR (dev-only, no secret set) always-allow. Prunes blobs >30 days old. |
 | `/api/bom` | GET, PUT | Read/set a SKU's bill of materials |
 | `/api/channel-listings` | GET, POST | List / create SKU↔marketplace listing mappings |
-| `/api/cron/poll` | GET, POST | Runs the full `ingestAllOrders` + `ingestAllReturns` + `syncAll` cycle. **Not wired to any scheduler in `vercel.json`** (§7) |
+| `/api/cron/poll` | GET, POST | Runs the full `ingestAllOrders` + `ingestAllReturns` + `syncAll` cycle. **Not wired to any scheduler in `vercel.json`** (§7). Self-guards via `isAuthorizedCron()` (Bearer CRON_SECRET) and sits in `proxy.ts`'s `PUBLIC_PATHS` for the same reason `/api/backup` does — Vercel Cron's request carries no session cookie, so without that it would 401 before `isAuthorizedCron()` ever ran (a real code-review catch: this was missing until 2026-09-14, harmless only because the route was never actually scheduled) |
 | `/api/health` | GET | Basic healthcheck |
 | `/api/login` | POST | Verifies `Account` credentials, creates a `Session`, sets the `auth` cookie to the session token, returns `{ok, redirectTo}` — the first section this account can actually see, or `NO_ACCESS_PATH` if none granted (never a bare `/login`, which used to leave a just-logged-in account stuck on the login form forever) |
 | `/api/logout` | POST | Deletes the current `Session` row, clears the `auth` cookie |
@@ -443,6 +448,9 @@ respectively).
   bypass it). `gaurav` (Owner) is the only account ever seeded by code; every Manager/Viewer login
   and its password is created by hand from the Team page, on purpose, so no password is ever
   written into a script or committed anywhere.
+  - `/api/login` pays the same scrypt cost whether or not the username exists (a fixed dummy
+    hash/salt stands in when it doesn't), closing a timing side-channel a code review found —
+    without it, response time alone could reveal which usernames are real accounts.
   - **The whole gate lives in `src/proxy.ts`, not `middleware.ts`.** Next.js 16 deprecated and
     renamed the file convention (`middleware.ts` → `proxy.ts`); this isn't cosmetic — a real
     production outage happened from keeping the old filename (`x-vercel-error:
@@ -468,6 +476,28 @@ respectively).
   replica set — Atlas always is one). Run `npm run db:up && npm run db:init` first.
 - **`removeVariant` hard-deletes history** (SkuStock/StockMovement/ChannelListing/
   ChannelInventoryState) for that SKU — there is no undo.
+- **Two easy-to-repeat permission-boundary mistakes, both caught by a full code review on
+  2026-09-14 and fixed — watch for the same shape when adding a new section:**
+  1. A grantable section's `SECTION_API_PREFIXES` entry must list **every** API prefix that
+     section's page actually calls, not just the "obvious" one. `/shipped` was granting `[]` —
+     its edit/delete-with-undo and "move back to queue" buttons all post through `/api/register`,
+     so a Manager granted only Shipped got a 403 on every one of them. Now fixed to
+     `['/api/register']`. When adding a section, grep the page's own components for every
+     `fetch('/api/...')` call before writing its prefix list — don't assume from the page name.
+  2. A page or API nested under another section's URL is invisibly covered by that section's
+     grant too, via `isPathAllowed`'s `pathname.startsWith(section + '/')` check — string-prefix
+     matching can't otherwise tell them apart. `/returns/marketplace` (a dormant automated-pipeline
+     admin tool, meant to be Owner-only) sits under `/returns`'s own URL, so granting "Returns" also
+     let a Manager reach it by typing the URL, and the bare `/api/returns` prefix likewise leaked
+     into `/api/returns/grade`/`/ingest`/`/simulate` (none of which the real Returns page ever
+     calls). Fixed by adding `/returns/marketplace` to `OWNER_ONLY_PAGE_PREFIXES` and moving
+     `/api/returns` itself into `OWNER_API_PREFIXES`, narrowing `/returns`'s own prefix list to only
+     what it actually uses (`/api/register`, `/api/return-reports`, `/api/return-shipments`). The
+     `/account` vs `/account/cloth` version of this same trap was caught earlier the same day by
+     giving Cloth Purchases its own top-level `/cloth` path instead — prefer that fix (a genuinely
+     separate URL) over an `OWNER_ONLY_PAGE_PREFIXES` entry whenever the nested page could
+     reasonably become its own grantable section later; reserve the deny-list approach for pages
+     that should truly never be grantable to begin with.
 
 ## 8. Integration boundary with the sister order-alert project
 

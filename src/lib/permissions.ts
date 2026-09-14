@@ -26,7 +26,12 @@ export const SECTION_HREFS = SECTIONS.map((s) => s.href);
 
 /** Owner-only pages — never grantable to Manager or Viewer, always available to Owner. */
 export const OWNER_SECTIONS: Section[] = [{ href: '/team', label: 'Team' }];
-const OWNER_ONLY_PAGE_PREFIXES = ['/team'];
+// '/returns/marketplace' is a dormant automated-pipeline admin tool nested
+// under the real '/returns' page's URL — without this, granting "Returns"
+// would also let a Manager reach it by typing the URL (page-prefix matching
+// can't otherwise tell the two apart, the same shape as /account vs
+// /account/cloth before that got its own top-level path).
+const OWNER_ONLY_PAGE_PREFIXES = ['/team', '/returns/marketplace'];
 
 /** Always reachable once logged in, regardless of role/sections — where an
  *  account with nothing granted yet lands instead of bouncing back to the
@@ -45,8 +50,15 @@ export const SECTION_API_PREFIXES: Record<string, string[]> = {
   '/register': ['/api/register'],
   '/notes': ['/api/notes'],
   '/ship': ['/api/pending'],
-  '/shipped': [],
-  '/returns': ['/api/register', '/api/return-reports', '/api/return-shipments', '/api/returns'],
+  // The Shipped page's edit/delete-with-undo and "move back to queue" buttons
+  // all post through /api/register — without this, Shipped alone (no Stock
+  // Log/Produce/Returns) got 403 on every one of them.
+  '/shipped': ['/api/register'],
+  // NOT '/api/returns' (bare) — that prefix also covers /api/returns/grade,
+  // /api/returns/ingest, /api/returns/simulate, the dormant automated-pipeline
+  // admin actions behind '/returns/marketplace' (Owner-only, see above). The
+  // real Returns page never calls bare /api/returns at all.
+  '/returns': ['/api/register', '/api/return-reports', '/api/return-shipments'],
   '/products': ['/api/products', '/api/channel-listings', '/api/upload', '/api/bom'],
   '/inventory': ['/api/stock'],
   '/produce': ['/api/register', '/api/raw-materials', '/api/bom'],
@@ -63,8 +75,11 @@ const SHARED_API_PREFIXES = ['/api/skus'];
  *  '/api/account' (singular, the Expense ledger) is now a grantable section
  *  via SECTION_API_PREFIXES above — only '/api/accounts' (plural, Team
  *  account management: creating/editing logins, passwords, roles) stays
- *  locked to Owner. */
-const OWNER_API_PREFIXES = ['/api/accounts'];
+ *  locked to Owner. '/api/returns' is the dormant automated-pipeline's own
+ *  surface (grade/ingest/simulate a ReturnRecord) — deliberately separate
+ *  from '/api/return-reports'/'/api/return-shipments', which the real
+ *  Returns page actually uses and which Manager/Viewer can be granted. */
+const OWNER_API_PREFIXES = ['/api/accounts', '/api/returns'];
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 

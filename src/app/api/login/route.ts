@@ -7,6 +7,14 @@ import { sectionsForRole, NO_ACCESS_PATH, type Role } from '@/lib/permissions';
 
 export const dynamic = 'force-dynamic';
 
+// A login attempt against a username that doesn't exist must still pay the
+// same scrypt cost as a real one — otherwise response timing leaks which
+// usernames exist (verifyPassword, and its ~expensive hash, would otherwise
+// be skipped entirely whenever `account` is null). These never match a real
+// password; they only exist to keep the timing constant.
+const DUMMY_SALT = 'a'.repeat(32);
+const DUMMY_HASH = 'b'.repeat(128);
+
 /** POST /api/login — check credentials against the Accounts collection, start a session. */
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({} as { username?: string; password?: string }));
@@ -18,7 +26,10 @@ export async function POST(req: Request) {
 
   await connectDB();
   const account = await AccountModel.findOne({ username });
-  if (!account || !(await verifyPassword(password, account.passwordHash, account.passwordSalt))) {
+  const valid = account
+    ? await verifyPassword(password, account.passwordHash, account.passwordSalt)
+    : await verifyPassword(password, DUMMY_HASH, DUMMY_SALT);
+  if (!account || !valid) {
     return NextResponse.json({ error: 'Wrong username or password' }, { status: 401 });
   }
 

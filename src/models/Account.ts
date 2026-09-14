@@ -2,11 +2,11 @@ import mongoose, { Schema, InferSchemaType, Model } from 'mongoose';
 import { ROLES } from '@/lib/permissions';
 
 /**
- * A login. Owner/Manager get their role's fixed set of sections
- * automatically; a Viewer's `allowedSections` is the explicit, admin-picked
- * subset of sidebar sections this specific account can see and use —
- * everything else, page or API, is denied server-side regardless of what
- * URL is typed (see src/lib/permissions.ts).
+ * A login. Owner gets every section automatically; a Manager or Viewer's
+ * `allowedSections` is the explicit, admin-picked subset of sidebar sections
+ * this specific account can see and use (Manager can edit within them,
+ * Viewer is read-only) — everything else, page or API, is denied
+ * server-side regardless of what URL is typed (see src/lib/permissions.ts).
  */
 const AccountSchema = new Schema(
   {
@@ -14,7 +14,7 @@ const AccountSchema = new Schema(
     passwordHash: { type: String, required: true },
     passwordSalt: { type: String, required: true },
     role: { type: String, enum: ROLES, required: true },
-    /** Only meaningful for VIEWER — ignored for OWNER/MANAGER, which get their role's full set. */
+    /** Only meaningful for MANAGER/VIEWER — ignored for OWNER, which always gets every section. */
     allowedSections: { type: [String], default: [] },
   },
   { timestamps: true },
