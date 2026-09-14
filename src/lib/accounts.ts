@@ -194,15 +194,37 @@ export async function deletePeriod(id: string): Promise<void> {
   await AccountPeriodModel.deleteOne({ _id: id });
 }
 
-/** Closes the current open period (endDate = now) and immediately opens the next one. */
+/**
+ * Closes the current open period (endDate = now) and immediately opens the
+ * next one. Whatever the closed cycle's net came out to (surplus or
+ * shortfall) is carried into the new cycle as an "Opening balance" entry —
+ * cash on hand doesn't vanish just because a cycle ended, and this entry is
+ * a normal one afterward: editable/deletable like anything else.
+ */
 export async function closeCurrentPeriod(): Promise<AccountPeriodItem> {
   await connectDB();
   const current = await ensureOpenPeriod();
   const doc = await AccountPeriodModel.findById(current.id);
   if (!doc) throw new Error('Period not found');
+  const { net } = computeTotals(await listEntries(current.id));
+
   doc.status = 'CLOSED';
   doc.endDate = new Date();
   await doc.save();
-  await AccountPeriodModel.create({ startDate: new Date(doc.endDate.getTime() + 86_400_000), status: 'OPEN' });
+
+  const next = await AccountPeriodModel.create({
+    startDate: new Date(doc.endDate.getTime() + 86_400_000),
+    status: 'OPEN',
+  });
+  if (net !== 0) {
+    await AccountEntryModel.create({
+      periodId: String(next._id),
+      type: net > 0 ? 'RECEIVED' : 'EXPENSE',
+      name: 'Opening balance',
+      date: next.startDate,
+      amount: Math.abs(net),
+    });
+  }
+
   return toPeriodItem(doc.toObject());
 }

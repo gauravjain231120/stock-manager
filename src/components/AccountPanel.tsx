@@ -102,6 +102,13 @@ export function AccountPanel({
         { label: 'Total expense', value: inr(totals.expense) },
         { label: 'Total received', value: inr(totals.received) },
         { label: 'Net', value: inr(totals.net) },
+        {
+          label: 'Carries to new cycle as',
+          value:
+            totals.net === 0
+              ? 'nothing (net is zero)'
+              : `Opening balance ${inr(Math.abs(totals.net))} (${totals.net > 0 ? 'Received' : 'Expense'})`,
+        },
       ],
       confirmLabel: 'Close & start new',
     });
