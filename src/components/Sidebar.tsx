@@ -35,8 +35,6 @@ const ICONS: Record<string, LucideIcon> = {
   '/team': Users,
 };
 
-const ROLE_LABELS: Record<Role, string> = { OWNER: 'Owner', MANAGER: 'Manager', VIEWER: 'Viewer' };
-
 export function Sidebar({
   currentUser,
 }: {
@@ -129,9 +127,7 @@ export function Sidebar({
         </nav>
 
         <div className="mt-auto flex flex-col gap-1 pt-4">
-          <div className="px-3 pb-1 text-xs text-neutral-400">
-            {currentUser.username} · {ROLE_LABELS[currentUser.role]}
-          </div>
+          <div className="px-3 pb-1 text-xs text-neutral-400">{currentUser.username}</div>
           <ThemeToggle />
           <button
             onClick={logout}
