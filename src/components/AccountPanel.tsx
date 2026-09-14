@@ -41,6 +41,11 @@ export function AccountPanel({
   const [entries, setEntries] = useState(initialOpen.entries);
   const period = initialOpen.period;
   const closed = initialClosed;
+  // Recomputed from the live entries (not a server snapshot) so it stays
+  // right as entries are added/edited/deleted without a page reload —
+  // the range shown is what's actually recorded, not when the period
+  // record itself happened to be created.
+  const from = entries.length > 0 ? [...entries].map((e) => e.date).sort()[0] : period.startDate;
 
   const [type, setType] = useState<EntryType>('EXPENSE');
   const [name, setName] = useState('');
@@ -87,7 +92,7 @@ export function AccountPanel({
   async function closePeriod() {
     const ok = await ask({
       title: 'Close this period?',
-      description: `${dateOnly(period.startDate)} – today gets locked in as a completed cycle, and a new one starts right after.`,
+      description: `${dateOnly(from)} – today gets locked in as a completed cycle, and a new one starts right after.`,
       details: [
         { label: 'Total expense', value: inr(totals.expense) },
         { label: 'Total received', value: inr(totals.received) },
@@ -116,7 +121,7 @@ export function AccountPanel({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold">Account</h1>
-          <p className="text-sm text-neutral-500">Current cycle: {dateOnly(period.startDate)} – ongoing</p>
+          <p className="text-sm text-neutral-500">Current cycle: {dateOnly(from)} – ongoing</p>
         </div>
         <button
           onClick={closePeriod}
@@ -197,7 +202,7 @@ export function AccountPanel({
           closed.map((p) => (
             <Panel
               key={p.id}
-              title={`${dateOnly(p.startDate)} – ${dateOnly(p.endDate)}`}
+              title={`${dateOnly(p.from)} – ${dateOnly(p.to)}`}
               actions={
                 <div className="flex items-center gap-2">
                   <Link href={`/account/${p.id}`} className="text-xs font-medium text-neutral-500 hover:underline">

@@ -30,10 +30,17 @@ export interface PeriodWithEntries {
   period: AccountPeriodItem;
   entries: AccountEntryItem[];
   totals: PeriodTotals;
+  /** The actual earliest/latest entry date in this period — what's meaningful
+   *  to show as its range, not necessarily when the period record itself was
+   *  opened/closed. `to` is null while still open. */
+  from: string;
+  to: string | null;
 }
 
 export interface ClosedPeriodSummary extends AccountPeriodItem {
   totals: PeriodTotals;
+  from: string;
+  to: string;
 }
 
 function toPeriodItem(doc: { _id: unknown; startDate: Date; endDate?: Date | null; status: string }): AccountPeriodItem {
@@ -69,6 +76,20 @@ function computeTotals(entries: { type: EntryType; amount: number }[]): PeriodTo
   return { expense, received, net: received - expense };
 }
 
+/**
+ * The date range a period actually covers, per its entries — falls back to
+ * the period's own start/end only when it has no entries at all (nothing
+ * else to go by). `to` is null for an open period regardless of entries,
+ * since "ongoing" has no end yet.
+ */
+function periodRange(entries: { date: string }[], period: AccountPeriodItem): { from: string; to: string | null } {
+  const dates = entries.map((e) => e.date).sort();
+  const from = dates[0] ?? period.startDate;
+  if (period.status !== 'CLOSED') return { from, to: null };
+  const to = dates[dates.length - 1] ?? period.endDate ?? period.startDate;
+  return { from, to };
+}
+
 /** The single open period, creating one (starting today) the first time this ever runs. */
 export async function ensureOpenPeriod(): Promise<AccountPeriodItem> {
   await connectDB();
@@ -88,7 +109,8 @@ export async function listEntries(periodId: string): Promise<AccountEntryItem[]>
 export async function getOpenPeriodWithEntries(): Promise<PeriodWithEntries> {
   const period = await ensureOpenPeriod();
   const entries = await listEntries(period.id);
-  return { period, entries, totals: computeTotals(entries) };
+  const { from, to } = periodRange(entries, period);
+  return { period, entries, totals: computeTotals(entries), from, to };
 }
 
 /** One period (open or closed) by id, with its entries — used by the detail/print pages. */
@@ -98,7 +120,8 @@ export async function getPeriod(id: string): Promise<PeriodWithEntries | null> {
   if (!doc) return null;
   const period = toPeriodItem(doc);
   const entries = await listEntries(period.id);
-  return { period, entries, totals: computeTotals(entries) };
+  const { from, to } = periodRange(entries, period);
+  return { period, entries, totals: computeTotals(entries), from, to };
 }
 
 /** Every closed period, most recently ended first, each with its own totals. */
@@ -115,7 +138,10 @@ export async function listClosedPeriods(): Promise<ClosedPeriodSummary[]> {
   }
   return periods.map((p) => {
     const item = toPeriodItem(p);
-    return { ...item, totals: computeTotals(byPeriod.get(item.id) ?? []) };
+    const periodEntries = byPeriod.get(item.id) ?? [];
+    // Every period here is CLOSED, so periodRange always returns a non-null `to`.
+    const { from, to } = periodRange(periodEntries, item) as { from: string; to: string };
+    return { ...item, totals: computeTotals(periodEntries), from, to };
   });
 }
 

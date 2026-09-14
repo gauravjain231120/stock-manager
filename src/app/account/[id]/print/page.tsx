@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const data = await getPeriod(id);
-  return { title: data ? `Rangrooh expense statement ${dateOnly(data.period.startDate)}` : 'Expense statement' };
+  return { title: data ? `Rangrooh expense statement ${dateOnly(data.from)}` : 'Expense statement' };
 }
 
 const th = 'border-b-2 border-black/40 px-2 py-1.5 text-left font-semibold dark:border-white/40';
@@ -34,11 +34,9 @@ export default async function AccountPrintPage({
   const sp = await searchParams;
   const data = await getPeriod(id);
   if (!data) notFound();
-  const { period, entries, totals } = data;
+  const { period, entries, totals, from, to } = data;
   const generated = dateTime(new Date());
-  const rangeLabel = period.endDate
-    ? `${dateOnly(period.startDate)} – ${dateOnly(period.endDate)}`
-    : `${dateOnly(period.startDate)} – ongoing`;
+  const rangeLabel = to ? `${dateOnly(from)} – ${dateOnly(to)}` : `${dateOnly(from)} – ongoing`;
 
   // Chronological (oldest first) with a running balance, like a bank statement.
   const chrono = [...entries].sort((a, b) => a.date.localeCompare(b.date));

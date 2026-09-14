@@ -11,10 +11,8 @@ export default async function AccountPeriodPage({ params }: { params: Promise<{ 
   const { id } = await params;
   const data = await getPeriod(id);
   if (!data) notFound();
-  const { period, entries } = data;
-  const rangeLabel = period.endDate
-    ? `${dateOnly(period.startDate)} – ${dateOnly(period.endDate)}`
-    : `${dateOnly(period.startDate)} – ongoing`;
+  const { period, entries, from, to } = data;
+  const rangeLabel = to ? `${dateOnly(from)} – ${dateOnly(to)}` : `${dateOnly(from)} – ongoing`;
 
   return (
     <main className="px-4 py-6 sm:px-6 sm:py-8">
