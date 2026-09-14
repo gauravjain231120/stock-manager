@@ -41,7 +41,9 @@ export function RegisterEntryForm({ products, lockedAction }: { products: Picker
   const [sku, setSku] = useState(products[0]?.sku ?? '');
   const [action, setAction] = useState<ActionKey>(lockedAction ?? 'PRODUCE');
   const [channel, setChannel] = useState<Platform>('AMAZON');
-  const [qty, setQty] = useState('');
+  // Returns default to qty 1 — the action-toggle row (where this normally
+  // gets set on click) is hidden when locked, so it has to happen here instead.
+  const [qty, setQty] = useState(lockedAction === 'RETURN' ? '1' : '');
   const [date, setDate] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
