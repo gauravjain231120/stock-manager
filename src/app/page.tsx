@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 
-// The app opens on the simple Stock Log.
+// The app opens on the Dashboard.
 export default function Home() {
-  redirect('/register');
+  redirect('/dashboard');
 }

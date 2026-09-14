@@ -1,4 +1,5 @@
 import { ReactNode } from 'react';
+import type { LucideIcon } from 'lucide-react';
 
 const cardBase =
   'rounded-xl border border-black/10 bg-white shadow-sm dark:border-white/10 dark:bg-neutral-900';
@@ -15,14 +16,77 @@ export function PageHeader({ title, subtitle, actions }: { title: string; subtit
   );
 }
 
-export function StatCard({ label, value, hint, tone }: { label: string; value: ReactNode; hint?: string; tone?: 'default' | 'warn' | 'danger' | 'good' }) {
+export function StatCard({
+  label,
+  value,
+  hint,
+  tone,
+  icon: Icon,
+}: {
+  label: string;
+  value: ReactNode;
+  hint?: string;
+  tone?: 'default' | 'warn' | 'danger' | 'good';
+  icon?: LucideIcon;
+}) {
   const toneClass =
     tone === 'warn' ? 'text-amber-500' : tone === 'danger' ? 'text-red-500' : tone === 'good' ? 'text-emerald-500' : '';
+  const iconToneClass =
+    tone === 'warn'
+      ? 'bg-amber-500/10 text-amber-500'
+      : tone === 'danger'
+        ? 'bg-red-500/10 text-red-500'
+        : tone === 'good'
+          ? 'bg-emerald-500/10 text-emerald-500'
+          : 'bg-brand-500/10 text-brand-600 dark:text-brand-400';
   return (
     <div className={`${cardBase} p-5`}>
-      <div className="text-sm text-neutral-500">{label}</div>
+      <div className="flex items-start justify-between gap-2">
+        <div className="text-sm text-neutral-500">{label}</div>
+        {Icon ? (
+          <div className={`flex size-7 shrink-0 items-center justify-center rounded-lg ${iconToneClass}`}>
+            <Icon size={15} />
+          </div>
+        ) : null}
+      </div>
       <div className={`mt-1 text-3xl font-semibold tabular-nums ${toneClass}`}>{value}</div>
       {hint ? <div className="mt-1 text-xs text-neutral-400">{hint}</div> : null}
+    </div>
+  );
+}
+
+/** A lightweight bar chart for a day-bucketed trend — pure inline SVG-free CSS,
+ *  no client JS or charting library, so it renders instantly server-side. */
+export function TrendBars({ data }: { data: { day: string; units: number }[] }) {
+  const max = Math.max(1, ...data.map((d) => d.units));
+  const H = 56;
+  return (
+    <div>
+      <div className="flex items-end gap-1" style={{ height: H }}>
+        {data.map((d) => {
+          const h = Math.max(d.units > 0 ? 3 : 1, Math.round((d.units / max) * H));
+          return (
+            <div
+              key={d.day}
+              title={`${d.day}: ${d.units} sold`}
+              className="relative flex-1 cursor-default"
+              style={{ height: H }}
+            >
+              <div
+                className="absolute inset-x-0 bottom-0 rounded-t bg-brand-500/70 transition-colors hover:bg-brand-600 dark:bg-brand-400/60"
+                style={{ height: h }}
+              />
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-1.5 flex gap-1 text-[10px] text-neutral-400">
+        {data.map((d) => (
+          <div key={d.day} className="flex-1 text-center">
+            {d.day.slice(8)}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

@@ -48,6 +48,13 @@ The stock/production/shipping core:
 | `ReorderPolicy` | `sku` (unique), `safetyStock`, `leadTimeDays` (default 7) | Drives the replenishment reorder-point formula |
 | `Note` | `_id: 'main'`, `text` | A single free-text scratchpad shown on the Dashboard — no structure, just whatever's currently typed |
 
+Auth / access control (§7 has the full design):
+
+| Model | Key fields | Purpose |
+|---|---|---|
+| `Account` | `username` (unique), `passwordHash`/`passwordSalt` (scrypt), `role` (`OWNER`\|`MANAGER`\|`VIEWER`), `allowedSections[]` | A login. Only `gaurav` (Owner) is ever seeded by code — every Manager/Viewer account is created by hand from the Team page, never scripted, and its password is set the same way |
+| `Session` | `_id` (the random token, also the `auth` cookie value), `accountId`, `username`, `role`, `allowedSections[]`, `expiresAt` (60 days) | Denormalizes role/allowedSections onto the session itself so `proxy.ts` is a single lookup per request, not a join. Wiped for an account (`destroyAllSessionsForAccount`) whenever its role/sections/password change, so edits take effect immediately rather than on next natural re-login |
+
 The multichannel-sync / automated-order half (dormant in production, §7):
 
 | Model | Key fields | Purpose |
@@ -244,10 +251,17 @@ hidden); PRODUCED/SOLD/RETURNED/ADJUSTED are editable/deletable from the log.
 ledger row; "today" is pinned to India time for the day-picker default.
 
 **`reports.ts`** — `reportBundle(days)`: sales-by-channel/revenue, fast/slow movers,
-damaged-by-SKU, return rate. **Sourced from `MarketplaceOrder` (the dormant automated-ingest
-pipeline's data) — not from Stock Log or Ready-to-Ship.** In the current live setup this means
-`/reports` and `/orders` will show little to no real data. Flag this to the user if they ever
-expect these pages to reflect actual sales.
+damaged-by-SKU, return rate. **`salesByChannel` (and therefore `totals.revenue`/`totals.orders`)
+is sourced from `MarketplaceOrder` (the dormant automated-ingest pipeline's data) — not from Stock
+Log or Ready-to-Ship, and reads as ₹0/empty in the current live setup.** `totals.sold`/
+`totals.returned`, `fastMovers`/`slowMovers`, `returnRatePct`, and `damagedBySku` are all sourced
+straight from the real `StockMovement` ledger instead, so those five ARE real regardless of the
+dormant pipeline — this is why the Dashboard (below) uses `totals.sold`/`fastMovers` but
+deliberately leaves out `totals.revenue`/`salesByChannel`. `dailySoldTrend(days)` (also ledger-only,
+real) adds a day-bucketed units-sold series for the Dashboard's trend chart. Flag the
+revenue/channel gap to the user if they ever expect `/reports` or `/orders` to reflect actual
+sales — nothing in the live order-alert-bot path records a per-unit sale price anywhere, so an
+accurate revenue figure isn't derivable at all today without adding that.
 
 **`sync.ts`** — the channel stock-push engine: `publishableQty = max(0, sellableAvailable -
 buffer)` (deliberately pushes *less* than true stock, never more — the safe direction against
@@ -269,17 +283,55 @@ inside Vercel's function time limit instead of hanging).
 **`format.ts`** — `inr`/`num` (en-IN formatting), `dateTime`/`dateOnly`/`dayKey` all explicitly
 pinned to `Asia/Kolkata` (never rely on server-local time for "today").
 
+**`permissions.ts`** — the whole access-control model, pure/no DB (safe to import from
+`proxy.ts`, Server Components, and client components alike):
+- `SECTIONS` — every grantable sidebar section (`{href, label}`), in nav order: Dashboard, Stock
+  Log, Notes, Ready to Ship, Shipped, Returns, Products, Inventory, Produce, **Expense** (the
+  money-in/out ledger at `/account` — labeled "Expense" in the UI; the route itself was never
+  renamed). `OWNER_SECTIONS` (currently just Team) is Owner-only and never grantable.
+- `sectionsForRole(role, allowedSections)` — Owner gets everything; Manager/Viewer get exactly
+  what's checked for their account on the Team page (no more automatic "Manager = everything").
+- `isPathAllowed(pathname, method, role, allowedSections)` — the single fail-closed authority
+  `proxy.ts` calls for **every** page and API route. Anything not explicitly mapped in
+  `SECTION_API_PREFIXES` is denied by default (an unmapped endpoint is never guessed into an
+  allow). **Viewer enforcement is real, not UI-only**: any non-GET/HEAD/OPTIONS request into a
+  granted section's API is refused here regardless of role, so calling the API directly instead
+  of clicking a button can't bypass it. `NO_ACCESS_PATH` (`/no-access`) is where a logged-in
+  account with zero granted sections lands, instead of a confusing bounce back to `/login` or a
+  raw 403.
+
+**`auth.ts`** — password-based sessions, no third-party auth library: `createSession`/
+`destroySession`/`destroyAllSessionsForAccount`/`getCurrentSession`. Passwords are hashed with
+Node's built-in `crypto.scrypt` (`password.ts`), not bcrypt. `getCurrentSession()` re-reads the
+session from the DB independently in Server Components/route handlers — it does not trust that
+`proxy.ts` already validated it upstream.
+
+**`team.ts`** — Owner-only Account CRUD (`createAccount`/`updateAccount`/`deleteAccount`) backing
+the Team page. `allowedSections` is meaningful whenever `role !== 'OWNER'`. `updateAccount` refuses
+to demote the **last** remaining Owner to any other role (guards against locking everyone out of
+Team/Expense-admin/Account-management entirely) and calls `destroyAllSessionsForAccount` on any
+role/section/password change so it takes effect immediately, not on that account's next natural
+re-login.
+
 ## 5. API surface (`src/app/api/`)
 
 | Route | Methods | Purpose |
 |---|---|---|
-| `/api/backup` | GET | Dumps every collection to JSON (Vercel Blob in prod, local `backups/` folder in dev); guarded by CRON_SECRET bearer OR the `auth` cookie OR (dev-only, no secret set) always-allow. Prunes blobs >30 days old. |
+| `/api/backup` | GET | Dumps every collection to JSON (Vercel Blob in prod, local `backups/` folder in dev); guarded by CRON_SECRET bearer OR the `auth` cookie OR (dev-only, no secret set) always-allow. Prunes blobs >30 days old. Also one of the few `PUBLIC_PATHS` in `proxy.ts` since it guards itself. |
 | `/api/bom` | GET, PUT | Read/set a SKU's bill of materials |
 | `/api/channel-listings` | GET, POST | List / create SKU↔marketplace listing mappings |
 | `/api/cron/poll` | GET, POST | Runs the full `ingestAllOrders` + `ingestAllReturns` + `syncAll` cycle. **Not wired to any scheduler in `vercel.json`** (§7) |
 | `/api/health` | GET | Basic healthcheck |
-| `/api/login` | POST | Sets the `auth` cookie |
-| `/api/logout` | POST | Clears the `auth` cookie |
+| `/api/login` | POST | Verifies `Account` credentials, creates a `Session`, sets the `auth` cookie to the session token, returns `{ok, redirectTo}` — the first section this account can actually see, or `NO_ACCESS_PATH` if none granted (never a bare `/login`, which used to leave a just-logged-in account stuck on the login form forever) |
+| `/api/logout` | POST | Deletes the current `Session` row, clears the `auth` cookie |
+| `/api/accounts` | GET, POST | **Owner-only**, always (`OWNER_API_PREFIXES`, never grantable). List/create Manager and Viewer logins from the Team page |
+| `/api/accounts/[id]` | PATCH, DELETE | **Owner-only.** Edit role/allowedSections/password, or delete an account; blocks demoting the last remaining Owner |
+| `/api/account` | GET, POST | The Expense ledger's open period + entries — grantable via the `/account` ("Expense") section like any other |
+| `/api/account/close` | POST | Close the current Expense period, start a new one |
+| `/api/account/periods/[id]` | DELETE | Delete a closed Expense period entirely |
+| `/api/account/entries/[id]` | PATCH, DELETE | Edit/delete one Expense entry |
+| `/api/account/cloth` | GET, POST | Cloth/fabric purchase log (kept as a separate running record from Expense entries) |
+| `/api/account/cloth/[id]` | PATCH, DELETE | Edit/delete one cloth purchase |
 | `/api/notes` | GET, PATCH | Read/replace the Dashboard's free-text scratchpad (`Note` model) |
 | `/api/orders` | GET | Recent `MarketplaceOrder` history (automated-pipeline data only) |
 | `/api/orders/ingest` | POST | Manually trigger `ingestAllOrders` |
@@ -318,29 +370,48 @@ pinned to `Asia/Kolkata` (never rely on server-local time for "today").
 
 ## 6. Pages (`src/app/`)
 
-**Sidebar nav (day-to-day use)**: `/register` "Stock Log", `/ship` "Ready to Ship" (queue,
-pack/ship, ship-by filter, "To make" list with per-item and "Produce all" buttons),
-`/shipped`/`/returns` (SOLD/RETURNED ledgers — both support delete-with-undo; Returns also
-supports reassigning a return to a different product), `/products` (manage groups/variants/
-photos/stock-sharing), `/inventory` (stock levels — category filter reveals a colour filter
-scoped to that category, plus a from/to date range that narrows Shipped/Returned only; on-hand/
-available always show the current count), `/produce` (create a production batch).
+**Sidebar nav is built dynamically, not hardcoded** — `Sidebar.tsx` renders
+`sectionsForRole(currentUser.role, currentUser.allowedSections)` (§4/§7), so what actually shows
+depends on who's logged in: Owner always sees every section below plus Team; a Manager/Viewer
+sees only whatever was checked for their account on the Team page. In nav order: `/dashboard`
+"Dashboard" (landing page — home `/` and a successful login both redirect here), `/register`
+"Stock Log", `/notes` "Notes", `/ship` "Ready to Ship" (queue, pack/ship, ship-by filter, "To
+make" list with per-item and "Produce all" buttons), `/shipped`/`/returns` (SOLD/RETURNED ledgers
+— both support delete-with-undo; Returns also supports reassigning a return to a different
+product), `/products` (manage groups/variants/photos/stock-sharing), `/inventory` (stock levels —
+category filter reveals a colour filter scoped to that category, plus a from/to date range that
+narrows Shipped/Returned only; on-hand/available always show the current count), `/produce`
+(create a production batch), `/account` **"Expense"** in the UI (money in/out ledger — route
+never renamed, only the label; §4/§7), and — Owner-only, never grantable — `/team` (create/edit/
+delete Manager and Viewer accounts, pick each one's section grants).
 
+- **`/dashboard`** is the real landing page now: KPI row (Ready to Ship + overdue count, stock on
+  hand, needs-reorder count, units sold 30d, returns awaiting grading, this Expense cycle's
+  totals) sourced straight from each feature's own `lib/` functions (no extra API round-trip —
+  the page is a Server Component calling them directly, which also means it only needs `/dashboard`
+  itself granted, not every section it summarizes); an "urgent Ready to Ship" table and a
+  "needs reorder" table (both linking to their full page); a 14-day units-sold trend
+  (`TrendBars` — pure CSS/HTML bars, no chart library) and a fast-movers table (both ledger-real,
+  §4's `reports.ts` note on why revenue/sales-by-channel are deliberately left off); a small
+  inventory preview and the Notes scratchpad. The "Simulate sales / Process orders / Sync stock"
+  dev-tool buttons only render for Owner — they're bulk test/mutation tools, not insights, and
+  stay unmapped in `SECTION_API_PREFIXES` so they fail closed for anyone else regardless of
+  whether Dashboard itself is granted.
 - `/inventory/print` — printable inventory sheet (one category per page, two colour-tables per
   row), reachable from Inventory's Print button; carries the same category/colour filter as
   `&category=`/`&color=` query params.
 - The Shipped, Returns, Stock Log, and Inventory pages all hide their headline numbers behind a
   "Show numbers" toggle by default (`RevealableStats` — pure client state, no request either way)
   — every fresh page load starts hidden.
-- The Dashboard has a free-text Notes scratchpad (`NotesPanel` / `Note` model) at the bottom —
-  no structure, just whatever's typed, saved on demand.
+- The Sidebar footer shows just the logged-in username now, no role label next to it.
 
-**Reachable by direct URL, not in the sidebar** (secondary/dev tools): `/dashboard`, `/orders`
-(MarketplaceOrder history — automated pipeline), `/channels` (ChannelListing management),
-`/replenishment`, `/reports`, `/production` (batch history, distinct from `/produce`),
-`/returns/marketplace` (automated ReturnRecord grading, separate from `/returns`),
-`/ship/queue-print` (printable queue sheet), `/ship/stock-report` (printable post-queue PDF),
-`/login`, home `/`.
+**Reachable by direct URL, not in the sidebar / not grantable** (secondary/dev tools, Owner
+only): `/orders` (MarketplaceOrder history — automated pipeline), `/channels` (ChannelListing
+management), `/replenishment`, `/reports`, `/production` (batch history, distinct from
+`/produce`), `/returns/marketplace` (automated ReturnRecord grading, separate from `/returns`),
+`/ship/queue-print` (printable queue sheet), `/ship/stock-report` (printable post-queue PDF).
+`/login` and `/no-access` are reachable by anyone (logged out / logged in with nothing granted,
+respectively).
 
 ## 7. Known constraints & gotchas — read before assuming automated sync works
 
@@ -355,14 +426,33 @@ available always show the current count), `/produce` (create a production batch)
     `MarketplaceOrder`, which real orders never populate — expect them to show little/no real
     data. **Real orders flow entirely through the sister order-alert bot → `POST /api/pending`
     → the Ready-to-Ship queue** (§8), a completely separate path from this dormant pipeline.
-- **Auth is a single shared fixed-secret cookie, not a signed session.**
-  `middleware.ts` does a plain string `===` against `TOKEN = AUTH_TOKEN env, or the hardcoded
-  fallback 'rangrooh-stock-authed-9c4458'` — no signature, no per-user distinction, no
-  server-side revocation beyond the cookie's own 60-day expiry. `AUTH_USERNAME`/`AUTH_PASSWORD`
-  also fall back to hardcoded defaults (`rangrooh` / `rangrooh@123`) if unset. **Confirm
-  `AUTH_TOKEN`, `AUTH_USERNAME`, `AUTH_PASSWORD`, and `CRON_SECRET` are all actually set in the
-  Vercel project's env vars** — if any are left unset, that endpoint's protection silently
-  degrades to a hardcoded default or an always-allow.
+- **Auth is now per-account, role-based, and enforced server-side on every request — not just
+  hidden in the sidebar.** Each login is a real `Account` (§3) with a scrypt-hashed password and a
+  role: **Owner** (unrestricted — the only role that can reach `/team`, i.e. create/edit/delete
+  other accounts, or change its own or anyone else's password), **Manager** (full read/write, but
+  only within the sections an Owner explicitly checked for that account — no longer automatic
+  "all sections"), **Viewer** (same section grants as Manager, but strictly **read-only** within
+  them: any non-GET/HEAD/OPTIONS request into a granted section, page or **API**, is refused by
+  `isPathAllowed` itself — calling the API directly instead of clicking a disabled button doesn't
+  bypass it). `gaurav` (Owner) is the only account ever seeded by code; every Manager/Viewer login
+  and its password is created by hand from the Team page, on purpose, so no password is ever
+  written into a script or committed anywhere.
+  - **The whole gate lives in `src/proxy.ts`, not `middleware.ts`.** Next.js 16 deprecated and
+    renamed the file convention (`middleware.ts` → `proxy.ts`); this isn't cosmetic — a real
+    production outage happened from keeping the old filename (`x-vercel-error:
+    MIDDLEWARE_INVOCATION_FAILED` on every request), apparently because Vercel's platform still
+    routes that legacy filename to their Edge runtime regardless of what Next.js's own docs say
+    about `proxy.ts` defaulting to Node — and Edge can't run Mongoose/TCP. **If this project is
+    ever regenerated or a file gets renamed back to `middleware.ts`, that's a live-site-down bug,
+    not a style nit** — verify with `curl -sv` against the deployed URL if anything about
+    login/session ever changes, don't trust `next build` succeeding locally as proof.
+  - The one exception: the sister order-alert bot (§8) is a server calling another server, never
+    a browser, so it can't carry a real per-account session — `proxy.ts`'s `isServiceRequest()`
+    recognizes the same fixed `AUTH_TOKEN` shared secret the old single-login system always used,
+    but narrowly, only for `/api/pending*` (exactly what that bot calls), nothing else. **Confirm
+    `AUTH_TOKEN` and `CRON_SECRET` are actually set in the Vercel project's env vars** — if
+    `AUTH_TOKEN` is unset it silently falls back to the hardcoded default
+    `'rangrooh-stock-authed-9c4458'`.
 - **Multi-collection operations that aren't wrapped in one transaction**: `renameVariantSku`
   touches 11 collections via separate `updateMany` calls; `removeVariant`/`deleteProductGroup`
   are similarly multi-step. A crash mid-operation could leave things partially updated. Worth
@@ -382,9 +472,15 @@ codebase or database directly.
 
 - Auth: it sends `Cookie: auth=<STOCK_MANAGER_AUTH_TOKEN>` on every call. That value must be the
   **exact same string** as this app's `AUTH_TOKEN` (or the hardcoded fallback if `AUTH_TOKEN` is
-  unset here) — `middleware.ts` compares it with plain `===`, nothing fancier.
-- It only ever calls two endpoints: `GET /api/pending/check?orderId=` (dup-check before adding)
-  and `POST /api/pending` (`addPending`).
+  unset here) — `proxy.ts`'s `isServiceRequest()` compares it with plain `===`, narrowly scoped to
+  `/api/pending*` only (§7); every other route needs a real per-account session now.
+- It calls four endpoints, all under `/api/pending*`: `GET /api/pending/check?orderId=` (dup-check
+  before adding), `POST /api/pending` (`addPending`), and — for the cancellation sweep — `GET
+  /api/pending/summary` (find the queue row(s) for a newly-cancelled order) then `DELETE
+  /api/pending/[id]` per matching row (`cancelPending`, releasing the reservation). Both halves
+  (new-order push and cancel-sweep) were re-verified live end-to-end after the RBAC rewrite and
+  the `proxy.ts` rename — see this session's history if the exact verification steps are ever
+  needed again.
 - It **never** touches `/api/cron/poll`, `/api/orders/ingest`, or anything in the
   marketplace-adapter pipeline. **The two order systems are completely independent and never
   need to reconcile** — the sister bot is a self-contained "detect → push to Ready to Ship"
@@ -407,10 +503,14 @@ codebase or database directly.
 ## 9. File map
 
 ```
-src/models/           one file per Mongoose model (§3)
+src/models/           one file per Mongoose model (§3), incl. Account + Session (auth)
 src/lib/
   db.ts                 Mongoose connection caching + transaction sessions
   constants.ts           PLATFORMS/CHANNELS, MovementType, STANDARD_SIZES, etc. — client-safe, no DB (§4)
+  permissions.ts          SECTIONS/OWNER_SECTIONS/isPathAllowed — the whole access-control model, pure/no DB (§4, §7)
+  auth.ts                 Session create/destroy/read (§4, §7)
+  password.ts             scrypt hash/verify
+  team.ts                 Owner-only Account CRUD backing the Team page (§4)
   stockShare.ts           stockSkuFor() — DB-backed, single-flight-cached stock-sharing resolution (§4)
   stock.ts                StockService — the only code allowed to mutate stock (§4)
   shipping.ts             Ready-to-Ship queue lifecycle — the sister project's integration surface (§4, §8)
@@ -426,7 +526,9 @@ src/lib/
   returnReports.ts          platform return-report reconciliation
   register.ts               "Stock Log" — Produce/Ship/Return manual entries
   movements.ts               Shipped/Returns list-page data
-  reports.ts                 sales/returns dashboard bundle (sourced from the dormant pipeline's data)
+  accounts.ts                the Expense ledger (periods/entries) — §3/§4, route `/account`, UI label "Expense"
+  clothPurchases.ts           cloth/fabric purchase log, separate from Expense entries
+  reports.ts                 sales/returns bundle + dailySoldTrend — see §4 for which fields are real vs. dormant-pipeline-sourced
   sync.ts                    channel stock-push engine
   cron.ts                    isAuthorizedCron() bearer-token check
   csv.ts                     Excel-safe CSV export
@@ -434,9 +536,10 @@ src/lib/
   notes.ts                   the Dashboard scratchpad's read/write (§3)
 src/app/
   api/                    one folder per route (§5)
-  register|ship|shipped|returns|products|inventory|produce/   sidebar pages (§6)
-  dashboard|orders|channels|replenishment|reports|production|returns/marketplace|ship/queue-print|ship/stock-report|login/   non-sidebar pages (§6)
-middleware.ts             the `auth` cookie gate on every route except login/logout/backup (§7)
+  dashboard|register|notes|ship|shipped|returns|products|inventory|produce|account|team/   sidebar pages, role/section-gated (§6)
+  orders|channels|replenishment|reports|production|returns/marketplace|ship/queue-print|ship/stock-report/   Owner-only, not in the sidebar (§6)
+  login|no-access/    reachable without a section grant (§6, §7)
+src/proxy.ts             the RBAC gate on every route except PUBLIC_PATHS — renamed from middleware.ts, NOT cosmetic (§7)
 vercel.json                only schedules /api/backup — no cron for the marketplace pipeline (§7)
 ```
 

@@ -10,6 +10,7 @@ export interface Section {
  *  up a Manager or Viewer account. Owner gets all of these automatically;
  *  Manager and Viewer only get what's explicitly checked for that account. */
 export const SECTIONS: Section[] = [
+  { href: '/dashboard', label: 'Dashboard' },
   { href: '/register', label: 'Stock Log' },
   { href: '/notes', label: 'Notes' },
   { href: '/ship', label: 'Ready to Ship' },

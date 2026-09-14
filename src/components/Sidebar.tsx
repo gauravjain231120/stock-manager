@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import {
+  LayoutDashboard,
   ClipboardList,
   Truck,
   PackageCheck,
@@ -23,6 +24,7 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 import { sectionsForRole, type Role } from '@/lib/permissions';
 
 const ICONS: Record<string, LucideIcon> = {
+  '/dashboard': LayoutDashboard,
   '/register': ClipboardList,
   '/notes': NotebookPen,
   '/ship': Truck,

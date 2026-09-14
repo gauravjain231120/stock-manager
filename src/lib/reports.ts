@@ -104,3 +104,32 @@ export async function reportBundle(days = 30): Promise<ReportBundle> {
     damagedBySku,
   };
 }
+
+export interface DailyPoint {
+  day: string;
+  units: number;
+}
+
+/** Units sold per day for the last `days` days (zero-filled), IST-pinned like the rest of the app — for the Dashboard's sales trend chart. */
+export async function dailySoldTrend(days = 14): Promise<DailyPoint[]> {
+  await connectDB();
+  const cutoff = new Date(Date.now() - days * DAY_MS);
+  const agg = await StockMovementModel.aggregate<{ _id: string; units: number }>([
+    { $match: { type: MovementType.SOLD, createdAt: { $gte: cutoff } } },
+    {
+      $group: {
+        _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt', timezone: 'Asia/Kolkata' } },
+        units: { $sum: '$qty' },
+      },
+    },
+  ]);
+  const byDay = new Map(agg.map((a) => [a._id, -a.units])); // qty is negative for SOLD
+
+  const dayKeyFmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' });
+  const points: DailyPoint[] = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const key = dayKeyFmt.format(new Date(Date.now() - i * DAY_MS));
+    points.push({ day: key, units: byDay.get(key) ?? 0 });
+  }
+  return points;
+}
