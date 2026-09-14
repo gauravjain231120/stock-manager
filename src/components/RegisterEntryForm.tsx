@@ -224,7 +224,7 @@ export function RegisterEntryForm({ products, lockedAction }: { products: Picker
 
             <div className="mt-3 rounded-lg bg-black/5 p-3 dark:bg-white/5">
               <div className="font-medium">{products.find((p) => p.sku === sku)?.name ?? sku}</div>
-              <div className="font-mono text-xs text-neutral-500">{sku}</div>
+              <div className="font-mono text-sm font-semibold text-brand-600 dark:text-brand-400">{sku}</div>
               <div className="mt-1 text-xs text-neutral-500">
                 {PLATFORM_LABELS[channel]} · {qty || 0} unit{Number(qty) === 1 ? '' : 's'} · {date && date !== todayStr() ? date : 'today'}
               </div>
