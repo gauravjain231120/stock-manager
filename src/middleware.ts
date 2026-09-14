@@ -8,6 +8,21 @@ import { isPathAllowed, sectionsForRole, NO_ACCESS_PATH, type Role } from '@/lib
 // CRON_SECRET / the auth cookie so Vercel Cron can reach it.
 const PUBLIC_PATHS = new Set(['/login', '/api/login', '/api/logout', '/api/backup']);
 
+// The order-alert integration (a SEPARATE app — Myntra/Amazon order events
+// adding/removing rows in the Ready-to-Ship queue) is a server calling
+// another server, never a browser — it can never carry a real per-account
+// session cookie. It already sends the fixed shared secret the old
+// single-login system used, unchanged since before this per-account/role
+// system existed; recognizing that same value here (already configured in
+// that other app's own env, nothing to change there) keeps it working
+// without needing a session, but ONLY for the exact API surface it actually
+// calls — everything else still requires a real logged-in account.
+const SERVICE_TOKEN = process.env.AUTH_TOKEN ?? 'rangrooh-stock-authed-9c4458';
+const SERVICE_API_PREFIXES = ['/api/pending'];
+function isServiceRequest(pathname: string, token: string | undefined): boolean {
+  return Boolean(token) && token === SERVICE_TOKEN && SERVICE_API_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
+
 /**
  * Gates the whole app behind login AND per-role/per-section authorization.
  * Runs on Node.js (this Next.js version's middleware/proxy defaults to it,
@@ -24,6 +39,11 @@ export async function middleware(req: NextRequest) {
   }
 
   const token = req.cookies.get('auth')?.value;
+
+  if (isServiceRequest(pathname, token)) {
+    return NextResponse.next();
+  }
+
   let session: { role: Role; allowedSections: string[] } | null = null;
   if (token) {
     try {
