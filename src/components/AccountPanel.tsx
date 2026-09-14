@@ -135,14 +135,22 @@ export function AccountPanel({
           <h1 className="text-xl font-bold">Account</h1>
           <p className="text-sm text-neutral-500">Current cycle: {dateOnly(from)} – ongoing</p>
         </div>
-        <button
-          onClick={closePeriod}
-          disabled={closing || entries.length === 0}
-          title={entries.length === 0 ? 'Add at least one entry first' : 'Lock in this cycle and start a fresh one'}
-          className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {closing ? 'Closing…' : 'Close period & start new'}
-        </button>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/account/cloth"
+            className="rounded-lg border border-black/15 px-3 py-2 text-sm font-medium text-neutral-600 transition hover:bg-black/5 dark:border-white/20 dark:text-neutral-300 dark:hover:bg-white/10"
+          >
+            Cloth purchases
+          </Link>
+          <button
+            onClick={closePeriod}
+            disabled={closing || entries.length === 0}
+            title={entries.length === 0 ? 'Add at least one entry first' : 'Lock in this cycle and start a fresh one'}
+            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {closing ? 'Closing…' : 'Close period & start new'}
+          </button>
+        </div>
       </div>
 
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
