@@ -59,9 +59,23 @@ export function StatCard({
  *  or charting library, so it renders instantly server-side. Each bar shows
  *  its exact count in a small tooltip on hover (a native `title` attribute
  *  is too unreliable here — slow OS-dependent timing, easy to miss). */
-export function TrendBars({ data }: { data: { day: string; units: number }[] }) {
+export function TrendBars({
+  data,
+  tone = 'brand',
+  unitLabel = 'units',
+}: {
+  data: { day: string; units: number }[];
+  tone?: 'brand' | 'warn';
+  unitLabel?: string;
+}) {
   const max = Math.max(1, ...data.map((d) => d.units));
   const H = 56;
+  const barClass =
+    tone === 'warn'
+      ? 'bg-amber-500/70 group-hover:bg-amber-600 dark:bg-amber-400/60'
+      : 'bg-brand-500/70 group-hover:bg-brand-600 dark:bg-brand-400/60';
+  const shortDate = (day: string) =>
+    new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' }).format(new Date(day));
   return (
     <div>
       <div className="flex items-end gap-1 overflow-visible pt-8" style={{ height: H + 32 }}>
@@ -69,12 +83,9 @@ export function TrendBars({ data }: { data: { day: string; units: number }[] }) 
           const h = Math.max(d.units > 0 ? 3 : 1, Math.round((d.units / max) * H));
           return (
             <div key={d.day} className="group relative flex-1" style={{ height: H }}>
-              <div
-                className="absolute inset-x-0 bottom-0 rounded-t bg-brand-500/70 transition-colors group-hover:bg-brand-600 dark:bg-brand-400/60"
-                style={{ height: h }}
-              />
+              <div className={`absolute inset-x-0 bottom-0 rounded-t transition-colors ${barClass}`} style={{ height: h }} />
               <div className="pointer-events-none absolute -top-8 left-1/2 z-10 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-neutral-900 px-2 py-1 text-[11px] font-medium text-white shadow-lg group-hover:block dark:bg-white dark:text-neutral-900">
-                {d.units} sold
+                {d.units} {unitLabel} · {shortDate(d.day)}
                 <div className="absolute left-1/2 top-full size-0 -translate-x-1/2 border-4 border-transparent border-t-neutral-900 dark:border-t-white" />
               </div>
             </div>
@@ -83,8 +94,8 @@ export function TrendBars({ data }: { data: { day: string; units: number }[] }) 
       </div>
       <div className="mt-1.5 flex gap-1 text-[10px] text-neutral-400">
         {data.map((d) => (
-          <div key={d.day} className="flex-1 text-center">
-            {d.day.slice(8)}
+          <div key={d.day} className="flex-1 text-center whitespace-nowrap">
+            {shortDate(d.day)}
           </div>
         ))}
       </div>

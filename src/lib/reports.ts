@@ -110,12 +110,14 @@ export interface DailyPoint {
   units: number;
 }
 
-/** Units sold per day for the last `days` days (zero-filled), IST-pinned like the rest of the app — for the Dashboard's sales trend chart. */
-export async function dailySoldTrend(days = 14): Promise<DailyPoint[]> {
+/** Shared day-bucketing for a single ledger movement type, IST-pinned like the rest of the app,
+ *  zero-filled so every one of the last `days` days appears even with no activity.
+ *  `negate` because SOLD's qty is stored negative (a decrement) while RETURNED's is positive. */
+async function dailyMovementTrend(type: MovementType, days: number, negate: boolean): Promise<DailyPoint[]> {
   await connectDB();
   const cutoff = new Date(Date.now() - days * DAY_MS);
   const agg = await StockMovementModel.aggregate<{ _id: string; units: number }>([
-    { $match: { type: MovementType.SOLD, createdAt: { $gte: cutoff } } },
+    { $match: { type, createdAt: { $gte: cutoff } } },
     {
       $group: {
         _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt', timezone: 'Asia/Kolkata' } },
@@ -123,7 +125,7 @@ export async function dailySoldTrend(days = 14): Promise<DailyPoint[]> {
       },
     },
   ]);
-  const byDay = new Map(agg.map((a) => [a._id, -a.units])); // qty is negative for SOLD
+  const byDay = new Map(agg.map((a) => [a._id, negate ? -a.units : a.units]));
 
   const dayKeyFmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' });
   const points: DailyPoint[] = [];
@@ -132,4 +134,15 @@ export async function dailySoldTrend(days = 14): Promise<DailyPoint[]> {
     points.push({ day: key, units: byDay.get(key) ?? 0 });
   }
   return points;
+}
+
+/** Units sold per day — for the Dashboard's sales trend chart. */
+export async function dailySoldTrend(days = 14): Promise<DailyPoint[]> {
+  return dailyMovementTrend(MovementType.SOLD, days, true);
+}
+
+/** Units returned per day (GOOD/BAD grades that actually posted back to the ledger — WRONG-condition
+ *  returns don't restock, so they never show here, matching what physically happened to stock). */
+export async function dailyReturnedTrend(days = 14): Promise<DailyPoint[]> {
+  return dailyMovementTrend(MovementType.RETURNED, days, false);
 }
