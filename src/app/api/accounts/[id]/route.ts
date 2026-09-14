@@ -6,12 +6,13 @@ import { ROLES } from '@/lib/permissions';
 export const dynamic = 'force-dynamic';
 
 const Patch = z.object({
+  username: z.string().trim().min(1).optional(),
   role: z.enum(ROLES).optional(),
   allowedSections: z.array(z.string()).optional(),
   password: z.string().min(6).optional(),
 });
 
-/** PATCH /api/accounts/[id] -> change role, Viewer permissions, and/or reset the password. */
+/** PATCH /api/accounts/[id] -> change username, role, Viewer permissions, and/or reset the password. */
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
   const parsed = Patch.safeParse(await req.json().catch(() => null));

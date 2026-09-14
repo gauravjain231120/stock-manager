@@ -47,6 +47,7 @@ function SectionPicker({ value, onChange }: { value: string[]; onChange: (v: str
 }
 
 interface EditDraft {
+  username: string;
   role: Role;
   allowedSections: string[];
   password: string;
@@ -99,7 +100,7 @@ export function TeamPanel({ initialAccounts }: { initialAccounts: AccountItem[] 
 
   function startEdit(a: AccountItem) {
     setEditingId(a.id);
-    setDraft({ role: a.role, allowedSections: a.allowedSections, password: '' });
+    setDraft({ username: a.username, role: a.role, allowedSections: a.allowedSections, password: '' });
   }
 
   function cancelEdit() {
@@ -109,6 +110,10 @@ export function TeamPanel({ initialAccounts }: { initialAccounts: AccountItem[] 
 
   async function saveEdit(a: AccountItem) {
     if (!draft) return;
+    if (!draft.username.trim()) {
+      toast.error('Username is required');
+      return;
+    }
     if (draft.password && draft.password.length < 6) {
       toast.error('New password must be at least 6 characters');
       return;
@@ -119,6 +124,7 @@ export function TeamPanel({ initialAccounts }: { initialAccounts: AccountItem[] 
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          username: draft.username.trim(),
           role: draft.role,
           allowedSections: draft.allowedSections,
           password: draft.password || undefined,
@@ -126,10 +132,15 @@ export function TeamPanel({ initialAccounts }: { initialAccounts: AccountItem[] 
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
+        const nextUsername = draft.username.trim().toLowerCase();
         setAccounts((prev) =>
-          prev.map((x) => (x.id === a.id ? { ...x, role: draft.role, allowedSections: draft.role !== 'OWNER' ? draft.allowedSections : [] } : x)),
+          prev.map((x) =>
+            x.id === a.id
+              ? { ...x, username: nextUsername, role: draft.role, allowedSections: draft.role !== 'OWNER' ? draft.allowedSections : [] }
+              : x,
+          ),
         );
-        toast.success(`Updated ✓ — ${a.username} will need to log in again for this to take effect`);
+        toast.success(`Updated ✓ — ${nextUsername} will need to log in again for this to take effect`);
         cancelEdit();
       } else {
         toast.error(data?.error || 'Could not update account');
@@ -232,7 +243,13 @@ export function TeamPanel({ initialAccounts }: { initialAccounts: AccountItem[] 
                   <Td colSpan={5}>
                     <div className="space-y-3 py-2">
                       <div className="flex flex-wrap items-center gap-3">
-                        <span className="text-sm font-medium">{a.username}</span>
+                        <input
+                          type="text"
+                          value={draft.username}
+                          onChange={(e) => setDraft({ ...draft, username: e.target.value })}
+                          placeholder="Username"
+                          className={`${input} w-40`}
+                        />
                         <select
                           value={draft.role}
                           onChange={(e) => setDraft({ ...draft, role: e.target.value as Role })}

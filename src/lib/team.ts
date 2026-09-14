@@ -64,7 +64,7 @@ export async function createAccount(input: {
 
 export async function updateAccount(
   id: string,
-  changes: { role?: Role; allowedSections?: string[]; password?: string },
+  changes: { username?: string; role?: Role; allowedSections?: string[]; password?: string },
 ): Promise<void> {
   await connectDB();
   const account = await AccountModel.findById(id);
@@ -79,6 +79,16 @@ export async function updateAccount(
 
   let changed = false;
   const nextRole = changes.role ?? (account.role as Role);
+  if (changes.username !== undefined) {
+    const username = changes.username.trim().toLowerCase();
+    if (!username) throw new Error('Username is required');
+    if (username !== account.username) {
+      const existing = await AccountModel.findOne({ username, _id: { $ne: id } }).lean();
+      if (existing) throw new Error('That username is already taken');
+      account.username = username;
+      changed = true;
+    }
+  }
   if (changes.role !== undefined && changes.role !== account.role) {
     account.role = changes.role;
     // Owner has no section list to maintain; Manager/Viewer moving away from
