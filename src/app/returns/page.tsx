@@ -7,6 +7,7 @@ import { PageHeader, StatCard } from '@/components/ui';
 import { MovementTable } from '@/components/MovementTable';
 import { MovementDayPanel } from '@/components/MovementDayPanel';
 import { ReturnReports } from '@/components/ReturnReports';
+import { QuickReturnCheck } from '@/components/QuickReturnCheck';
 import { ReturnSearch } from '@/components/ReturnSearch';
 import { RegisterEntryForm } from '@/components/RegisterEntryForm';
 import { RevealableStats } from '@/components/RevealableStats';
@@ -89,6 +90,10 @@ export default async function ReturnsPage() {
 
       <div className="mb-6">
         <MovementDayPanel rows={rows} today={stats.today} title="Returned on a day" verb="returned" />
+      </div>
+
+      <div className="mb-6">
+        <QuickReturnCheck />
       </div>
 
       <div className="mb-6">

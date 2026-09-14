@@ -242,9 +242,14 @@ return by tracking ID, then scan-and-grade on arrival — `GOOD` → sellable st
 so a barcode scan always matches whatever was typed when logging it.
 
 **`returnReports.ts`** — reconciles a platform's own "these parcels are coming back" report
-against logged returns (exact match, or partial match if ≥8 chars). Tracking numbers are
-**globally unique across all saved reports** (DB-enforced) — a clear `DUPLICATE_MESSAGE` error
-surfaces instead of a raw Mongo duplicate-key error.
+against logged returns (exact match, or partial match if ≥8 chars, via the shared
+`loadLoggedReturns()`/`findMatch` helper). Tracking numbers are **globally unique across all
+saved reports** (DB-enforced) — a clear `DUPLICATE_MESSAGE` error surfaces instead of a raw
+Mongo duplicate-key error. `checkTrackingIds(codes)` is a second, deliberately separate entry
+point onto the same matching logic — a **read-only, nothing-saved** one-off check (backs the
+Returns page's "Quick check" upload tool, §6): given tracking numbers straight from an uploaded
+file, say which are already logged as returned. Never touches `ReturnReportModel` at all, unlike
+everything else in this file.
 
 **`register.ts`** ("Stock Log") — the simplest recording UI: PRODUCE (+stock)/SHIP (-stock, via
 `sellUnits`, refused if insufficient)/RETURN (+stock). An exchange is logged as one Return + one
@@ -370,6 +375,7 @@ re-login.
 | `/api/reports` | GET | `?days=30` sales/returns/movers bundle |
 | `/api/return-reports` | POST | Save a platform's return report |
 | `/api/return-reports/[id]` | PATCH, DELETE | Edit / delete a saved report |
+| `/api/return-reports/check` | POST | `{trackingIds[]}` -> one-off match against logged returns, **read-only, saves nothing** — backs the Quick Check upload tool, not the saved-reports workflow |
 | `/api/return-shipments` | GET, POST | Outstanding-parcel count / log an EXPECTED return |
 | `/api/return-shipments/[id]` | POST, PATCH, DELETE | Grade/receive, edit, delete |
 | `/api/return-shipments/scan` | POST | `{trackingId}` → matching parcel or 404 (scan-to-grade flow) |
@@ -393,7 +399,13 @@ sees only whatever was checked for their account on the Team page. In nav order:
 "Stock Log", `/notes` "Notes", `/ship` "Ready to Ship" (queue, pack/ship, ship-by filter, "To
 make" list with per-item and "Produce all" buttons), `/shipped`/`/returns` (SOLD/RETURNED ledgers
 — both support delete-with-undo; Returns also supports reassigning a return to a different
-product), `/products` (manage groups/variants/photos/stock-sharing), `/inventory` (stock levels —
+product; also has a "Log a Return" quick-entry box at the top, same picker as Stock Log's, locked
+to Return-only via `RegisterEntryForm`'s `lockedAction` prop; below that, two return-report
+tools that look similar but are deliberately different — "Quick check" is upload-and-diff with
+**nothing saved** (`QuickReturnCheck.tsx`, parses the file client-side with SheetJS, §4/§7), while
+"Return reports" below it is the **persisted** version (`ReturnReports.tsx`) that keeps the list,
+tracks it over time, and lets you mark a parcel claimed/written off), `/products` (manage
+groups/variants/photos/stock-sharing), `/inventory` (stock levels —
 category filter reveals a colour filter scoped to that category, plus a from/to date range that
 narrows Shipped/Returned only; on-hand/available always show the current count), `/produce`
 (create a production batch), `/account` **"Expense"** in the UI (money in/out ledger — route
@@ -483,6 +495,13 @@ respectively).
   replica set — Atlas always is one). Run `npm run db:up && npm run db:init` first.
 - **`removeVariant` hard-deletes history** (SkuStock/StockMovement/ChannelListing/
   ChannelInventoryState) for that SKU — there is no undo.
+- **`xlsx` (SheetJS, for parsing an uploaded Myntra return-report file client-side) is installed
+  from SheetJS's own CDN, not the npm registry** — `package.json` pins
+  `"xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"` on purpose. The npm-registry
+  version has real, unpatched vulnerabilities (prototype pollution + ReDoS, "no fix available"
+  per its own npm advisory) — SheetJS stopped shipping fixes there and moved to their own CDN
+  instead. **Never `npm install xlsx` to "fix" or bump this** — that silently swaps back to the
+  vulnerable version; get a newer pinned version from `https://cdn.sheetjs.com` the same way.
 - **Two easy-to-repeat permission-boundary mistakes, both caught by a full code review on
   2026-09-14 and fixed — watch for the same shape when adding a new section:**
   1. A grantable section's `SECTION_API_PREFIXES` entry must list **every** API prefix that

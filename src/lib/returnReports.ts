@@ -170,37 +170,96 @@ export async function autoAddToDayReport(platform: string, trackingId: string, d
   }
 }
 
-/** Every saved report, newest first, with each line matched against real returns. */
-export async function listReturnReports(): Promise<ReportView[]> {
-  await connectDB();
-  const reports = await ReturnReportModel.find().sort({ reportDate: -1, createdAt: -1 }).lean();
-  if (reports.length === 0) return [];
+interface LoggedReturn {
+  sku: string;
+  qty: number;
+  trackingId: string;
+  createdAt: unknown;
+}
 
-  // All returns that carry a tracking number — matched on ANY date, because a
-  // parcel listed today may only reach us next week.
-  const returns = await StockMovementModel.find(
+/**
+ * Every logged return that carries a tracking number, plus a matcher over
+ * them — exact match first, then (for codes long enough to mean something,
+ * `MIN_PARTIAL_LEN`) a scan that caught extra/missing characters. Shared by
+ * the saved reports feature and the no-save quick-check below, so both use
+ * exactly the same matching rules.
+ */
+async function loadLoggedReturns() {
+  await connectDB();
+  // Matched on ANY date, because a parcel listed today may only reach us next week.
+  const returns = (await StockMovementModel.find(
     { type: MovementType.RETURNED, trackingId: { $nin: [null, ''] } },
     { sku: 1, qty: 1, trackingId: 1, createdAt: 1 },
-  ).sort({ createdAt: -1 }).lean();
+  ).sort({ createdAt: -1 }).lean()) as unknown as LoggedReturn[];
+  const byTracking = new Map(returns.map((r) => [r.trackingId, r]));
 
-  const byTracking = new Map(returns.map((r) => [r.trackingId as string, r]));
-  const skus = [...new Set(returns.map((r) => r.sku))];
-  const products = await ProductModel.find({ sku: { $in: skus } }, { sku: 1, name: 1 }).lean();
-  const nameBy = new Map(products.map((p) => [p.sku, p.name]));
-
-  /** Exact match first; then tolerate a scan that captured extra characters. */
   const findMatch = (code: string) => {
     const exact = byTracking.get(code);
     if (exact) return { hit: exact, partial: false };
     if (code.length < MIN_PARTIAL_LEN) return null;
     for (const r of returns) {
-      const t = r.trackingId as string;
+      const t = r.trackingId;
       if (t.length >= MIN_PARTIAL_LEN && (t.startsWith(code) || code.startsWith(t))) {
         return { hit: r, partial: true };
       }
     }
     return null;
   };
+
+  return { returns, findMatch };
+}
+
+export interface QuickCheckLine {
+  trackingId: string;
+  received: boolean;
+  partial: boolean;
+  sku: string | null;
+  name: string | null;
+  qty: number | null;
+  loggedAt: string | null;
+}
+
+/**
+ * One-off check: given tracking numbers straight from an uploaded file, say
+ * which are already logged as returned and which aren't — nothing is read
+ * from or written to ReturnReportModel, and nothing from this call is saved
+ * anywhere. Pure read-and-compare, for a quick "what's missing" answer
+ * without committing to the saved-reports workflow.
+ */
+export async function checkTrackingIds(codes: string[]): Promise<QuickCheckLine[]> {
+  await connectDB();
+  const clean = [...new Set(codes.map((c) => normalizeTracking(c)).filter((c): c is string => Boolean(c)))];
+  if (clean.length === 0) return [];
+
+  const { findMatch } = await loadLoggedReturns();
+  const skus = [...new Set(clean.map((c) => findMatch(c)?.hit.sku).filter((s): s is string => Boolean(s)))];
+  const products = await ProductModel.find({ sku: { $in: skus } }, { sku: 1, name: 1 }).lean();
+  const nameBy = new Map(products.map((p) => [p.sku, p.name]));
+
+  return clean.map((code) => {
+    const m = findMatch(code);
+    return {
+      trackingId: code,
+      received: Boolean(m),
+      partial: Boolean(m?.partial),
+      sku: m ? m.hit.sku : null,
+      name: m ? nameBy.get(m.hit.sku) ?? m.hit.sku : null,
+      qty: m ? Math.abs(m.hit.qty) : null,
+      loggedAt: m ? (m.hit.createdAt as Date).toISOString() : null,
+    };
+  });
+}
+
+/** Every saved report, newest first, with each line matched against real returns. */
+export async function listReturnReports(): Promise<ReportView[]> {
+  await connectDB();
+  const reports = await ReturnReportModel.find().sort({ reportDate: -1, createdAt: -1 }).lean();
+  if (reports.length === 0) return [];
+
+  const { findMatch } = await loadLoggedReturns();
+  const skus = [...new Set(reports.flatMap((r) => r.items.map((i) => findMatch(i.trackingId)?.hit.sku)).filter((s): s is string => Boolean(s)))];
+  const products = await ProductModel.find({ sku: { $in: skus } }, { sku: 1, name: 1 }).lean();
+  const nameBy = new Map(products.map((p) => [p.sku, p.name]));
 
   return reports.map((rep) => {
     const lines: ReportLine[] = rep.items.map((it) => {
