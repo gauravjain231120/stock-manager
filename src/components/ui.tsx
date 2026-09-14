@@ -55,27 +55,28 @@ export function StatCard({
   );
 }
 
-/** A lightweight bar chart for a day-bucketed trend — pure inline SVG-free CSS,
- *  no client JS or charting library, so it renders instantly server-side. */
+/** A lightweight bar chart for a day-bucketed trend — pure CSS, no client JS
+ *  or charting library, so it renders instantly server-side. Each bar shows
+ *  its exact count in a small tooltip on hover (a native `title` attribute
+ *  is too unreliable here — slow OS-dependent timing, easy to miss). */
 export function TrendBars({ data }: { data: { day: string; units: number }[] }) {
   const max = Math.max(1, ...data.map((d) => d.units));
   const H = 56;
   return (
     <div>
-      <div className="flex items-end gap-1" style={{ height: H }}>
+      <div className="flex items-end gap-1 overflow-visible pt-8" style={{ height: H + 32 }}>
         {data.map((d) => {
           const h = Math.max(d.units > 0 ? 3 : 1, Math.round((d.units / max) * H));
           return (
-            <div
-              key={d.day}
-              title={`${d.day}: ${d.units} sold`}
-              className="relative flex-1 cursor-default"
-              style={{ height: H }}
-            >
+            <div key={d.day} className="group relative flex-1" style={{ height: H }}>
               <div
-                className="absolute inset-x-0 bottom-0 rounded-t bg-brand-500/70 transition-colors hover:bg-brand-600 dark:bg-brand-400/60"
+                className="absolute inset-x-0 bottom-0 rounded-t bg-brand-500/70 transition-colors group-hover:bg-brand-600 dark:bg-brand-400/60"
                 style={{ height: h }}
               />
+              <div className="pointer-events-none absolute -top-8 left-1/2 z-10 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-neutral-900 px-2 py-1 text-[11px] font-medium text-white shadow-lg group-hover:block dark:bg-white dark:text-neutral-900">
+                {d.units} sold
+                <div className="absolute left-1/2 top-full size-0 -translate-x-1/2 border-4 border-transparent border-t-neutral-900 dark:border-t-white" />
+              </div>
             </div>
           );
         })}
