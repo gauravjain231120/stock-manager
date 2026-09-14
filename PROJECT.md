@@ -593,7 +593,13 @@ vercel.json                only schedules /api/backup — no cron for the market
    replica set running.
 2. `npm run build` must succeed before pushing.
 3. Commit, `git push origin main` → `https://github.com/gauravbhandari23/stock-manager.git`.
-4. Vercel auto-deploys on push to the `stock-manager-niko` project.
+4. Vercel auto-deploys on push to the `stock-manager-niko` project. **In parallel**,
+   `.github/workflows/ci.yml` runs on GitHub Actions (lint → type check → build) as an
+   independent gate — added 2026-09-14 after a real `eslint` error (an impure `Date.now()` call)
+   sat in the codebase unnoticed for a while, because Vercel's own build-time lint pass doesn't
+   necessarily catch everything a plain `npm run lint` does. This doesn't block the Vercel
+   deploy itself (they run independently) — treat a red CI check on GitHub as "go fix this," the
+   same as a local `npm run build` failure, not as something to push past.
 5. If a change touches the `/api/pending*` routes, verify the sister order-alert project's
    integration still works end to end (its `PROJECT.md` §16 has its own test workflow) — that's
    the one external caller with zero visibility into this app's internals.

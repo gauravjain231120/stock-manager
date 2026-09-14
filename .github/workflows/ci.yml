@@ -1,0 +1,38 @@
+name: CI
+
+# Runs on every push and PR so a broken lint/type/build never reaches main
+# unnoticed — Vercel deploys straight from a push and doesn't run `eslint`
+# the same way `npm run lint` does locally, which is exactly how a real
+# lint error (an impure Date.now() call) sat unnoticed in the codebase.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+        env:
+          # Every page in this app is `dynamic = 'force-dynamic'`, so nothing
+          # actually connects to Mongo during `next build` — no real secrets
+          # needed here, just enough to satisfy any code that reads the var.
+          MONGODB_URI: mongodb://localhost:27017/ci-placeholder
