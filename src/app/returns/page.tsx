@@ -1,23 +1,26 @@
 import { listMovementRows, movementStats } from '@/lib/movements';
 import { listReturnReports } from '@/lib/returnReports';
 import { listProductOptions } from '@/lib/products';
+import { registerTotals } from '@/lib/register';
 import { MovementType, PLATFORM_LABELS, Platform } from '@/lib/constants';
 import { PageHeader, StatCard } from '@/components/ui';
 import { MovementTable } from '@/components/MovementTable';
 import { MovementDayPanel } from '@/components/MovementDayPanel';
 import { ReturnReports } from '@/components/ReturnReports';
 import { ReturnSearch } from '@/components/ReturnSearch';
+import { RegisterEntryForm } from '@/components/RegisterEntryForm';
 import { RevealableStats } from '@/components/RevealableStats';
 import { num } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
 
 export default async function ReturnsPage() {
-  const [rows, stats, reports, products] = await Promise.all([
+  const [rows, stats, reports, products, registerRows] = await Promise.all([
     listMovementRows(MovementType.RETURNED),
     movementStats(MovementType.RETURNED),
     listReturnReports(),
     listProductOptions(),
+    registerTotals(),
   ]);
   const outstanding = reports.reduce((a, r) => a + r.missing, 0);
 
@@ -34,7 +37,24 @@ export default async function ReturnsPage() {
 
   return (
     <main className="px-4 py-6 sm:px-6 sm:py-8">
-      <PageHeader title="Returns" subtitle="Everything that has come back, with its tracking number. Log a return from the Stock Log." />
+      <PageHeader title="Returns" subtitle="Everything that has come back, with its tracking number." />
+
+      <div className="mb-6">
+        <RegisterEntryForm
+          lockedAction="RETURN"
+          products={registerRows.map((r) => ({
+            sku: r.sku,
+            name: r.name,
+            inStock: r.inStock,
+            groupCode: r.groupCode,
+            groupName: r.groupName,
+            category: r.category,
+            color: r.color,
+            size: r.size,
+            imageUrl: r.imageUrl,
+          }))}
+        />
+      </div>
 
       <div className="mb-6">
         <ReturnSearch rows={rows} reports={reports} />

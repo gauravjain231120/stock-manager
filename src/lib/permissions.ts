@@ -37,13 +37,15 @@ export const NO_ACCESS_PATH = '/no-access';
  *  prefixes. Deliberately fail-closed: anything not listed here is denied
  *  rather than guessed into an allow. /register's API is shared by both
  *  Stock Log and Produce (recording production posts through the same
- *  endpoint the stock log itself uses). */
+ *  endpoint the stock log itself uses; also shared by Returns now that it has
+ *  its own "log a Return" box, same as Produce already shares it for logging
+ *  production straight from that page). */
 export const SECTION_API_PREFIXES: Record<string, string[]> = {
   '/register': ['/api/register'],
   '/notes': ['/api/notes'],
   '/ship': ['/api/pending'],
   '/shipped': [],
-  '/returns': ['/api/return-reports', '/api/return-shipments', '/api/returns'],
+  '/returns': ['/api/register', '/api/return-reports', '/api/return-shipments', '/api/returns'],
   '/products': ['/api/products', '/api/channel-listings', '/api/upload', '/api/bom'],
   '/inventory': ['/api/stock'],
   '/produce': ['/api/register', '/api/raw-materials', '/api/bom'],

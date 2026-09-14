@@ -30,12 +30,16 @@ const ACTIONS = [
 
 const input = 'rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm text-neutral-900 dark:border-white/20 dark:text-white';
 
-export function RegisterEntryForm({ products }: { products: PickerProduct[] }) {
+type ActionKey = (typeof ACTIONS)[number]['key'];
+
+/** `lockedAction` embeds this form pre-set to one action with no Produce/Ship/Return
+ *  toggle shown — used on the Returns page, where only logging a Return makes sense. */
+export function RegisterEntryForm({ products, lockedAction }: { products: PickerProduct[]; lockedAction?: ActionKey }) {
   const router = useRouter();
   const ask = useConfirm();
   const toast = useToast();
   const [sku, setSku] = useState(products[0]?.sku ?? '');
-  const [action, setAction] = useState<(typeof ACTIONS)[number]['key']>('PRODUCE');
+  const [action, setAction] = useState<ActionKey>(lockedAction ?? 'PRODUCE');
   const [channel, setChannel] = useState<Platform>('AMAZON');
   const [qty, setQty] = useState('');
   const [date, setDate] = useState('');
@@ -157,36 +161,47 @@ export function RegisterEntryForm({ products }: { products: PickerProduct[] }) {
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        {ACTIONS.map((a) => (
-          <button
-            type="button"
-            key={a.key}
-            onClick={() => {
-              setAction(a.key);
-              if (a.key === 'RETURN' && !qty) setQty('1');
-            }}
-            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition ${
-              action === a.key ? `${a.tone} text-white shadow-sm` : 'border border-black/15 text-neutral-600 hover:bg-black/5 dark:border-white/20 dark:text-neutral-300 dark:hover:bg-white/10'
-            }`}
-            title={a.help}
-          >
-            <a.Icon size={15} />
-            {a.label}
-          </button>
-        ))}
+        {!lockedAction
+          ? ACTIONS.map((a) => (
+              <button
+                type="button"
+                key={a.key}
+                onClick={() => {
+                  setAction(a.key);
+                  if (a.key === 'RETURN' && !qty) setQty('1');
+                }}
+                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+                  action === a.key ? `${a.tone} text-white shadow-sm` : 'border border-black/15 text-neutral-600 hover:bg-black/5 dark:border-white/20 dark:text-neutral-300 dark:hover:bg-white/10'
+                }`}
+                title={a.help}
+              >
+                <a.Icon size={15} />
+                {a.label}
+              </button>
+            ))
+          : null}
 
         {needsPlatform ? (
-          <label className="ml-1 flex items-center gap-2 text-xs text-neutral-500">
-            Platform
-            <select className={input} value={channel} onChange={(e) => setChannel(e.target.value as Platform)}>
-              {PLATFORMS.map((p) => (
-                <option key={p} value={p}>{PLATFORM_LABELS[p]}</option>
-              ))}
-            </select>
-          </label>
-        ) : (
+          <div className="ml-1 flex flex-wrap items-center gap-1.5">
+            <span className="text-xs text-neutral-500">Platform</span>
+            {PLATFORMS.map((p) => (
+              <button
+                type="button"
+                key={p}
+                onClick={() => setChannel(p)}
+                className={`rounded-lg px-2.5 py-1 text-xs font-medium transition ${
+                  channel === p
+                    ? 'bg-brand-600 text-white shadow-sm'
+                    : 'border border-black/15 text-neutral-600 hover:bg-black/5 dark:border-white/20 dark:text-neutral-300 dark:hover:bg-white/10'
+                }`}
+              >
+                {PLATFORM_LABELS[p]}
+              </button>
+            ))}
+          </div>
+        ) : !lockedAction ? (
           <span className="self-center text-xs text-neutral-400">{ACTIONS.find((a) => a.key === action)?.help}</span>
-        )}
+        ) : null}
 
         <label className="ml-1 flex items-center gap-2 text-xs text-neutral-500">
           Date
