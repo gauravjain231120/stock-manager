@@ -62,11 +62,13 @@ export async function createAccount(input: {
   return toItem(doc.toObject());
 }
 
+/** Returns whether anything was actually changed — so the caller can tell
+ *  the difference between "saved" and "no-op, nothing to save." */
 export async function updateAccount(
   id: string,
   changes: { username?: string; role?: Role; allowedSections?: string[]; password?: string },
   currentAccountId?: string,
-): Promise<void> {
+): Promise<{ changed: boolean }> {
   await connectDB();
   const account = await AccountModel.findById(id);
   if (!account) throw new Error('Account not found');
@@ -117,12 +119,13 @@ export async function updateAccount(
     account.passwordSalt = salt;
     changed = true;
   }
-  if (!changed) return;
+  if (!changed) return { changed: false };
   await account.save();
   // Any of the above changes this account's access or credentials — force a
   // fresh login everywhere so the change takes effect immediately, instead
   // of silently staying stale until it happens to log out on its own.
   await destroyAllSessionsForAccount(id);
+  return { changed: true };
 }
 
 export async function deleteAccount(id: string): Promise<void> {

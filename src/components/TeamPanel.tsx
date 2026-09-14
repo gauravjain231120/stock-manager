@@ -146,7 +146,9 @@ export function TeamPanel({
               : x,
           ),
         );
-        toast.success(`Updated ✓ — ${nextUsername} will need to log in again for this to take effect`);
+        toast.success(
+          data?.changed ? `Updated ✓ — ${nextUsername} will need to log in again for this to take effect` : 'Nothing to save — no changes made',
+        );
         cancelEdit();
       } else {
         toast.error(data?.error || 'Could not update account');

@@ -320,6 +320,23 @@ export async function shipPending(id: string, qty?: number, trackingId?: string,
   const p = await PendingShipmentModel.findById(id);
   if (!p) throw new Error('Item not found');
   const shipQty = qty && qty > 0 ? Math.min(Math.floor(qty), p.qty) : p.qty;
+
+  // FIFO fairness, enforced not just displayed: queueRows() shows each row's
+  // "free" share assuming every order queued ahead of it on the same pile
+  // gets served first. Without re-checking that here, shipping is really
+  // "whoever's ship button gets clicked first, regardless of queue
+  // position" — on an oversold pile, a later order could take the stock an
+  // earlier one was shown as entitled to, silently starving it. Recomputed
+  // fresh (not cached) so it reflects the queue as it stands right now.
+  const row = queueRows(await listPending()).find((r) => r.id === id);
+  if (row && shipQty > row.free) {
+    throw new Error(
+      row.free <= 0
+        ? `An earlier-queued order has first claim on this stock — ship that one first.`
+        : `Only ${row.free} available for this order right now — an earlier-queued order has first claim on the rest. Ship that one first, or ship ${row.free} here.`,
+    );
+  }
+
   // A number typed at packing time wins; otherwise use whatever was saved on the row.
   const tracking = cleanTracking(trackingId) ?? p.trackingId ?? undefined;
   // A tracking number belongs to the parcel going out now, not to the units left
@@ -497,8 +514,14 @@ export async function shipOrder(orderId: string, trackingId?: string) {
 /** Pack & ship a chosen set of queue entries (each shipped in full). */
 export async function shipSelectedPending(ids: string[]) {
   await connectDB();
+  // Oldest first, same reasoning as shipAllPending — the caller's array order
+  // (whatever order checkboxes were clicked/collected in) shouldn't decide
+  // who gets an oversold pile's stock ahead of an earlier-queued order.
+  const sortedIds = (await PendingShipmentModel.find({ _id: { $in: ids } }, { _id: 1 }).sort({ createdAt: 1 }).lean()).map((d) =>
+    String(d._id),
+  );
   let shipped = 0;
-  for (const id of ids) {
+  for (const id of sortedIds) {
     await shipPending(id);
     shipped++;
   }
@@ -507,7 +530,11 @@ export async function shipSelectedPending(ids: string[]) {
 
 export async function shipAllPending(channel?: string) {
   await connectDB();
-  const items = await PendingShipmentModel.find(channel ? { channel } : {}).lean();
+  // Oldest first — matches queueRows()' FIFO order, so on an oversold pile
+  // shipPending()'s fairness check never trips mid-batch (each row's turn
+  // only comes up once everything queued ahead of it, same pile or not, has
+  // already gone through).
+  const items = await PendingShipmentModel.find(channel ? { channel } : {}).sort({ createdAt: 1 }).lean();
   for (const i of items) await shipPending(String(i._id));
   return { shipped: items.length };
 }

@@ -158,6 +158,13 @@ to over HTTP — never call these functions' underlying writes any other way fro
 - `shipPending(id, qty?, trackingId?, orderId?)` — packs/ships (default: the whole row): posts a
   SOLD movement, decrements `reserved`, deletes the row on a full ship or reduces `qty` on a
   partial one (**and clears `trackingId`** on partial — the remainder needs its own label).
+  **Re-derives `queueRows()` fresh and refuses to ship past a row's current fair share** — a code
+  review found the display's FIFO ordering wasn't actually enforced, only shown: the physical
+  `onHand` guard alone let whichever order's Ship button got clicked first win an oversold pile,
+  regardless of queue position, silently starving an earlier-queued order the page displayed as
+  having priority. `shipAllPending`/`shipSelectedPending` now also process oldest-queued-first
+  (`sort({createdAt: 1})`) so a full "ship all"/bulk-select run never trips this mid-batch on a
+  pile that has enough for some but not all of its queued rows.
 - `editPending(id, changes)` — fix sku/qty/channel/orderId/trackingId/**shipByAt** on a
   still-queued row; moves the reservation to the new `stockSkuFor` pool if a SKU edit crosses
   bundle pools. The queue's per-row Produce button was removed (producing more stock now happens

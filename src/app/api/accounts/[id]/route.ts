@@ -21,8 +21,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   }
   try {
     const session = await getCurrentSession();
-    await updateAccount(id, parsed.data, session?.accountId);
-    return Response.json({ ok: true });
+    const { changed } = await updateAccount(id, parsed.data, session?.accountId);
+    return Response.json({ ok: true, changed });
   } catch (err) {
     return Response.json({ error: err instanceof Error ? err.message : String(err) }, { status: 400 });
   }
