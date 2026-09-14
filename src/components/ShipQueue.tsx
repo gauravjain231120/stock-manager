@@ -224,7 +224,7 @@ export function ShipQueue({
             aria-label="Filter by packed status"
             className={filterCls}
           >
-            <option value="all">Ready + Not ready ({visibleBeforeReady.length})</option>
+            <option value="all">Ready ({readyCount}) + Not ready ({notReadyCount})</option>
             <option value="ready">Ready ({readyCount})</option>
             <option value="not-ready">Not ready ({notReadyCount})</option>
           </select>
