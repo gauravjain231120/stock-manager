@@ -55,7 +55,7 @@ export async function destroyAllSessionsForAccount(accountId: string): Promise<v
 /**
  * Reads the current session from the request cookie — for Server
  * Components/route handlers. Middleware already validated the session
- * before the request reached here (see src/middleware.ts); this is an
+ * before the request reached here (see src/proxy.ts); this is an
  * independent re-check, not a trust of that result, and returns null if not
  * logged in or the session has expired/been revoked.
  */
