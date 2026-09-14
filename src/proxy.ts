@@ -25,13 +25,19 @@ function isServiceRequest(pathname: string, token: string | undefined): boolean 
 
 /**
  * Gates the whole app behind login AND per-role/per-section authorization.
- * Runs on Node.js (this Next.js version's middleware/proxy defaults to it,
- * not Edge — see AGENTS.md), so a real DB lookup per request is fine, same
- * as any route handler. Checked here — not just hidden in the sidebar — so
- * a section a Viewer wasn't granted can't be reached by typing its URL, page
- * or API, directly.
+ *
+ * Renamed from middleware.ts per Next.js 16's own migration (file convention
+ * deprecated → proxy.ts) — this wasn't cosmetic: the "defaults to Node.js
+ * runtime" guarantee this relies on for a real per-request DB lookup is
+ * specifically documented for proxy.ts, not the legacy middleware.ts name,
+ * and keeping the old filename produced a live MIDDLEWARE_INVOCATION_FAILED
+ * crash on Vercel (consistent with it actually still running on their Edge
+ * network under the old name, where mongoose/TCP sockets aren't available).
+ *
+ * Checked here — not just hidden in the sidebar — so a section a Viewer
+ * wasn't granted can't be reached by typing its URL, page or API, directly.
  */
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   if (PUBLIC_PATHS.has(pathname)) {
