@@ -98,21 +98,24 @@ export function cleanTracking(input?: string | null): string | undefined {
 
 /**
  * What came back in a returned parcel, chosen when logging a Return:
- *   GOOD   as-new — back into sellable stock
- *   USED   worn but resellable — also back into stock, flagged as used
- *   WRONG  not the item that was sent — no stock added, kept in DAMAGED to claim
+ *   GOOD       as-new — back into sellable stock
+ *   USED       worn but resellable — also back into stock, flagged as used
+ *   WRONG      not the item that was sent — kept in DAMAGED, sellable stock untouched, to claim
+ *   DEFECTIVE  faulty/damaged — kept in DAMAGED, sellable stock untouched, not resold
  */
-export const RETURN_CONDITIONS = ['GOOD', 'USED', 'WRONG'] as const;
+export const RETURN_CONDITIONS = ['GOOD', 'USED', 'WRONG', 'DEFECTIVE'] as const;
 export type ReturnCondition = (typeof RETURN_CONDITIONS)[number];
 export const RETURN_CONDITION_LABELS: Record<ReturnCondition, string> = {
   GOOD: 'Good',
   USED: 'Used',
   WRONG: 'Wrong item',
+  DEFECTIVE: 'Defective',
 };
 export const RETURN_CONDITION_HINTS: Record<ReturnCondition, string> = {
   GOOD: 'back to sellable stock',
   USED: 'back to stock, marked used',
   WRONG: 'not my item — claim it',
+  DEFECTIVE: "damaged — won't be resold",
 };
 
 /** Special location codes the system relies on, plus normal warehouse codes. */

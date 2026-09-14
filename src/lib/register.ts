@@ -66,11 +66,14 @@ export async function recordEntry(
       break;
     case 'RETURN': {
       // Good and used parcels both go back on the shelf (used is just flagged);
-      // a wrong item was never ours, so it's parked in DAMAGED to be claimed.
+      // a wrong item was never ours (parked in DAMAGED to be claimed) and a
+      // defective one won't be resold (parked in DAMAGED too) — neither adds
+      // to sellable stock.
       const cond: ReturnCondition = condition ?? 'GOOD';
+      const notSellable = cond === 'WRONG' || cond === 'DEFECTIVE';
       movementId = await applyMovement({
         sku: s,
-        locationCode: cond === 'WRONG' ? SystemLocation.DAMAGED : loc,
+        locationCode: notSellable ? SystemLocation.DAMAGED : loc,
         qty,
         type: MovementType.RETURNED,
         channel,
@@ -111,9 +114,10 @@ export async function recordEntry(
  * change is refused only when the difference itself can't be applied — not when
  * the original units happen to have been shipped since.
  *
- * A return's condition decides where its units live: a Wrong item is held in
- * DAMAGED (never resold), Good/Used both sit in MAIN. So changing condition
- * across that line moves the whole quantity between locations, not just a delta.
+ * A return's condition decides where its units live: Wrong item and Defective
+ * are both held in DAMAGED (never resold), Good/Used both sit in MAIN. So
+ * changing condition across that line moves the whole quantity between
+ * locations, not just a delta.
  * Changing the SKU is the same idea one level up: the whole quantity moves off
  * the old product's pile and onto the new one's, instead of a delta on one pile.
  */
@@ -151,7 +155,11 @@ export async function editEntry(
     ? changes.condition ?? (mv.condition as ReturnCondition | null) ?? 'GOOD'
     : undefined;
   const oldLocation = mv.locationCode;
-  const newLocation = isReturn ? (newCondition === 'WRONG' ? SystemLocation.DAMAGED : SystemLocation.MAIN) : oldLocation;
+  const newLocation = isReturn
+    ? newCondition === 'WRONG' || newCondition === 'DEFECTIVE'
+      ? SystemLocation.DAMAGED
+      : SystemLocation.MAIN
+    : oldLocation;
 
   // Fields left out of `changes` keep their current value; an empty string clears.
   const fields: Record<string, unknown> = {
