@@ -249,7 +249,15 @@ Mongo duplicate-key error. `checkTrackingIds(codes)` is a second, deliberately s
 point onto the same matching logic — a **read-only, nothing-saved** one-off check (backs the
 Returns page's "Quick check" upload tool, §6): given tracking numbers straight from an uploaded
 file, say which are already logged as returned. Never touches `ReturnReportModel` at all, unlike
-everything else in this file.
+everything else in this file. `findExtraReturnsForDay(date, fileTrackingIds)` is the *reverse*
+direction for that same tool — Myntra returns you logged **on that exact calendar day** (IST)
+whose tracking number isn't anywhere in the file (exact or partial), catching a typo made when it
+was logged or a return Myntra's file doesn't (yet) mention. Deliberately filtered to
+`channel === 'MYNTRA'` (same as `autoAddToDayReport`) so an Amazon/Flipkart return logged the same
+day doesn't show up as noise. The Quick Check UI groups same-day files together before calling
+either function — Myntra sometimes splits one day's returns across multiple files, and checking
+per-file in isolation would wrongly flag file A's numbers as "extra" just because file B alone
+doesn't list them.
 
 **`register.ts`** ("Stock Log") — the simplest recording UI: PRODUCE (+stock)/SHIP (-stock, via
 `sellUnits`, refused if insufficient)/RETURN (+stock). An exchange is logged as one Return + one
@@ -375,7 +383,7 @@ re-login.
 | `/api/reports` | GET | `?days=30` sales/returns/movers bundle |
 | `/api/return-reports` | POST | Save a platform's return report |
 | `/api/return-reports/[id]` | PATCH, DELETE | Edit / delete a saved report |
-| `/api/return-reports/check` | POST | `{trackingIds[]}` -> one-off match against logged returns, **read-only, saves nothing** — backs the Quick Check upload tool, not the saved-reports workflow |
+| `/api/return-reports/check` | POST | `{trackingIds[], date?}` -> two-way one-off check, **read-only, saves nothing**: `lines` = which of `trackingIds` are already logged as returned; `extra` (only when `date` is given) = Myntra returns logged that exact day that aren't in `trackingIds` at all — backs the Quick Check upload tool, not the saved-reports workflow |
 | `/api/return-shipments` | GET, POST | Outstanding-parcel count / log an EXPECTED return |
 | `/api/return-shipments/[id]` | POST, PATCH, DELETE | Grade/receive, edit, delete |
 | `/api/return-shipments/scan` | POST | `{trackingId}` → matching parcel or 404 (scan-to-grade flow) |
@@ -402,9 +410,10 @@ make" list with per-item and "Produce all" buttons), `/shipped`/`/returns` (SOLD
 product; also has a "Log a Return" quick-entry box at the top, same picker as Stock Log's, locked
 to Return-only via `RegisterEntryForm`'s `lockedAction` prop; below that, two return-report
 tools that look similar but are deliberately different — "Quick check" is upload-and-diff with
-**nothing saved** (`QuickReturnCheck.tsx`, parses the file client-side with SheetJS, §4/§7), while
-"Return reports" below it is the **persisted** version (`ReturnReports.tsx`) that keeps the list,
-tracks it over time, and lets you mark a parcel claimed/written off), `/products` (manage
+**nothing saved** (`QuickReturnCheck.tsx`, parses the file client-side with SheetJS, groups
+same-day files together, checks both directions — file-not-logged and logged-not-in-file, §4/§7),
+while "Return reports" below it is the **persisted** version (`ReturnReports.tsx`) that keeps the
+list, tracks it over time, and lets you mark a parcel claimed/written off), `/products` (manage
 groups/variants/photos/stock-sharing), `/inventory` (stock levels —
 category filter reveals a colour filter scoped to that category, plus a from/to date range that
 narrows Shipped/Returned only; on-hand/available always show the current count), `/produce`

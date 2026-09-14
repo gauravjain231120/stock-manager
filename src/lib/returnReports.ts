@@ -174,6 +174,7 @@ interface LoggedReturn {
   sku: string;
   qty: number;
   trackingId: string;
+  channel: string | null;
   createdAt: unknown;
 }
 
@@ -189,7 +190,7 @@ async function loadLoggedReturns() {
   // Matched on ANY date, because a parcel listed today may only reach us next week.
   const returns = (await StockMovementModel.find(
     { type: MovementType.RETURNED, trackingId: { $nin: [null, ''] } },
-    { sku: 1, qty: 1, trackingId: 1, createdAt: 1 },
+    { sku: 1, qty: 1, trackingId: 1, channel: 1, createdAt: 1 },
   ).sort({ createdAt: -1 }).lean()) as unknown as LoggedReturn[];
   const byTracking = new Map(returns.map((r) => [r.trackingId, r]));
 
@@ -248,6 +249,52 @@ export async function checkTrackingIds(codes: string[]): Promise<QuickCheckLine[
       loggedAt: m ? (m.hit.createdAt as Date).toISOString() : null,
     };
   });
+}
+
+export interface ExtraReturnLine {
+  trackingId: string;
+  sku: string;
+  name: string;
+  qty: number;
+  loggedAt: string;
+}
+
+/**
+ * The reverse direction of checkTrackingIds: returns you logged as returned
+ * on this exact calendar day (IST, `dayKey`) whose tracking number doesn't
+ * appear anywhere in the uploaded file — not even a close/partial match.
+ * Usually means a typo when it was logged, or a genuine return Myntra's file
+ * doesn't (yet) mention. Only meaningful for a specific day, so there's
+ * nothing to return without a `date`.
+ */
+export async function findExtraReturnsForDay(date: string, fileTrackingIds: string[]): Promise<ExtraReturnLine[]> {
+  await connectDB();
+  const fileCodes = [...new Set(fileTrackingIds.map((c) => normalizeTracking(c)).filter((c): c is string => Boolean(c)))];
+
+  const matchesFile = (loggedCode: string) => {
+    if (fileCodes.includes(loggedCode)) return true;
+    if (loggedCode.length < MIN_PARTIAL_LEN) return false;
+    return fileCodes.some((f) => f.length >= MIN_PARTIAL_LEN && (f.startsWith(loggedCode) || loggedCode.startsWith(f)));
+  };
+
+  const { returns } = await loadLoggedReturns();
+  // Myntra-only, like the rest of this reconciliation feature (autoAddToDayReport
+  // is the same) — an Amazon/Flipkart return logged the same day is real, but
+  // irrelevant noise when checking a Myntra file specifically.
+  const extras = returns.filter((r) => r.channel === 'MYNTRA' && dayKey(r.createdAt as Date) === date && !matchesFile(r.trackingId));
+  if (extras.length === 0) return [];
+
+  const skus = [...new Set(extras.map((r) => r.sku))];
+  const products = await ProductModel.find({ sku: { $in: skus } }, { sku: 1, name: 1 }).lean();
+  const nameBy = new Map(products.map((p) => [p.sku, p.name]));
+
+  return extras.map((r) => ({
+    trackingId: r.trackingId,
+    sku: r.sku,
+    name: nameBy.get(r.sku) ?? r.sku,
+    qty: Math.abs(r.qty),
+    loggedAt: (r.createdAt as Date).toISOString(),
+  }));
 }
 
 /** Every saved report, newest first, with each line matched against real returns. */
