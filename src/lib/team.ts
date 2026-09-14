@@ -129,9 +129,11 @@ export async function deleteAccount(id: string): Promise<void> {
   await connectDB();
   const account = await AccountModel.findById(id).lean();
   if (!account) return;
+  // Owner accounts are never deletable directly, full stop — not just the
+  // last one. Change the role away from Owner first (already allowed for
+  // any Owner but your own, see updateAccount), then delete it.
   if (account.role === 'OWNER') {
-    const ownerCount = await AccountModel.countDocuments({ role: 'OWNER' });
-    if (ownerCount <= 1) throw new Error('Cannot delete the last Owner account');
+    throw new Error("Owner accounts can't be deleted — change the role first, then delete");
   }
   await AccountModel.deleteOne({ _id: id });
   await destroyAllSessionsForAccount(id);

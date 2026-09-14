@@ -326,9 +326,9 @@ export function TeamPanel({
                     </button>
                     <button
                       onClick={() => remove(a)}
-                      disabled={busy}
-                      className="inline-flex size-7 items-center justify-center rounded-md text-red-600 transition hover:bg-black/5 disabled:opacity-50 dark:hover:bg-white/10"
-                      title="Delete"
+                      disabled={busy || a.role === 'OWNER'}
+                      className="inline-flex size-7 items-center justify-center rounded-md text-red-600 transition hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-white/10"
+                      title={a.role === 'OWNER' ? "Owner accounts can't be deleted — change the role first, then delete" : 'Delete'}
                     >
                       <Trash2 size={14} />
                     </button>
