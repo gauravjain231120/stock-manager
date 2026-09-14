@@ -204,17 +204,19 @@ export function ShipQueue({
             {categories.map((c) => <option key={c} value={c}>{c}</option>)}
             {rows.some((r) => !r.category) ? <option value="">No category</option> : null}
           </select>
-          {fCategory !== 'all' && colorsInCategory.length > 0 ? (
-            <select
-              value={fColor}
-              onChange={(e) => setFColor(e.target.value)}
-              aria-label="Filter by colour"
-              className={filterCls}
-            >
-              <option value="all">All colours</option>
-              {colorsInCategory.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-          ) : null}
+          {/* Always rendered (even with nothing to pick yet) so the row after it
+              doesn't jump position the moment a category is chosen. */}
+          <select
+            value={fColor}
+            onChange={(e) => setFColor(e.target.value)}
+            aria-label="Filter by colour"
+            disabled={fCategory === 'all' || colorsInCategory.length === 0}
+            title={fCategory === 'all' ? 'Pick a category first' : undefined}
+            className={filterCls}
+          >
+            <option value="all">All colours</option>
+            {colorsInCategory.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
           <PlatformFilter />
           <select
             value={fReady}
