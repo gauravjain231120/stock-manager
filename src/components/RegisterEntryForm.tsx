@@ -40,7 +40,9 @@ export function RegisterEntryForm({ products, lockedAction }: { products: Picker
   const toast = useToast();
   const [sku, setSku] = useState(products[0]?.sku ?? '');
   const [action, setAction] = useState<ActionKey>(lockedAction ?? 'PRODUCE');
-  const [channel, setChannel] = useState<Platform>('AMAZON');
+  // Returns default to Myntra (most returns come from there); Stock Log's
+  // own Ship/Return still defaults to Amazon, unchanged.
+  const [channel, setChannel] = useState<Platform>(lockedAction === 'RETURN' ? 'MYNTRA' : 'AMAZON');
   // Returns default to qty 1 — the action-toggle row (where this normally
   // gets set on click) is hidden when locked, so it has to happen here instead.
   const [qty, setQty] = useState(lockedAction === 'RETURN' ? '1' : '');
