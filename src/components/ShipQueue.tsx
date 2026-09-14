@@ -244,6 +244,11 @@ export function ShipQueue({
           <ShipDateFilter />
           {visible.length > 0 ? (
             <>
+              {/* Forces the Ship buttons onto their own line every time, so a long
+                  "Ship all <category/colour/…>" label can't shift them between
+                  sharing the filters' line and wrapping below it depending on
+                  what's selected — they always start fresh, in the same place. */}
+              <div className="h-0 basis-full" />
               <ActionButton
                 label={`Ship selected (${sel.length})`}
                 endpoint="/api/pending/ship-selected"

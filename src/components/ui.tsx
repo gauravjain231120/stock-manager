@@ -32,7 +32,7 @@ export function Panel({ title, actions, children }: { title?: string; actions?: 
     <section className={cardBase}>
       {(title || actions) && (
         <div className="flex items-center justify-between border-b border-black/10 px-5 py-3 dark:border-white/10">
-          {title ? <h2 className="text-sm font-medium">{title}</h2> : <span />}
+          {title ? <h2 className="shrink-0 whitespace-nowrap text-sm font-medium">{title}</h2> : <span />}
           {actions}
         </div>
       )}
