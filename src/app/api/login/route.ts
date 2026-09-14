@@ -3,7 +3,7 @@ import { connectDB } from '@/lib/db';
 import { AccountModel } from '@/models/Account';
 import { verifyPassword } from '@/lib/password';
 import { createSession, SESSION_COOKIE } from '@/lib/auth';
-import { sectionsForRole, type Role } from '@/lib/permissions';
+import { sectionsForRole, NO_ACCESS_PATH, type Role } from '@/lib/permissions';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,9 +30,12 @@ export async function POST(req: Request) {
     allowedSections: account.allowedSections,
   });
 
-  // Land on the first section this account can actually see — a Viewer
-  // without Stock Log granted shouldn't bounce off a blocked default page.
-  const redirectTo = sectionsForRole(role, account.allowedSections)[0]?.href ?? '/login';
+  // Land on the first section this account can actually see. Falling back to
+  // '/login' here (instead of NO_ACCESS_PATH) sent a just-logged-in account
+  // with zero granted sections straight back to the login page — the client
+  // would router.replace('/login') while already authenticated, so the form
+  // just sat stuck on "Logging in…" instead of showing anything useful.
+  const redirectTo = sectionsForRole(role, account.allowedSections)[0]?.href ?? NO_ACCESS_PATH;
 
   const res = NextResponse.json({ ok: true, redirectTo });
   res.cookies.set(SESSION_COOKIE, token, {

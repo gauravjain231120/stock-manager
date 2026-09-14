@@ -246,7 +246,7 @@ export function ClothPurchasesPanel({ initialItems }: { initialItems: ClothPurch
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-bold">Cloth Purchases</h1>
-        <p className="text-sm text-neutral-500">Every fabric purchase you&apos;ve logged — a running record, separate from Account expenses.</p>
+        <p className="text-sm text-neutral-500">Every fabric purchase you&apos;ve logged — a running record, separate from Expense entries.</p>
       </div>
 
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">

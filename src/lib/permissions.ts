@@ -18,15 +18,13 @@ export const SECTIONS: Section[] = [
   { href: '/products', label: 'Products' },
   { href: '/inventory', label: 'Inventory' },
   { href: '/produce', label: 'Produce' },
+  { href: '/account', label: 'Expense' },
 ];
 export const SECTION_HREFS = SECTIONS.map((s) => s.href);
 
 /** Owner-only pages — never grantable to Manager or Viewer, always available to Owner. */
-export const OWNER_SECTIONS: Section[] = [
-  { href: '/account', label: 'Account' },
-  { href: '/team', label: 'Team' },
-];
-const OWNER_ONLY_PAGE_PREFIXES = ['/account', '/team'];
+export const OWNER_SECTIONS: Section[] = [{ href: '/team', label: 'Team' }];
+const OWNER_ONLY_PAGE_PREFIXES = ['/team'];
 
 /** Always reachable once logged in, regardless of role/sections — where an
  *  account with nothing granted yet lands instead of bouncing back to the
@@ -48,6 +46,7 @@ export const SECTION_API_PREFIXES: Record<string, string[]> = {
   '/products': ['/api/products', '/api/channel-listings', '/api/upload', '/api/bom'],
   '/inventory': ['/api/stock'],
   '/produce': ['/api/register', '/api/raw-materials', '/api/bom'],
+  '/account': ['/api/account'],
 };
 
 /** Small shared utility endpoints every authenticated role can use regardless
@@ -55,8 +54,12 @@ export const SECTION_API_PREFIXES: Record<string, string[]> = {
  *  a page of their own. Read-only by nature, so fine for Viewer too. */
 const SHARED_API_PREFIXES = ['/api/skus'];
 
-/** Owner-only API surface — never reachable by Manager or Viewer. */
-const OWNER_API_PREFIXES = ['/api/account', '/api/accounts'];
+/** Owner-only API surface — never reachable by Manager or Viewer. Note:
+ *  '/api/account' (singular, the Expense ledger) is now a grantable section
+ *  via SECTION_API_PREFIXES above — only '/api/accounts' (plural, Team
+ *  account management: creating/editing logins, passwords, roles) stays
+ *  locked to Owner. */
+const OWNER_API_PREFIXES = ['/api/accounts'];
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 

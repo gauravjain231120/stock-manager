@@ -3,7 +3,6 @@ import { AccountPanel } from '@/components/AccountPanel';
 
 export const dynamic = 'force-dynamic';
 
-// Not in the sidebar — reachable only by going to /account directly.
 export default async function AccountPage() {
   const [open, closed] = await Promise.all([getOpenPeriodWithEntries(), listClosedPeriods()]);
 

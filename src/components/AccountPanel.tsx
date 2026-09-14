@@ -132,7 +132,7 @@ export function AccountPanel({
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold">Account</h1>
+          <h1 className="text-xl font-bold">Expense</h1>
           <p className="text-sm text-neutral-500">Current cycle: {dateOnly(from)} – ongoing</p>
         </div>
         <div className="flex items-center gap-2">

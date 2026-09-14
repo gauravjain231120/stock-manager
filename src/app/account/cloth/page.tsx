@@ -16,7 +16,7 @@ export default async function ClothPurchasesPage() {
           className="flex w-fit items-center gap-1.5 rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium text-neutral-600 transition hover:bg-black/5 dark:border-white/20 dark:text-neutral-300 dark:hover:bg-white/10"
         >
           <ArrowLeft size={14} />
-          Back to Account
+          Back to Expense
         </Link>
       </div>
       <ClothPurchasesPanel initialItems={items} />
