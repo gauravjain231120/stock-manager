@@ -25,8 +25,12 @@ export default function LoginPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
       });
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        router.replace('/register');
+        // The first section THIS account can actually see — a Viewer without
+        // Stock Log granted shouldn't land on a page middleware immediately
+        // bounces them off of.
+        router.replace(data?.redirectTo || '/register');
         router.refresh();
       } else {
         setErr('Wrong username or password');

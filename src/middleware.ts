@@ -1,28 +1,64 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { connectDB } from '@/lib/db';
+import { SessionModel } from '@/models/Session';
+import { isPathAllowed, sectionsForRole, type Role } from '@/lib/permissions';
 
-// Cookie value that marks a logged-in session. Override with AUTH_TOKEN in prod.
-const TOKEN = process.env.AUTH_TOKEN ?? 'rangrooh-stock-authed-9c4458';
+// Public routes (login screen + its API). /api/backup guards itself with
+// CRON_SECRET / the auth cookie so Vercel Cron can reach it.
+const PUBLIC_PATHS = new Set(['/login', '/api/login', '/api/logout', '/api/backup']);
 
-/** Gate the whole app behind login. Unauthenticated → /login (pages) or 401 (API). */
-export function middleware(req: NextRequest) {
+/**
+ * Gates the whole app behind login AND per-role/per-section authorization.
+ * Runs on Node.js (this Next.js version's middleware/proxy defaults to it,
+ * not Edge — see AGENTS.md), so a real DB lookup per request is fine, same
+ * as any route handler. Checked here — not just hidden in the sidebar — so
+ * a section a Viewer wasn't granted can't be reached by typing its URL, page
+ * or API, directly.
+ */
+export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // Public routes (login screen + its API). /api/backup guards itself with
-  // CRON_SECRET / the auth cookie so Vercel Cron can reach it.
-  if (pathname === '/login' || pathname === '/api/login' || pathname === '/api/logout' || pathname === '/api/backup') {
+  if (PUBLIC_PATHS.has(pathname)) {
     return NextResponse.next();
   }
 
-  const authed = req.cookies.get('auth')?.value === TOKEN;
-  if (authed) return NextResponse.next();
-
-  if (pathname.startsWith('/api/')) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const token = req.cookies.get('auth')?.value;
+  let session: { role: Role; allowedSections: string[] } | null = null;
+  if (token) {
+    try {
+      await connectDB();
+      const doc = await SessionModel.findById(token).lean();
+      if (doc && doc.expiresAt.getTime() > Date.now()) {
+        session = { role: doc.role as Role, allowedSections: doc.allowedSections };
+      }
+    } catch {
+      // Fail closed — never treat an unreachable DB as "authorized".
+      session = null;
+    }
   }
 
+  if (!session) {
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const url = req.nextUrl.clone();
+    url.pathname = '/login';
+    return NextResponse.redirect(url);
+  }
+
+  if (isPathAllowed(pathname, session.role, session.allowedSections)) {
+    return NextResponse.next();
+  }
+
+  // Logged in, but this specific page/API isn't part of this account's role
+  // or granted sections.
+  if (pathname.startsWith('/api/')) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+  const fallback = sectionsForRole(session.role, session.allowedSections)[0]?.href ?? '/login';
   const url = req.nextUrl.clone();
-  url.pathname = '/login';
+  url.pathname = fallback;
   return NextResponse.redirect(url);
 }
 

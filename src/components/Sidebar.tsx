@@ -3,38 +3,68 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { ClipboardList, Truck, PackageCheck, Undo2, Shirt, Boxes, Factory, NotebookPen, LogOut, Menu, X } from 'lucide-react';
+import {
+  ClipboardList,
+  Truck,
+  PackageCheck,
+  Undo2,
+  Shirt,
+  Boxes,
+  Factory,
+  NotebookPen,
+  Wallet,
+  Users,
+  LogOut,
+  Menu,
+  X,
+  type LucideIcon,
+} from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { sectionsForRole, type Role } from '@/lib/permissions';
 
-const NAV = [
-  { href: '/register', label: 'Stock Log', Icon: ClipboardList },
-  { href: '/notes', label: 'Notes', Icon: NotebookPen },
-  { href: '/ship', label: 'Ready to Ship', Icon: Truck },
-  { href: '/shipped', label: 'Shipped', Icon: PackageCheck },
-  { href: '/returns', label: 'Returns', Icon: Undo2 },
-  { href: '/products', label: 'Products', Icon: Shirt },
-  { href: '/inventory', label: 'Inventory', Icon: Boxes },
-  { href: '/produce', label: 'Produce', Icon: Factory },
-];
+const ICONS: Record<string, LucideIcon> = {
+  '/register': ClipboardList,
+  '/notes': NotebookPen,
+  '/ship': Truck,
+  '/shipped': PackageCheck,
+  '/returns': Undo2,
+  '/products': Shirt,
+  '/inventory': Boxes,
+  '/produce': Factory,
+  '/account': Wallet,
+  '/team': Users,
+};
 
-export function Sidebar() {
+const ROLE_LABELS: Record<Role, string> = { OWNER: 'Owner', MANAGER: 'Manager', VIEWER: 'Viewer' };
+
+export function Sidebar({
+  currentUser,
+}: {
+  currentUser: { username: string; role: Role; allowedSections: string[] } | null;
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const [toPack, setToPack] = useState<number | null>(null);
   const [open, setOpen] = useState(false);
 
+  const nav = currentUser ? sectionsForRole(currentUser.role, currentUser.allowedSections) : [];
+  const canShip = nav.some((s) => s.href === '/ship');
+
   // Live count for the "Ready to Ship" badge; refreshes when the page changes.
+  // Skipped entirely for a role without Ready to Ship — that call would just
+  // be blocked (403) by middleware anyway.
   useEffect(() => {
+    if (!canShip) return;
     let on = true;
     fetch('/api/pending')
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (on && d) setToPack(d.count ?? 0); })
       .catch(() => {});
     return () => { on = false; };
-  }, [pathname]);
+  }, [pathname, canShip]);
 
   // No sidebar on the login screen.
-  if (pathname === '/login') return null;
+  if (pathname === '/login' || !currentUser) return null;
 
   async function logout() {
     await fetch('/api/logout', { method: 'POST' });
@@ -73,7 +103,8 @@ export function Sidebar() {
         </div>
 
         <nav className="flex flex-col gap-1">
-          {NAV.map(({ href, label, Icon }) => {
+          {nav.map(({ href, label }) => {
+            const Icon = ICONS[href] ?? ClipboardList;
             // Exact match (or a sub-path) so /shipped doesn't also light up /ship.
             const active = pathname === href || pathname.startsWith(`${href}/`);
             return (
@@ -98,6 +129,9 @@ export function Sidebar() {
         </nav>
 
         <div className="mt-auto flex flex-col gap-1 pt-4">
+          <div className="px-3 pb-1 text-xs text-neutral-400">
+            {currentUser.username} · {ROLE_LABELS[currentUser.role]}
+          </div>
           <ThemeToggle />
           <button
             onClick={logout}
