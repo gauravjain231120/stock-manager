@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { PackageCheck, Undo2, Wallet, Boxes, TrendingUp, Flame } from 'lucide-react';
+import { Undo2, Wallet, Boxes, TrendingUp, Flame } from 'lucide-react';
 import { getInventoryOverview } from '@/lib/queries';
 import { listPending } from '@/lib/shipping';
 import { getOpenPeriodWithEntries } from '@/lib/accounts';
@@ -26,7 +26,6 @@ export default async function Dashboard() {
 
   const isOwner = session?.role === 'OWNER';
   const now = Date.now();
-  const overdueShip = pending.filter((p) => p.shipByAt && new Date(p.shipByAt).getTime() < now);
   const urgentQueue = [...pending]
     .sort((a, b) => {
       if (!a.shipByAt) return 1;
@@ -61,14 +60,7 @@ export default async function Dashboard() {
         }
       />
 
-      <section className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-        <StatCard
-          icon={PackageCheck}
-          label="Ready to Ship"
-          value={num(pending.length)}
-          hint={overdueShip.length > 0 ? `${overdueShip.length} overdue` : 'on track'}
-          tone={overdueShip.length > 0 ? 'danger' : 'default'}
-        />
+      <section className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
         <StatCard icon={Boxes} label="Stock on hand" value={num(totals.units)} hint="sellable units" />
         <StatCard icon={TrendingUp} label="Units sold" value={num(report.totals.sold)} hint={`last ${report.windowDays}d`} />
         <StatCard
@@ -87,7 +79,7 @@ export default async function Dashboard() {
         />
       </section>
 
-      <div className="mb-6 grid gap-6 lg:grid-cols-2">
+      <div className="mb-6">
         <Panel
           title={`Ready to Ship — urgent (${pending.length})`}
           actions={<Link href="/ship" className="text-xs text-neutral-500 hover:underline">Open →</Link>}
@@ -106,23 +98,6 @@ export default async function Dashboard() {
                 </Tr>
               );
             })}
-          </Table>
-        </Panel>
-
-        <Panel
-          title={`Returns pending (${expectedReturns.length})`}
-          actions={<Link href="/returns" className="text-xs text-neutral-500 hover:underline">Open →</Link>}
-        >
-          <Table head={<><Th>Tracking</Th><Th>Item</Th><Th right>Waiting</Th></>} empty={expectedReturns.length === 0}>
-            {expectedReturns.slice(0, 6).map((r) => (
-              <Tr key={r.id}>
-                <Td mono>{r.trackingId}</Td>
-                <Td>{r.name}</Td>
-                <Td right>
-                  <span className={r.overdue ? 'font-medium text-red-500' : ''}>{r.waitingDays}d</span>
-                </Td>
-              </Tr>
-            ))}
           </Table>
         </Panel>
       </div>
