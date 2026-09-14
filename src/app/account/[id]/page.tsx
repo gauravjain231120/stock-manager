@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { ArrowLeft, Printer } from 'lucide-react';
 import { getPeriod } from '@/lib/accounts';
 import { PeriodDetail } from '@/components/PeriodDetail';
+import { DeletePeriodButton } from '@/components/DeletePeriodButton';
 import { dateOnly } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
@@ -11,7 +12,7 @@ export default async function AccountPeriodPage({ params }: { params: Promise<{ 
   const { id } = await params;
   const data = await getPeriod(id);
   if (!data) notFound();
-  const { period, entries, from, to } = data;
+  const { period, entries, totals, from, to } = data;
   const rangeLabel = to ? `${dateOnly(from)} – ${dateOnly(to)}` : `${dateOnly(from)} – ongoing`;
 
   return (
@@ -24,14 +25,19 @@ export default async function AccountPeriodPage({ params }: { params: Promise<{ 
           <ArrowLeft size={14} />
           Back to Account
         </Link>
-        <Link
-          href={`/account/${period.id}/print`}
-          target="_blank"
-          className="flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-brand-700"
-        >
-          <Printer size={14} />
-          Print
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href={`/account/${period.id}/print`}
+            target="_blank"
+            className="flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-brand-700"
+          >
+            <Printer size={14} />
+            Print
+          </Link>
+          {period.status === 'CLOSED' && to ? (
+            <DeletePeriodButton periodId={period.id} from={from} to={to} totals={totals} redirectTo="/account" />
+          ) : null}
+        </div>
       </div>
 
       <div className="mb-6">

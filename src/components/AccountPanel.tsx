@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Plus, Printer } from 'lucide-react';
 import { Panel, StatCard } from '@/components/ui';
 import { EntryTable } from '@/components/EntryTable';
+import { DeletePeriodButton } from '@/components/DeletePeriodButton';
 import { useConfirm } from '@/components/ConfirmProvider';
 import { useToast } from '@/components/ToastProvider';
 import { inr, dateOnly, dayKey } from '@/lib/format';
@@ -40,7 +41,7 @@ export function AccountPanel({
   const toast = useToast();
   const [entries, setEntries] = useState(initialOpen.entries);
   const period = initialOpen.period;
-  const closed = initialClosed;
+  const [closed, setClosed] = useState(initialClosed);
   // Recomputed from the live entries (not a server snapshot) so it stays
   // right as entries are added/edited/deleted without a page reload —
   // the range shown is what's actually recorded, not when the period
@@ -87,6 +88,10 @@ export function AccountPanel({
 
   function deleteLocal(id: string) {
     setEntries((prev) => prev.filter((e) => e.id !== id));
+  }
+
+  function removeClosedPeriod(id: string) {
+    setClosed((prev) => prev.filter((p) => p.id !== id));
   }
 
   async function closePeriod() {
@@ -215,6 +220,13 @@ export function AccountPanel({
                   >
                     <Printer size={12} /> Print
                   </Link>
+                  <DeletePeriodButton
+                    periodId={p.id}
+                    from={p.from}
+                    to={p.to}
+                    totals={p.totals}
+                    onDeleted={() => removeClosedPeriod(p.id)}
+                  />
                 </div>
               }
             >

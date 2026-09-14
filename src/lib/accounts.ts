@@ -180,6 +180,20 @@ export async function deleteEntry(id: string): Promise<void> {
   await AccountEntryModel.deleteOne({ _id: id });
 }
 
+/**
+ * Permanently deletes a CLOSED period and every entry in it. Refuses to
+ * delete the open period — there must always be exactly one, and deleting
+ * "now" makes no sense; clear its entries individually instead.
+ */
+export async function deletePeriod(id: string): Promise<void> {
+  await connectDB();
+  const period = await AccountPeriodModel.findById(id).lean();
+  if (!period) return;
+  if (period.status !== 'CLOSED') throw new Error('Cannot delete the current open period');
+  await AccountEntryModel.deleteMany({ periodId: id });
+  await AccountPeriodModel.deleteOne({ _id: id });
+}
+
 /** Closes the current open period (endDate = now) and immediately opens the next one. */
 export async function closeCurrentPeriod(): Promise<AccountPeriodItem> {
   await connectDB();
