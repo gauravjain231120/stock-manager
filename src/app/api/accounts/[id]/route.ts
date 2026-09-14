@@ -20,7 +20,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     return Response.json({ error: 'Validation failed', issues: parsed.error.issues }, { status: 400 });
   }
   try {
-    await updateAccount(id, parsed.data);
+    const session = await getCurrentSession();
+    await updateAccount(id, parsed.data, session?.accountId);
     return Response.json({ ok: true });
   } catch (err) {
     return Response.json({ error: err instanceof Error ? err.message : String(err) }, { status: 400 });

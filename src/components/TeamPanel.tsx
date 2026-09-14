@@ -54,7 +54,13 @@ interface EditDraft {
 }
 
 /** Owner-only: create/edit/delete Manager and Viewer accounts, and pick each one's allowed sections. */
-export function TeamPanel({ initialAccounts }: { initialAccounts: AccountItem[] }) {
+export function TeamPanel({
+  initialAccounts,
+  currentAccountId,
+}: {
+  initialAccounts: AccountItem[];
+  currentAccountId: string | null;
+}) {
   const ask = useConfirm();
   const toast = useToast();
   const [accounts, setAccounts] = useState(initialAccounts);
@@ -253,7 +259,9 @@ export function TeamPanel({ initialAccounts }: { initialAccounts: AccountItem[] 
                         <select
                           value={draft.role}
                           onChange={(e) => setDraft({ ...draft, role: e.target.value as Role })}
-                          className={input}
+                          disabled={a.id === currentAccountId}
+                          title={a.id === currentAccountId ? "You can't change your own role — ask another Owner to do it" : undefined}
+                          className={`${input} disabled:cursor-not-allowed disabled:opacity-50`}
                         >
                           {ROLES.map((r) => (
                             <option key={r} value={r}>

@@ -65,10 +65,19 @@ export async function createAccount(input: {
 export async function updateAccount(
   id: string,
   changes: { username?: string; role?: Role; allowedSections?: string[]; password?: string },
+  currentAccountId?: string,
 ): Promise<void> {
   await connectDB();
   const account = await AccountModel.findById(id);
   if (!account) throw new Error('Account not found');
+
+  // Nobody edits their own role, even Owner-to-Owner-shaped edits are moot —
+  // this only ever fires for an Owner (Team is Owner-only), and stops the
+  // exact "accidentally demote myself mid-session" mistake the last-Owner
+  // guard below doesn't catch when a second Owner exists.
+  if (changes.role !== undefined && changes.role !== account.role && currentAccountId === id) {
+    throw new Error("You can't change your own role — ask another Owner to do it");
+  }
 
   // Demoting an Owner to anything else (Manager OR Viewer) is the same risk
   // as deleting them — must never leave zero Owners behind.
