@@ -137,7 +137,7 @@ export function AccountPanel({
         </div>
         <div className="flex items-center gap-2">
           <Link
-            href="/account/cloth"
+            href="/cloth"
             className="rounded-lg border border-black/15 px-3 py-2 text-sm font-medium text-neutral-600 transition hover:bg-black/5 dark:border-white/20 dark:text-neutral-300 dark:hover:bg-white/10"
           >
             Cloth purchases

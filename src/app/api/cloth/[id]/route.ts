@@ -9,10 +9,11 @@ const Patch = z.object({
   meters: z.number().positive().optional(),
   price: z.number().positive().optional(),
   shop: z.string().trim().max(200).optional(),
+  billNumber: z.string().trim().max(100).optional(),
   date: z.string().min(1).optional(),
 });
 
-/** PATCH /api/account/cloth/[id] -> edit a cloth purchase's fields. */
+/** PATCH /api/cloth/[id] -> edit a cloth purchase's fields. */
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
   const parsed = Patch.safeParse(await req.json().catch(() => null));
@@ -23,7 +24,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   return Response.json({ ok: true });
 }
 
-/** DELETE /api/account/cloth/[id] -> remove a cloth purchase. */
+/** DELETE /api/cloth/[id] -> remove a cloth purchase. */
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
   await deleteClothPurchase(id);

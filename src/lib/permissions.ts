@@ -20,6 +20,7 @@ export const SECTIONS: Section[] = [
   { href: '/inventory', label: 'Inventory' },
   { href: '/produce', label: 'Produce' },
   { href: '/account', label: 'Expense' },
+  { href: '/cloth', label: 'Cloth Purchases' },
 ];
 export const SECTION_HREFS = SECTIONS.map((s) => s.href);
 
@@ -50,6 +51,7 @@ export const SECTION_API_PREFIXES: Record<string, string[]> = {
   '/inventory': ['/api/stock'],
   '/produce': ['/api/register', '/api/raw-materials', '/api/bom'],
   '/account': ['/api/account'],
+  '/cloth': ['/api/cloth'],
 };
 
 /** Small shared utility endpoints every authenticated role can use regardless

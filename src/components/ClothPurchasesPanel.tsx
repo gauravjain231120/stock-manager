@@ -21,11 +21,20 @@ interface Draft {
   meters: string;
   price: string;
   shop: string;
+  billNumber: string;
   date: string;
 }
 
 function draftOf(c: ClothPurchaseItem): Draft {
-  return { category: c.category, name: c.name, meters: String(c.meters), price: String(c.price), shop: c.shop, date: c.date.slice(0, 10) };
+  return {
+    category: c.category,
+    name: c.name,
+    meters: String(c.meters),
+    price: String(c.price),
+    shop: c.shop,
+    billNumber: c.billNumber,
+    date: c.date.slice(0, 10),
+  };
 }
 
 /**
@@ -120,6 +129,7 @@ export function ClothPurchasesPanel({ initialItems }: { initialItems: ClothPurch
   const [meters, setMeters] = useState('');
   const [price, setPrice] = useState('');
   const [shop, setShop] = useState('');
+  const [billNumber, setBillNumber] = useState('');
   const [date, setDate] = useState(() => dayKey(new Date()));
   const [adding, setAdding] = useState(false);
 
@@ -131,7 +141,7 @@ export function ClothPurchasesPanel({ initialItems }: { initialItems: ClothPurch
   // Names used under the chosen category — or every name ever used, until a category is picked.
   const namesForCategory = [...new Set(items.filter((c) => !category || c.category === category).map((c) => c.name).filter(Boolean))].sort();
 
-  const filtered = items.filter((c) => matchesSearch(`${c.category} ${c.name} ${c.shop}`, q));
+  const filtered = items.filter((c) => matchesSearch(`${c.category} ${c.name} ${c.shop} ${c.billNumber}`, q));
   const totals = filtered.reduce((a, c) => ({ meters: a.meters + c.meters, price: a.price + c.price }), { meters: 0, price: 0 });
 
   async function addPurchase(e: FormEvent) {
@@ -141,10 +151,10 @@ export function ClothPurchasesPanel({ initialItems }: { initialItems: ClothPurch
     if (!name.trim() || !Number.isFinite(m) || m <= 0 || !Number.isFinite(p) || p <= 0) return;
     setAdding(true);
     try {
-      const res = await fetch('/api/account/cloth', {
+      const res = await fetch('/api/cloth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ category: category.trim(), name: name.trim(), meters: m, price: p, shop: shop.trim(), date }),
+        body: JSON.stringify({ category: category.trim(), name: name.trim(), meters: m, price: p, shop: shop.trim(), billNumber: billNumber.trim(), date }),
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
@@ -153,6 +163,7 @@ export function ClothPurchasesPanel({ initialItems }: { initialItems: ClothPurch
         setMeters('');
         setPrice('');
         setShop('');
+        setBillNumber('');
         toast.success('Purchase added ✓');
       } else {
         toast.error(data?.error || 'Could not add purchase');
@@ -182,7 +193,7 @@ export function ClothPurchasesPanel({ initialItems }: { initialItems: ClothPurch
     }
     setBusyId(id);
     try {
-      const res = await fetch(`/api/account/cloth/${id}`, {
+      const res = await fetch(`/api/cloth/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -191,6 +202,7 @@ export function ClothPurchasesPanel({ initialItems }: { initialItems: ClothPurch
           meters: m,
           price: p,
           shop: draft.shop.trim(),
+          billNumber: draft.billNumber.trim(),
           date: draft.date,
         }),
       });
@@ -198,7 +210,16 @@ export function ClothPurchasesPanel({ initialItems }: { initialItems: ClothPurch
         setItems((prev) =>
           prev.map((c) =>
             c.id === id
-              ? { ...c, category: draft.category.trim(), name: draft.name.trim(), meters: m, price: p, shop: draft.shop.trim(), date: new Date(draft.date).toISOString() }
+              ? {
+                  ...c,
+                  category: draft.category.trim(),
+                  name: draft.name.trim(),
+                  meters: m,
+                  price: p,
+                  shop: draft.shop.trim(),
+                  billNumber: draft.billNumber.trim(),
+                  date: new Date(draft.date).toISOString(),
+                }
               : c,
           ),
         );
@@ -222,6 +243,7 @@ export function ClothPurchasesPanel({ initialItems }: { initialItems: ClothPurch
         { label: 'Meters', value: num(c.meters) },
         { label: 'Price', value: inr(c.price) },
         ...(c.shop ? [{ label: 'Shop', value: c.shop }] : []),
+        ...(c.billNumber ? [{ label: 'Bill No.', value: c.billNumber }] : []),
         { label: 'Date', value: dateOnly(c.date) },
       ],
       tone: 'danger',
@@ -230,7 +252,7 @@ export function ClothPurchasesPanel({ initialItems }: { initialItems: ClothPurch
     if (!ok) return;
     setBusyId(c.id);
     try {
-      const res = await fetch(`/api/account/cloth/${c.id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/cloth/${c.id}`, { method: 'DELETE' });
       if (res.ok) {
         setItems((prev) => prev.filter((x) => x.id !== c.id));
         toast.success('Purchase deleted ✓');
@@ -259,7 +281,7 @@ export function ClothPurchasesPanel({ initialItems }: { initialItems: ClothPurch
         onSubmit={addPurchase}
         className="rounded-xl border border-black/10 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-neutral-900"
       >
-        <div className="grid gap-4 sm:grid-cols-[1fr_1fr_auto_auto_1fr_auto_auto] sm:items-end">
+        <div className="grid gap-4 sm:grid-cols-[1fr_1fr_auto_auto_1fr_auto_auto_auto] sm:items-end">
           {/* Keyed by category so switching category resets whether the name
               field shows a dropdown or a text box, based on THAT category's
               own history rather than stale state from the previous one. */}
@@ -303,6 +325,10 @@ export function ClothPurchasesPanel({ initialItems }: { initialItems: ClothPurch
             <input value={shop} onChange={(e) => setShop(e.target.value)} placeholder="e.g. Sharma Textiles" className={input} />
           </label>
           <label className="flex flex-col gap-1 text-xs text-neutral-500">
+            Bill No. <span className="text-[10px] text-neutral-400">optional</span>
+            <input value={billNumber} onChange={(e) => setBillNumber(e.target.value)} placeholder="e.g. INV-1042" className={`${input} w-28`} />
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-neutral-500">
             Date
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={input} required />
           </label>
@@ -341,6 +367,7 @@ export function ClothPurchasesPanel({ initialItems }: { initialItems: ClothPurch
                 <Th right>Price</Th>
                 <Th right>Rate/m</Th>
                 <Th>Shop</Th>
+                <Th>Bill No.</Th>
                 <Th right>Action</Th>
               </>
             }
@@ -384,6 +411,9 @@ export function ClothPurchasesPanel({ initialItems }: { initialItems: ClothPurch
                     <Td>
                       <input value={draft.shop} onChange={(e) => setDraft({ ...draft, shop: e.target.value })} className={cellInput} />
                     </Td>
+                    <Td>
+                      <input value={draft.billNumber} onChange={(e) => setDraft({ ...draft, billNumber: e.target.value })} className={cellInput} />
+                    </Td>
                     <Td right>
                       <div className="flex justify-end gap-1">
                         <button onClick={() => saveEdit(c.id)} disabled={busy} className={`${iconBtn} text-emerald-600 disabled:opacity-50`} title="Save">
@@ -406,6 +436,7 @@ export function ClothPurchasesPanel({ initialItems }: { initialItems: ClothPurch
                   <Td right>{inr(c.price)}</Td>
                   <Td right className="text-neutral-400">{inr(c.price / c.meters)}</Td>
                   <Td>{c.shop || '—'}</Td>
+                  <Td className="font-mono text-xs">{c.billNumber || '—'}</Td>
                   <Td right>
                     <div className="flex justify-end gap-1">
                       <button onClick={() => startEdit(c)} disabled={busy} className={`${iconBtn} text-neutral-500 disabled:opacity-50`} title="Edit">

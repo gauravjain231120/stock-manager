@@ -47,6 +47,9 @@ The stock/production/shipping core:
 | `ProductionBatch` | `sku`, `qty`, `locationCode`, `materialsConsumed[]` | One manufacturing run — posts a PRODUCED movement + CONSUMED raw-material movements, one transaction |
 | `ReorderPolicy` | `sku` (unique), `safetyStock`, `leadTimeDays` (default 7) | Drives the replenishment reorder-point formula |
 | `Note` | `_id: 'main'`, `text` | A single free-text scratchpad shown on the Dashboard — no structure, just whatever's currently typed |
+| `AccountPeriod` | `startDate`, `endDate` (null while open), `status` (`OPEN`\|`CLOSED`) | One Expense cycle. Exactly one `OPEN` period at a time (`ensureOpenPeriod` creates it lazily) |
+| `AccountEntry` | `periodId`, `type` (`EXPENSE`\|`RECEIVED`), `name`, `date`, `amount` | One line in the Expense ledger (`/account`, labeled "Expense" in the UI) |
+| `ClothPurchase` | `category`, `name`, `meters`, `price`, `shop`, `billNumber`, `date` — all but `name`/`meters`/`price`/`date` optional | Fabric purchase log (`/cloth`) — a permanent running record, entirely independent of `AccountPeriod`/`AccountEntry` (never rolled into Expense totals, never archived on period close) |
 
 Auth / access control (§7 has the full design):
 
@@ -330,8 +333,8 @@ re-login.
 | `/api/account/close` | POST | Close the current Expense period, start a new one |
 | `/api/account/periods/[id]` | DELETE | Delete a closed Expense period entirely |
 | `/api/account/entries/[id]` | PATCH, DELETE | Edit/delete one Expense entry |
-| `/api/account/cloth` | GET, POST | Cloth/fabric purchase log (kept as a separate running record from Expense entries) |
-| `/api/account/cloth/[id]` | PATCH, DELETE | Edit/delete one cloth purchase |
+| `/api/cloth` | GET, POST | Cloth/fabric purchase log (category/name/meters/price/shop/bill number/date) — its own section, `/cloth`, not nested under Expense despite the shared `ClothPurchase` origin |
+| `/api/cloth/[id]` | PATCH, DELETE | Edit/delete one cloth purchase |
 | `/api/notes` | GET, PATCH | Read/replace the Dashboard's free-text scratchpad (`Note` model) |
 | `/api/orders` | GET | Recent `MarketplaceOrder` history (automated-pipeline data only) |
 | `/api/orders/ingest` | POST | Manually trigger `ingestAllOrders` |
@@ -382,8 +385,11 @@ product), `/products` (manage groups/variants/photos/stock-sharing), `/inventory
 category filter reveals a colour filter scoped to that category, plus a from/to date range that
 narrows Shipped/Returned only; on-hand/available always show the current count), `/produce`
 (create a production batch), `/account` **"Expense"** in the UI (money in/out ledger — route
-never renamed, only the label; §4/§7), and — Owner-only, never grantable — `/team` (create/edit/
-delete Manager and Viewer accounts, pick each one's section grants).
+never renamed, only the label; §4/§7), `/cloth` "Cloth Purchases" (fabric purchase log —
+category/name/meters/price/shop/bill number/date; its own independently grantable section, not
+nested under Expense despite both being about money — moved off `/account/cloth` specifically so
+granting one never implies the other, §7), and — Owner-only, never grantable — `/team`
+(create/edit/delete Manager and Viewer accounts, pick each one's section grants).
 
 - **`/dashboard`** is the real landing page now: KPI row (Ready to Ship + overdue count, stock on
   hand, needs-reorder count, units sold 30d, returns awaiting grading, this Expense cycle's
@@ -527,7 +533,7 @@ src/lib/
   register.ts               "Stock Log" — Produce/Ship/Return manual entries
   movements.ts               Shipped/Returns list-page data
   accounts.ts                the Expense ledger (periods/entries) — §3/§4, route `/account`, UI label "Expense"
-  clothPurchases.ts           cloth/fabric purchase log, separate from Expense entries
+  clothPurchases.ts           cloth/fabric purchase log — own section `/cloth`, separate from Expense entries
   reports.ts                 sales/returns bundle + dailySoldTrend — see §4 for which fields are real vs. dormant-pipeline-sourced
   sync.ts                    channel stock-push engine
   cron.ts                    isAuthorizedCron() bearer-token check
@@ -536,7 +542,7 @@ src/lib/
   notes.ts                   the Dashboard scratchpad's read/write (§3)
 src/app/
   api/                    one folder per route (§5)
-  dashboard|register|notes|ship|shipped|returns|products|inventory|produce|account|team/   sidebar pages, role/section-gated (§6)
+  dashboard|register|notes|ship|shipped|returns|products|inventory|produce|account|cloth|team/   sidebar pages, role/section-gated (§6)
   orders|channels|replenishment|reports|production|returns/marketplace|ship/queue-print|ship/stock-report/   Owner-only, not in the sidebar (§6)
   login|no-access/    reachable without a section grant (§6, §7)
 src/proxy.ts             the RBAC gate on every route except PUBLIC_PATHS — renamed from middleware.ts, NOT cosmetic (§7)

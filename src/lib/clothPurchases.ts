@@ -8,6 +8,7 @@ export interface ClothPurchaseItem {
   meters: number;
   price: number;
   shop: string;
+  billNumber: string;
   date: string;
 }
 
@@ -18,6 +19,7 @@ function toItem(doc: {
   meters: number;
   price: number;
   shop?: string | null;
+  billNumber?: string | null;
   date: Date;
 }): ClothPurchaseItem {
   return {
@@ -27,6 +29,7 @@ function toItem(doc: {
     meters: doc.meters,
     price: doc.price,
     shop: doc.shop ?? '',
+    billNumber: doc.billNumber ?? '',
     date: doc.date.toISOString(),
   };
 }
@@ -44,6 +47,7 @@ export async function addClothPurchase(input: {
   meters: number;
   price: number;
   shop: string;
+  billNumber: string;
   date: string;
 }): Promise<ClothPurchaseItem> {
   await connectDB();
@@ -53,6 +57,7 @@ export async function addClothPurchase(input: {
     meters: input.meters,
     price: input.price,
     shop: input.shop.trim(),
+    billNumber: input.billNumber.trim(),
     date: new Date(input.date),
   });
   return toItem(doc.toObject());
@@ -60,7 +65,7 @@ export async function addClothPurchase(input: {
 
 export async function updateClothPurchase(
   id: string,
-  changes: Partial<{ category: string; name: string; meters: number; price: number; shop: string; date: string }>,
+  changes: Partial<{ category: string; name: string; meters: number; price: number; shop: string; billNumber: string; date: string }>,
 ): Promise<void> {
   await connectDB();
   const set: Record<string, string | number | Date> = {};
@@ -69,6 +74,7 @@ export async function updateClothPurchase(
   if (changes.meters !== undefined) set.meters = changes.meters;
   if (changes.price !== undefined) set.price = changes.price;
   if (changes.shop !== undefined) set.shop = changes.shop.trim();
+  if (changes.billNumber !== undefined) set.billNumber = changes.billNumber.trim();
   if (changes.date !== undefined) set.date = new Date(changes.date);
   if (Object.keys(set).length === 0) return;
   await ClothPurchaseModel.updateOne({ _id: id }, { $set: set });

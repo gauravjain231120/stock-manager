@@ -14,6 +14,7 @@ import {
   Factory,
   NotebookPen,
   Wallet,
+  Scissors,
   Users,
   LogOut,
   Menu,
@@ -34,6 +35,7 @@ const ICONS: Record<string, LucideIcon> = {
   '/inventory': Boxes,
   '/produce': Factory,
   '/account': Wallet,
+  '/cloth': Scissors,
   '/team': Users,
 };
 
