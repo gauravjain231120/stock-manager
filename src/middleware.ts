@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { connectDB } from '@/lib/db';
 import { SessionModel } from '@/models/Session';
-import { isPathAllowed, sectionsForRole, type Role } from '@/lib/permissions';
+import { isPathAllowed, sectionsForRole, NO_ACCESS_PATH, type Role } from '@/lib/permissions';
 
 // Public routes (login screen + its API). /api/backup guards itself with
 // CRON_SECRET / the auth cookie so Vercel Cron can reach it.
@@ -47,16 +47,21 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (isPathAllowed(pathname, session.role, session.allowedSections)) {
+  if (isPathAllowed(pathname, req.method, session.role, session.allowedSections)) {
     return NextResponse.next();
   }
 
   // Logged in, but this specific page/API isn't part of this account's role
-  // or granted sections.
+  // or granted sections — or (Viewer) it's a granted section's page, just
+  // not a mutating request into it.
   if (pathname.startsWith('/api/')) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const readOnly = session.role === 'VIEWER';
+    return NextResponse.json(
+      { error: readOnly ? 'View-only access — your account can look but not make changes here.' : 'Forbidden' },
+      { status: 403 },
+    );
   }
-  const fallback = sectionsForRole(session.role, session.allowedSections)[0]?.href ?? '/login';
+  const fallback = sectionsForRole(session.role, session.allowedSections)[0]?.href ?? NO_ACCESS_PATH;
   const url = req.nextUrl.clone();
   url.pathname = fallback;
   return NextResponse.redirect(url);

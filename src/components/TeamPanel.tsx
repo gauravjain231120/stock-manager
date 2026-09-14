@@ -15,7 +15,7 @@ const roleTone: Record<Role, 'good' | 'default' | 'warn'> = { OWNER: 'good', MAN
 const roleLabel: Record<Role, string> = { OWNER: 'Owner', MANAGER: 'Manager', VIEWER: 'Viewer' };
 
 function sectionsLabel(role: Role, allowedSections: string[]) {
-  if (role !== 'VIEWER') return 'All sections';
+  if (role === 'OWNER') return 'All sections';
   if (allowedSections.length === 0) return 'None yet';
   return SECTIONS.filter((s) => allowedSections.includes(s.href))
     .map((s) => s.label)
@@ -52,7 +52,7 @@ interface EditDraft {
   password: string;
 }
 
-/** Owner-only: create/edit/delete Manager and Viewer accounts, and pick each Viewer's allowed sections. */
+/** Owner-only: create/edit/delete Manager and Viewer accounts, and pick each one's allowed sections. */
 export function TeamPanel({ initialAccounts }: { initialAccounts: AccountItem[] }) {
   const ask = useConfirm();
   const toast = useToast();
@@ -79,7 +79,7 @@ export function TeamPanel({ initialAccounts }: { initialAccounts: AccountItem[] 
       const res = await fetch('/api/accounts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: username.trim(), password, role, allowedSections: role === 'VIEWER' ? allowedSections : undefined }),
+        body: JSON.stringify({ username: username.trim(), password, role, allowedSections: role !== 'OWNER' ? allowedSections : undefined }),
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
@@ -127,7 +127,7 @@ export function TeamPanel({ initialAccounts }: { initialAccounts: AccountItem[] 
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
         setAccounts((prev) =>
-          prev.map((x) => (x.id === a.id ? { ...x, role: draft.role, allowedSections: draft.role === 'VIEWER' ? draft.allowedSections : [] } : x)),
+          prev.map((x) => (x.id === a.id ? { ...x, role: draft.role, allowedSections: draft.role !== 'OWNER' ? draft.allowedSections : [] } : x)),
         );
         toast.success(`Updated ✓ — ${a.username} will need to log in again for this to take effect`);
         cancelEdit();
@@ -171,7 +171,9 @@ export function TeamPanel({ initialAccounts }: { initialAccounts: AccountItem[] 
       <div>
         <h1 className="text-xl font-bold">Team</h1>
         <p className="text-sm text-neutral-500">
-          Create Manager and Viewer logins. A Viewer only sees the sections you grant them — everything else is blocked, page and API, even by URL.
+          Create Manager and Viewer logins, and pick which sections each one can access — everything else is
+          blocked, page and API, even by URL. Manager can edit within their sections; Viewer can only look, never
+          change anything, even by calling the API directly.
         </p>
       </div>
 
@@ -209,9 +211,11 @@ export function TeamPanel({ initialAccounts }: { initialAccounts: AccountItem[] 
             <Plus size={15} /> {adding ? 'Adding…' : 'Add account'}
           </button>
         </div>
-        {role === 'VIEWER' ? (
+        {role !== 'OWNER' ? (
           <div className="mt-4 border-t border-black/10 pt-4 dark:border-white/10">
-            <div className="mb-2 text-xs text-neutral-500">Sections this Viewer can access</div>
+            <div className="mb-2 text-xs text-neutral-500">
+              Sections this account can access {role === 'VIEWER' ? '(view only)' : '(can edit)'}
+            </div>
             <SectionPicker value={allowedSections} onChange={setAllowedSections} />
           </div>
         ) : null}
@@ -248,8 +252,13 @@ export function TeamPanel({ initialAccounts }: { initialAccounts: AccountItem[] 
                           className={`${input} min-w-[16rem] flex-1`}
                         />
                       </div>
-                      {draft.role === 'VIEWER' ? (
-                        <SectionPicker value={draft.allowedSections} onChange={(v) => setDraft({ ...draft, allowedSections: v })} />
+                      {draft.role !== 'OWNER' ? (
+                        <div>
+                          <div className="mb-1.5 text-xs text-neutral-500">
+                            Sections {draft.role === 'VIEWER' ? '(view only)' : '(can edit)'}
+                          </div>
+                          <SectionPicker value={draft.allowedSections} onChange={(v) => setDraft({ ...draft, allowedSections: v })} />
+                        </div>
                       ) : null}
                       <div className="flex justify-end gap-2">
                         <button

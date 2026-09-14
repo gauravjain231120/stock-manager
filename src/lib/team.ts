@@ -49,9 +49,9 @@ export async function createAccount(input: {
   if (existing) throw new Error('That username is already taken');
 
   const { hash, salt } = await hashPassword(input.password);
-  // Only meaningful for VIEWER — Owner/Manager get their role's full set automatically.
+  // Only meaningful for Manager/Viewer — Owner gets everything automatically.
   const allowedSections =
-    input.role === 'VIEWER' ? (input.allowedSections ?? []).filter((s) => SECTION_HREFS.includes(s)) : [];
+    input.role === 'OWNER' ? [] : (input.allowedSections ?? []).filter((s) => SECTION_HREFS.includes(s));
   const doc = await AccountModel.create({
     username,
     passwordHash: hash,
@@ -70,17 +70,24 @@ export async function updateAccount(
   const account = await AccountModel.findById(id);
   if (!account) throw new Error('Account not found');
 
-  if (changes.role !== undefined && changes.role !== 'VIEWER' && account.role === 'OWNER' && changes.role !== 'OWNER') {
+  // Demoting an Owner to anything else (Manager OR Viewer) is the same risk
+  // as deleting them — must never leave zero Owners behind.
+  if (changes.role !== undefined && changes.role !== 'OWNER' && account.role === 'OWNER') {
     const ownerCount = await AccountModel.countDocuments({ role: 'OWNER' });
     if (ownerCount <= 1) throw new Error('Cannot demote the last Owner account');
   }
 
   let changed = false;
+  const nextRole = changes.role ?? (account.role as Role);
   if (changes.role !== undefined && changes.role !== account.role) {
     account.role = changes.role;
+    // Owner has no section list to maintain; Manager/Viewer moving away from
+    // Owner start with nothing granted until explicitly set (below, or a
+    // separate edit) — never inherit whatever was on the account before.
+    if (changes.role === 'OWNER') account.allowedSections = [];
     changed = true;
   }
-  if (changes.allowedSections !== undefined) {
+  if (changes.allowedSections !== undefined && nextRole !== 'OWNER') {
     account.allowedSections = changes.allowedSections.filter((s) => SECTION_HREFS.includes(s));
     changed = true;
   }
