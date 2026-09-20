@@ -370,6 +370,7 @@ re-login.
 | `/api/pending/ship-all` | POST | Ship the whole queue (optionally one channel) |
 | `/api/pending/ship-order` | POST | Ship every line of one order as one parcel |
 | `/api/pending/ship-selected` | POST | Ship a chosen set of queue row ids |
+| **`/api/pending/unship-cancelled`** | POST | `{orderId,sku,qty}` → **reverses an already-shipped order the sister bot's cancellation sweep found nothing to cancel in the queue for** — restores stock, does not re-queue |
 | `/api/production` | GET, POST | List / create production batches |
 | `/api/products` | GET, POST | Product groups with per-variant stock / create a group |
 | `/api/products/[code]` | PATCH, DELETE | Edit / delete a product group |
@@ -545,13 +546,22 @@ codebase or database directly.
   **exact same string** as this app's `AUTH_TOKEN` (or the hardcoded fallback if `AUTH_TOKEN` is
   unset here) — `proxy.ts`'s `isServiceRequest()` compares it with plain `===`, narrowly scoped to
   `/api/pending*` only (§7); every other route needs a real per-account session now.
-- It calls four endpoints, all under `/api/pending*`: `GET /api/pending/check?orderId=` (dup-check
+- It calls five endpoints, all under `/api/pending*`: `GET /api/pending/check?orderId=` (dup-check
   before adding), `POST /api/pending` (`addPending`), and — for the cancellation sweep — `GET
   /api/pending/summary` (find the queue row(s) for a newly-cancelled order) then `DELETE
   /api/pending/[id]` per matching row (`cancelPending`, releasing the reservation). Both halves
   (new-order push and cancel-sweep) were re-verified live end-to-end after the RBAC rewrite and
   the `proxy.ts` rename — see this session's history if the exact verification steps are ever
   needed again.
+- The fifth, added 2026-09-20: `POST /api/pending/unship-cancelled { orderId, sku, qty }`
+  (`unshipCancelledLine()` in `src/lib/register.ts`) — for when the sister bot's cancellation
+  sweep above finds nothing in the queue for a cancelled line, meaning it was already shipped.
+  Restores up to `qty` units of stock (matched by SKU suffix, oldest `StockMovement` SOLD entries
+  first) by reusing `deleteEntry()` internally, but deliberately does **not** call
+  `moveShippedToQueue()`'s full behavior — no `PendingShipment` row is re-created, since there's no
+  live order left to ship. Named/placed under `/api/pending` specifically so the sister bot's
+  existing narrowly-scoped service token (see above) already covers it, without widening
+  `SERVICE_API_PREFIXES` in `proxy.ts` into the rest of the Stock Log.
 - It **never** touches `/api/cron/poll`, `/api/orders/ingest`, or anything in the
   marketplace-adapter pipeline. **The two order systems are completely independent and never
   need to reconcile** — the sister bot is a self-contained "detect → push to Ready to Ship"
