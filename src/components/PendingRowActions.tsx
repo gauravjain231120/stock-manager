@@ -77,6 +77,21 @@ export function PendingRowActions({
         {row.ready ? 'Ready ✓' : 'Mark ready'}
       </button>
 
+      {/* Opens in a new tab, scrolled straight to this exact SKU's row on the
+          Products page, so checking/fixing its stock doesn't lose your place
+          in the queue. Links to stockSku (the SKU actually tracked), not
+          sku — those differ for bundle sets, where sku itself has no product
+          page of its own. */}
+      <a
+        href={`/products#variant-${row.stockSku}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        title={`Open ${row.stockSku} on the Products page`}
+        className="rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium transition hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+      >
+        Product
+      </a>
+
       <RowMenu>
         {(close) => (
           <>

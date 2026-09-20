@@ -104,3 +104,19 @@ body {
     break-before: page;
   }
 }
+
+/* Deep-linked from the Ready-to-Ship queue's "Product" button
+   (/products#variant-<sku>) — briefly flashes the exact variant row so it's
+   easy to spot among a product's other colours/sizes. */
+tr:target {
+  animation: variant-target-flash 2s ease-out 1;
+}
+
+@keyframes variant-target-flash {
+  from {
+    background-color: color-mix(in srgb, var(--color-brand-500) 25%, transparent);
+  }
+  to {
+    background-color: transparent;
+  }
+}

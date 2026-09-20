@@ -231,7 +231,7 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
             <table className="mt-3 w-full text-xs">
               <tbody>
                 {variants.map((v) => (
-                  <tr key={v.sku} className="border-t border-black/5 dark:border-white/5">
+                  <tr key={v.sku} id={`variant-${v.sku}`} className="scroll-mt-20 border-t border-black/5 dark:border-white/5">
                     <td className="py-1">
                       <div className="text-neutral-600 dark:text-neutral-300">{[v.color, v.size].filter(Boolean).join(' / ') || v.sku}</div>
                       <div className="mt-0.5 font-mono text-[11px] text-brand-700 dark:text-brand-500">{v.sku}</div>
