@@ -119,7 +119,7 @@ export function MovementTable({
         if (withCondition) {
           row.push(
             r.condition ? RETURN_CONDITION_LABELS[r.condition as ReturnCondition] ?? r.condition : '',
-            // Wrong item and Defective are both held back; good and used both go on the shelf.
+            // Wrong item and Defective are both held back; good/used/faked all go on the shelf.
             r.condition === 'WRONG' || r.condition === 'DEFECTIVE' ? 'No' : 'Yes',
           );
         }
@@ -307,7 +307,15 @@ export function MovementTable({
               <div className="font-mono text-[11px] text-neutral-500">{r.sku}</div>
               {r.orderId ? <div className="text-[11px] text-neutral-400">Order {r.orderId}</div> : null}
               {r.condition && r.condition !== 'GOOD' ? (
-                <div className={`text-[11px] ${r.condition === 'WRONG' || r.condition === 'DEFECTIVE' ? 'text-red-500' : 'text-amber-500'}`}>
+                <div
+                  className={`text-[11px] ${
+                    r.condition === 'WRONG' || r.condition === 'DEFECTIVE'
+                      ? 'text-red-500'
+                      : r.condition === 'FAKED'
+                        ? 'text-purple-500'
+                        : 'text-amber-500'
+                  }`}
+                >
                   {RETURN_CONDITION_LABELS[r.condition as ReturnCondition] ?? r.condition}
                   {r.condition === 'WRONG' || r.condition === 'DEFECTIVE' ? ' — kept out of stock' : ' — back in stock'}
                 </div>

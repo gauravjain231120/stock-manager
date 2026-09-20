@@ -240,7 +240,7 @@ export function RegisterEntryForm({ products, lockedAction }: { products: Picker
                     onClick={() => setCondition(k)}
                     className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition ${
                       condition === k
-                        ? k === 'GOOD' ? 'bg-emerald-600 text-white' : k === 'USED' ? 'bg-amber-600 text-white' : 'bg-red-600 text-white'
+                        ? k === 'GOOD' ? 'bg-emerald-600 text-white' : k === 'USED' ? 'bg-amber-600 text-white' : k === 'FAKED' ? 'bg-purple-600 text-white' : 'bg-red-600 text-white'
                         : 'border border-black/15 text-neutral-600 hover:bg-black/5 dark:border-white/20 dark:text-neutral-300 dark:hover:bg-white/10'
                     }`}
                   >
@@ -278,7 +278,7 @@ export function RegisterEntryForm({ products, lockedAction }: { products: Picker
                 Cancel
               </button>
               <button type="button" onClick={save} disabled={busy || trackingTooLong} className={`rounded-lg px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50 ${
-                condition === 'GOOD' ? 'bg-emerald-600 hover:bg-emerald-700' : condition === 'USED' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-red-600 hover:bg-red-700'
+                condition === 'GOOD' ? 'bg-emerald-600 hover:bg-emerald-700' : condition === 'USED' ? 'bg-amber-600 hover:bg-amber-700' : condition === 'FAKED' ? 'bg-purple-600 hover:bg-purple-700' : 'bg-red-600 hover:bg-red-700'
               }`}>
                 {busy ? 'Saving…' : 'Save return'}
               </button>

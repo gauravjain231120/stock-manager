@@ -5,13 +5,16 @@ import { useRouter } from 'next/navigation';
 import { ShipButton } from '@/components/ShipButton';
 import { CancelButton } from '@/components/CancelButton';
 import { EditPendingButton } from '@/components/EditPendingButton';
+import { ProduceButton } from '@/components/ProduceButton';
 import { useToast } from '@/components/ToastProvider';
 import { RowMenu, menuItemCls } from '@/components/RowMenu';
 import type { QueueRow } from '@/components/ShipQueue';
 
 /**
  * A queue row's Action cell: Ship stays out front, Edit and Cancel move into
- * the "⋯" menu. (Producing more stock is done from the "To make" list instead.)
+ * the "⋯" menu. A short row (after < 0, same condition as the "Out of stock
+ * (make N)" badge) also gets its own Produce button, so it can be made right
+ * here instead of scrolling down to the "To make" list.
  *
  * The two dialogs are rendered here rather than inside the menu — the menu panel
  * unmounts the moment it closes, which would close the dialog with it. Mounting
@@ -77,20 +80,9 @@ export function PendingRowActions({
         {row.ready ? 'Ready ✓' : 'Mark ready'}
       </button>
 
-      {/* Opens in a new tab, scrolled straight to this exact SKU's row on the
-          Products page, so checking/fixing its stock doesn't lose your place
-          in the queue. Links to stockSku (the SKU actually tracked), not
-          sku — those differ for bundle sets, where sku itself has no product
-          page of its own. */}
-      <a
-        href={`/products#variant-${row.stockSku}`}
-        target="_blank"
-        rel="noopener noreferrer"
-        title={`Open ${row.stockSku} on the Products page`}
-        className="rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium transition hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
-      >
-        Product
-      </a>
+      {row.after < 0 ? (
+        <ProduceButton sku={row.sku} stockSku={row.stockSku} name={row.name} onHand={row.free} need={row.qty} />
+      ) : null}
 
       <RowMenu>
         {(close) => (

@@ -65,10 +65,10 @@ export async function recordEntry(
       movementId = await applyMovement({ sku: s, locationCode: loc, qty, type: MovementType.PRODUCED, refType: 'REGISTER' });
       break;
     case 'RETURN': {
-      // Good and used parcels both go back on the shelf (used is just flagged);
-      // a wrong item was never ours (parked in DAMAGED to be claimed) and a
-      // defective one won't be resold (parked in DAMAGED too) — neither adds
-      // to sellable stock.
+      // Good, used, and faked parcels all go back on the shelf (used/faked are
+      // just flagged); a wrong item was never ours (parked in DAMAGED to be
+      // claimed) and a defective one won't be resold (parked in DAMAGED too) —
+      // neither adds to sellable stock.
       const cond: ReturnCondition = condition ?? 'GOOD';
       const notSellable = cond === 'WRONG' || cond === 'DEFECTIVE';
       movementId = await applyMovement({
@@ -115,7 +115,7 @@ export async function recordEntry(
  * the original units happen to have been shipped since.
  *
  * A return's condition decides where its units live: Wrong item and Defective
- * are both held in DAMAGED (never resold), Good/Used both sit in MAIN. So
+ * are both held in DAMAGED (never resold), Good/Used/Faked all sit in MAIN. So
  * changing condition across that line moves the whole quantity between
  * locations, not just a delta.
  * Changing the SKU is the same idea one level up: the whole quantity moves off
@@ -340,6 +340,52 @@ export async function moveManyShippedToQueue(ids: string[]) {
     moved++;
   }
   return { moved };
+}
+
+/**
+ * Called by the order-alert app when a marketplace reports an order cancelled
+ * AFTER it was already shipped (presumed RTO — the courier brings the parcel
+ * back) rather than a genuine loss. Restores the stock exactly like
+ * deleteEntry() does, but looked up by order+SKU (that app has no way to know
+ * a movement's Mongo id) and, unlike moveShippedToQueue(), never re-adds
+ * anything to Ready to Ship — there's no live order left to ship it to.
+ *
+ * Different marketplaces prefix the same variant differently (RRC-/RR-/R-),
+ * so this matches by everything after the first "-", same convention as
+ * addPending()'s own fallback resolution above.
+ *
+ * Reverses whole SOLD movements, oldest first, only up to `qty`: if the next
+ * candidate movement's own qty would overshoot what's left to reverse, this
+ * stops rather than guessing at a partial reversal (deleteEntry has no
+ * partial-quantity mode). The caller gets back exactly how much it managed to
+ * reverse, so it can flag anything left over for a human to check.
+ */
+export async function unshipCancelledLine({ orderId, sku, qty }: { orderId: string; sku: string; qty: number }) {
+  await connectDB();
+  const idx = sku.indexOf('-');
+  const suffix = (idx === -1 ? sku : sku.slice(idx + 1)).trim().toUpperCase();
+  const escaped = suffix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+  const candidates = await StockMovementModel.find({
+    orderId,
+    type: MovementType.SOLD,
+    sku: new RegExp(`-${escaped}$`, 'i'),
+  })
+    .sort({ createdAt: 1 })
+    .lean();
+
+  let remaining = qty;
+  const reversedIds: string[] = [];
+  for (const mv of candidates) {
+    if (remaining <= 0) break;
+    const mvQty = Math.abs(mv.qty);
+    if (mvQty > remaining) break; // would overshoot this line's cancelled qty — stop rather than guess
+    await deleteEntry(String(mv._id));
+    reversedIds.push(String(mv._id));
+    remaining -= mvQty;
+  }
+
+  return { reversedQty: qty - remaining, remaining, movementIds: reversedIds };
 }
 
 export interface EntrySnapshot {

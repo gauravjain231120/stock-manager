@@ -184,7 +184,7 @@ export function EditMovementButton({
                         onClick={() => setCondition(k)}
                         className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition ${
                           condition === k
-                            ? k === 'GOOD' ? 'bg-emerald-600 text-white' : k === 'USED' ? 'bg-amber-600 text-white' : 'bg-red-600 text-white'
+                            ? k === 'GOOD' ? 'bg-emerald-600 text-white' : k === 'USED' ? 'bg-amber-600 text-white' : k === 'FAKED' ? 'bg-purple-600 text-white' : 'bg-red-600 text-white'
                             : 'border border-black/15 text-neutral-600 hover:bg-black/5 dark:border-white/20 dark:text-neutral-300 dark:hover:bg-white/10'
                         }`}
                       >
@@ -201,7 +201,7 @@ export function EditMovementButton({
 
             <p className="mt-3 text-[11px] text-neutral-400">
               Changing the quantity adjusts stock to match.
-              {isReturn ? ' Changing condition between Good/Used and Wrong item/Defective moves the stock between shelves too, and changing the product moves it off the old one’s pile onto the new one’s.' : ''}
+              {isReturn ? ' Changing condition between Good/Used/Faked and Wrong item/Defective moves the stock between shelves too, and changing the product moves it off the old one’s pile onto the new one’s.' : ''}
             </p>
 
             <div className="mt-4 flex justify-end gap-2">
