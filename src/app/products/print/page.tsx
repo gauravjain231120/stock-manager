@@ -43,7 +43,7 @@ export default async function ProductSkuPrintPage({ searchParams }: { searchPara
         </p>
 
         {rows.length > 0 ? (
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             {rows.map((g) => (
               <table key={g.code} className="w-full border-collapse text-sm">
                 <tbody>
