@@ -2,7 +2,6 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { getProductGroups } from '@/lib/products';
 import { PrintButton } from '@/components/PrintButton';
-import { STANDARD_SIZES } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,36 +17,19 @@ function skuCode(sku: string): string | null {
   return seg && /^\d+$/.test(seg) ? seg : null;
 }
 
-function sizeRank(size?: string) {
-  const i = size ? (STANDARD_SIZES as readonly string[]).indexOf(size.toUpperCase()) : -1;
-  return i === -1 ? STANDARD_SIZES.length : i;
-}
-
-// One row per colour — the smallest available size represents that colour,
-// rather than picking just one SKU for the whole product.
-function colorRows(variants: { sku: string; color?: string; size?: string }[]) {
-  const byColor = new Map<string, { sku: string; size?: string }>();
-  for (const v of variants) {
-    const key = v.color || '—';
-    const existing = byColor.get(key);
-    if (!existing || sizeRank(v.size) < sizeRank(existing.size)) byColor.set(key, { sku: v.sku, size: v.size });
-  }
-  return [...byColor.entries()].map(([color, v]) => ({ color, sku: v.sku }));
-}
-
 /**
- * Every product's name + one real SKU per colour (any single size — the
- * smallest available represents each colour), each in its OWN small bordered
- * table, numbered by the product code embedded in its SKU and sorted
- * ascending by that same number (001, 002, ...). Laid out 2-up so several fit
- * per printed page. Screen chrome carries `no-print`, same pattern as the
- * other print pages (§ /ship/queue-print, /inventory/print).
+ * Every product's name + one real variant SKU (any single colour/size —
+ * group.code is just an internal group id, not an actual trackable SKU), each
+ * in its OWN small bordered table, numbered by the product code embedded in
+ * its SKU and sorted ascending by that same number (001, 002, ...). Laid out
+ * 2-up so several fit per printed page. Screen chrome carries `no-print`,
+ * same pattern as the other print pages (§ /ship/queue-print, /inventory/print).
  */
 export default async function ProductSkuPrintPage({ searchParams }: { searchParams: Promise<{ print?: string }> }) {
   const sp = await searchParams;
   const { groups } = await getProductGroups();
   const rows = [...groups]
-    .map((g) => ({ ...g, code3: skuCode(g.variants[0]?.sku ?? ''), colors: colorRows(g.variants) }))
+    .map((g) => ({ ...g, code3: skuCode(g.variants[0]?.sku ?? ''), sampleSku: g.variants[0]?.sku ?? '' }))
     .sort((a, b) => {
       if (a.code3 && b.code3) return Number(a.code3) - Number(b.code3);
       if (a.code3) return -1;
@@ -80,25 +62,13 @@ export default async function ProductSkuPrintPage({ searchParams }: { searchPara
                 <tbody>
                   <tr>
                     <td className={td}>
-                      {g.code3 ? <span className="mr-2 font-bold">{g.code3}</span> : null}
+                      {g.code3 ? <span className="mr-2 text-xl font-bold">{g.code3}</span> : null}
                       <span className="font-bold">{g.name}</span>
                     </td>
                   </tr>
-                  {g.colors.length > 0 ? (
-                    g.colors.map((c) => (
-                      <tr key={c.sku}>
-                        <td className={`${td} font-mono font-bold`}>
-                          {c.color}
-                          {c.color !== '—' ? '  ' : ''}
-                          {c.sku}
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td className={`${td} font-bold`}>—</td>
-                    </tr>
-                  )}
+                  <tr>
+                    <td className={`${td} font-mono font-bold`}>{g.sampleSku || '—'}</td>
+                  </tr>
                 </tbody>
               </table>
             ))}
