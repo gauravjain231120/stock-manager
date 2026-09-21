@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Pencil, Trash2, Upload } from 'lucide-react';
+import Link from 'next/link';
+import { Pencil, Printer, Trash2, Upload } from 'lucide-react';
 import { Badge } from '@/components/ui';
 import { useConfirm } from '@/components/ConfirmProvider';
 import { EditableStock } from '@/components/EditableStock';
@@ -41,6 +42,13 @@ function qtyColor(n: number) {
   if (n <= 0) return 'text-red-600';
   if (n <= 5) return 'text-amber-600';
   return 'text-emerald-600';
+}
+
+/** /products/print?sku=...&category=...&print=1 — same pattern as the other print pages. */
+function skuPrintHref(category: string, sku: string) {
+  const params = new URLSearchParams({ sku, print: '1' });
+  if (category) params.set('category', category);
+  return `/products/print?${params.toString()}`;
 }
 
 export function ProductCard({ group, categories = [] }: { group: CardGroup; categories?: string[] }) {
@@ -236,7 +244,19 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
                       <div className="text-neutral-600 dark:text-neutral-300">{[v.color, v.size].filter(Boolean).join(' / ') || v.sku}</div>
                       <div className="mt-0.5 font-mono text-[11px] text-brand-700 dark:text-brand-500">{v.sku}</div>
                     </td>
-                    <td className="py-1 text-right align-top"><EditableStock sku={v.sku} value={v.onHand} /></td>
+                    <td className="py-1 text-right align-top">
+                      <div className="flex items-center justify-end gap-1">
+                        <Link
+                          href={skuPrintHref(group.category ?? '', v.sku)}
+                          target="_blank"
+                          className="inline-flex size-6 items-center justify-center rounded-md text-neutral-400 transition hover:bg-black/5 hover:text-neutral-700 dark:hover:bg-white/10 dark:hover:text-neutral-200"
+                          title="Print SKU label"
+                        >
+                          <Printer size={13} />
+                        </Link>
+                        <EditableStock sku={v.sku} value={v.onHand} />
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
