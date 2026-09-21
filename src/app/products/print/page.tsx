@@ -11,15 +11,18 @@ const th = 'border border-black px-2 py-1 text-left font-semibold';
 const td = 'border border-black px-2 py-1 align-top';
 
 /**
- * Every product's name + SKU (its group code), one row each, on one printable
- * sheet — no per-product buttons, just this one page for the whole catalog.
- * Screen chrome carries `no-print`, same pattern as the other print pages
- * (§ /ship/queue-print, /inventory/print).
+ * Every product's name + one real variant SKU (any single colour/size —
+ * group.code is just an internal group id, not an actual trackable SKU),
+ * one row each, on one printable sheet — no per-product buttons, just this
+ * one page for the whole catalog. Screen chrome carries `no-print`, same
+ * pattern as the other print pages (§ /ship/queue-print, /inventory/print).
  */
 export default async function ProductSkuPrintPage({ searchParams }: { searchParams: Promise<{ print?: string }> }) {
   const sp = await searchParams;
   const { groups } = await getProductGroups();
-  const rows = [...groups].sort((a, b) => a.name.localeCompare(b.name));
+  const rows = [...groups]
+    .map((g) => ({ ...g, sampleSku: g.variants[0]?.sku ?? '' }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <main className="px-4 py-6 sm:px-6 sm:py-8 print:p-0">
@@ -51,7 +54,7 @@ export default async function ProductSkuPrintPage({ searchParams }: { searchPara
               {rows.map((g) => (
                 <tr key={g.code}>
                   <td className={td}>{g.name}</td>
-                  <td className={`${td} font-mono`}>{g.code}</td>
+                  <td className={`${td} font-mono`}>{g.sampleSku || '—'}</td>
                 </tr>
               ))}
             </tbody>
