@@ -121,7 +121,16 @@ export default async function ReturnsPage() {
         <ReturnReports reports={reports} today={stats.today} />
       </div>
 
-      <MovementTable rows={rows} title="Returns" dateLabel="Returned" verb="returned" csvName="returns" withCondition products={products} />
+      <MovementTable
+        rows={rows}
+        title="Returns"
+        dateLabel="Returned"
+        verb="returned"
+        csvName="returns"
+        withCondition
+        showConditionFilter={isOwner}
+        products={products}
+      />
     </main>
   );
 }

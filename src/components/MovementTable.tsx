@@ -4,6 +4,11 @@ import { useState } from 'react';
 import { Panel, Table, Th, Td, Tr } from '@/components/ui';
 import { dateOnly, dayKey, matchesSearch, num } from '@/lib/format';
 import { PLATFORMS, PLATFORM_LABELS, Platform, RETURN_CONDITION_LABELS, ReturnCondition } from '@/lib/constants';
+
+// Same 4 conditions the owner-only count row on the Returns page shows —
+// Defective is a real condition too, but was deliberately left out of that
+// summary, so it's left out of this filter for the same reason.
+const OWNER_FILTER_CONDITIONS: ReturnCondition[] = ['GOOD', 'USED', 'FAKED', 'WRONG'];
 import { EditMovementButton } from '@/components/EditMovementButton';
 import { ActionButton } from '@/components/ActionButton';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
@@ -47,6 +52,7 @@ export function MovementTable({
   verb,
   csvName,
   withCondition = false,
+  showConditionFilter = false,
   returnRows,
   allowMoveToQueue = false,
   products,
@@ -57,6 +63,8 @@ export function MovementTable({
   verb: string;
   csvName: string;
   withCondition?: boolean;
+  /** Returns + Owner only: a Good/Used/Faked/Wrong dropdown, next to the other filters. */
+  showConditionFilter?: boolean;
   /** The returns ledger, run through these same filters — shown alongside the total. */
   returnRows?: MovementRow[];
   /** Shipped only: offer "Move to Ready to Ship" to undo a shipment marked by mistake. */
@@ -67,6 +75,7 @@ export function MovementTable({
   const [q, setQ] = useState('');
   const [fCategory, setFCategory] = useState('all');
   const [fPlatform, setFPlatform] = useState('all');
+  const [fCondition, setFCondition] = useState('all');
   const [onlyUntracked, setOnlyUntracked] = useState(false);
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
@@ -80,6 +89,7 @@ export function MovementTable({
     // "" is a real choice here — the products that have no category at all.
     if (fCategory !== 'all' && r.category !== fCategory) return false;
     if (fPlatform !== 'all' && r.channel !== fPlatform) return false;
+    if (fCondition !== 'all' && r.condition !== fCondition) return false;
     if (onlyUntracked && r.trackingId) return false;
     // Compare India-time calendar days, so a date means the day you'd see on screen.
     if (fromDate || toDate) {
@@ -207,6 +217,17 @@ export function MovementTable({
             <option value="all">All platforms</option>
             {PLATFORMS.map((p) => <option key={p} value={p}>{PLATFORM_LABELS[p]}</option>)}
           </select>
+          {showConditionFilter ? (
+            <select
+              value={fCondition}
+              onChange={(e) => { setFCondition(e.target.value); setPage(1); }}
+              aria-label="Filter by condition"
+              className={filterCls}
+            >
+              <option value="all">All conditions</option>
+              {OWNER_FILTER_CONDITIONS.map((c) => <option key={c} value={c}>{RETURN_CONDITION_LABELS[c]}</option>)}
+            </select>
+          ) : null}
           <input
             value={q}
             onChange={(e) => { setQ(e.target.value); setPage(1); }}
@@ -258,6 +279,7 @@ export function MovementTable({
         <span className="text-xs text-neutral-400">
           {fCategory === 'all' ? 'All categories' : fCategory || 'No category'} · {rangeLabel(fromDate, toDate)}
           {fPlatform === 'all' ? '' : ` · ${PLATFORM_LABELS[fPlatform as Platform] ?? fPlatform}`}
+          {fCondition === 'all' ? '' : ` · ${RETURN_CONDITION_LABELS[fCondition as ReturnCondition] ?? fCondition}`}
         </span>
       </div>
 
