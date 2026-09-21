@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 
 export const metadata = { title: 'Rangrooh Product SKUs' };
 
-const td = 'border border-black px-2 py-1.5 align-top';
+const td = 'border border-black px-2 py-1.5 align-top break-words';
 
 // A SKU's own product code sits right after the brand prefix, e.g.
 // "RRC-009-CO-J-GRN-XS" -> "009". Used both to number each box and to sort
@@ -58,7 +58,7 @@ export default async function ProductSkuPrintPage({ searchParams }: { searchPara
         {rows.length > 0 ? (
           <div className="grid grid-cols-2 gap-3">
             {rows.map((g) => (
-              <table key={g.code} className="w-full border-collapse text-sm">
+              <table key={g.code} className="w-full min-w-0 table-fixed border-collapse text-sm">
                 <tbody>
                   <tr>
                     <td className={td}>
