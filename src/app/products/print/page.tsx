@@ -7,15 +7,15 @@ export const dynamic = 'force-dynamic';
 
 export const metadata = { title: 'Rangrooh Product SKUs' };
 
-const th = 'border border-black px-2 py-1 text-left font-semibold';
-const td = 'border border-black px-2 py-1 align-top';
+const td = 'border border-black px-2 py-1.5 font-bold align-top';
 
 /**
  * Every product's name + one real variant SKU (any single colour/size —
- * group.code is just an internal group id, not an actual trackable SKU),
- * one row each, on one printable sheet — no per-product buttons, just this
- * one page for the whole catalog. Screen chrome carries `no-print`, same
- * pattern as the other print pages (§ /ship/queue-print, /inventory/print).
+ * group.code is just an internal group id, not an actual trackable SKU), each
+ * in its OWN small bordered table (not shared rows in one big table) so each
+ * product reads as a distinct block, laid out in a grid so several fit per
+ * printed page. Screen chrome carries `no-print`, same pattern as the other
+ * print pages (§ /ship/queue-print, /inventory/print).
  */
 export default async function ProductSkuPrintPage({ searchParams }: { searchParams: Promise<{ print?: string }> }) {
   const sp = await searchParams;
@@ -43,22 +43,20 @@ export default async function ProductSkuPrintPage({ searchParams }: { searchPara
         </p>
 
         {rows.length > 0 ? (
-          <table className="w-full border-collapse text-xs">
-            <thead>
-              <tr>
-                <th className={th}>Product</th>
-                <th className={th}>SKU</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((g) => (
-                <tr key={g.code}>
-                  <td className={td}>{g.name}</td>
-                  <td className={`${td} font-mono`}>{g.sampleSku || '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="grid grid-cols-3 gap-3">
+            {rows.map((g) => (
+              <table key={g.code} className="w-full border-collapse text-sm">
+                <tbody>
+                  <tr>
+                    <td className={td}>{g.name}</td>
+                  </tr>
+                  <tr>
+                    <td className={`${td} font-mono`}>{g.sampleSku || '—'}</td>
+                  </tr>
+                </tbody>
+              </table>
+            ))}
+          </div>
         ) : (
           <p className="py-8 text-center text-sm text-neutral-400">No products yet.</p>
         )}
