@@ -44,10 +44,9 @@ function qtyColor(n: number) {
   return 'text-emerald-600';
 }
 
-/** /products/print?sku=...&category=...&print=1 — same pattern as the other print pages. */
-function skuPrintHref(category: string, sku: string) {
-  const params = new URLSearchParams({ sku, print: '1' });
-  if (category) params.set('category', category);
+/** /products/print?name=...&sku=...&print=1 — same pattern as the other print pages. */
+function skuPrintHref(name: string, sku: string) {
+  const params = new URLSearchParams({ name, sku, print: '1' });
   return `/products/print?${params.toString()}`;
 }
 
@@ -243,13 +242,6 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
                     <td className="py-1">
                       <div className="text-neutral-600 dark:text-neutral-300">{[v.color, v.size].filter(Boolean).join(' / ') || v.sku}</div>
                       <div className="mt-0.5 font-mono text-[11px] text-brand-700 dark:text-brand-500">{v.sku}</div>
-                      <Link
-                        href={skuPrintHref(group.category ?? '', v.sku)}
-                        target="_blank"
-                        className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-neutral-400 transition hover:text-neutral-700 dark:hover:text-neutral-200"
-                      >
-                        <Printer size={11} /> Print SKU
-                      </Link>
                     </td>
                     <td className="py-1 text-right align-top"><EditableStock sku={v.sku} value={v.onHand} /></td>
                   </tr>
@@ -257,6 +249,13 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
               </tbody>
             </table>
             <div className="mt-auto flex items-center justify-end gap-2 pt-3">
+              <Link
+                href={skuPrintHref(group.name, group.code)}
+                target="_blank"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium transition hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+              >
+                <Printer size={14} /> Print SKU
+              </Link>
               <button
                 onClick={startEdit}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium transition hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"

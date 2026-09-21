@@ -11,18 +11,18 @@ export async function generateMetadata({ searchParams }: { searchParams: Promise
 }
 
 /**
- * A single SKU tag — category + SKU, nothing else — for sticking on the
- * physical item or box. Screen chrome carries `no-print`, same pattern as
- * the other print pages (§ /ship/queue-print, /inventory/print).
+ * A single product tag — product name + one SKU, nothing else — for sticking
+ * on the physical item or box. Screen chrome carries `no-print`, same pattern
+ * as the other print pages (§ /ship/queue-print, /inventory/print).
  */
 export default async function ProductSkuPrintPage({
   searchParams,
 }: {
-  searchParams: Promise<{ print?: string; sku?: string; category?: string }>;
+  searchParams: Promise<{ print?: string; sku?: string; name?: string }>;
 }) {
   const sp = await searchParams;
   const sku = sp.sku?.trim() || '';
-  const category = sp.category?.trim() || '';
+  const name = sp.name?.trim() || '';
 
   return (
     <main className="px-4 py-6 sm:px-6 sm:py-8 print:p-0">
@@ -40,9 +40,7 @@ export default async function ProductSkuPrintPage({
       <div className="print-sheet flex justify-center">
         {sku ? (
           <div className="inline-flex flex-col items-center gap-1 rounded-xl border border-black/20 px-8 py-6 dark:border-white/20">
-            {category ? (
-              <div className="text-xs font-medium uppercase tracking-wide text-neutral-500 print-muted">{category}</div>
-            ) : null}
+            {name ? <div className="text-sm font-medium text-neutral-700 dark:text-neutral-200">{name}</div> : null}
             <div className="font-mono text-xl font-bold tracking-wide">{sku}</div>
           </div>
         ) : (
