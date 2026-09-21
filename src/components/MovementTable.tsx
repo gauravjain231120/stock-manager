@@ -306,14 +306,10 @@ export function MovementTable({
               </div>
               <div className="font-mono text-[11px] text-neutral-500">{r.sku}</div>
               {r.orderId ? <div className="text-[11px] text-neutral-400">Order {r.orderId}</div> : null}
-              {r.condition && r.condition !== 'GOOD' ? (
+              {r.condition && r.condition !== 'GOOD' && r.condition !== 'FAKED' ? (
                 <div
                   className={`text-[11px] ${
-                    r.condition === 'WRONG' || r.condition === 'DEFECTIVE'
-                      ? 'text-red-500'
-                      : r.condition === 'FAKED'
-                        ? 'text-purple-500'
-                        : 'text-amber-500'
+                    r.condition === 'WRONG' || r.condition === 'DEFECTIVE' ? 'text-red-500' : 'text-amber-500'
                   }`}
                 >
                   {RETURN_CONDITION_LABELS[r.condition as ReturnCondition] ?? r.condition}

@@ -2,6 +2,7 @@ import { listMovementRows, movementStats } from '@/lib/movements';
 import { listReturnReports } from '@/lib/returnReports';
 import { listProductOptions } from '@/lib/products';
 import { registerTotals } from '@/lib/register';
+import { getCurrentSession } from '@/lib/auth';
 import { MovementType, PLATFORM_LABELS, Platform } from '@/lib/constants';
 import { PageHeader, StatCard } from '@/components/ui';
 import { MovementTable } from '@/components/MovementTable';
@@ -16,14 +17,16 @@ import { num } from '@/lib/format';
 export const dynamic = 'force-dynamic';
 
 export default async function ReturnsPage() {
-  const [rows, stats, reports, products, registerRows] = await Promise.all([
+  const [rows, stats, reports, products, registerRows, session] = await Promise.all([
     listMovementRows(MovementType.RETURNED),
     movementStats(MovementType.RETURNED),
     listReturnReports(),
     listProductOptions(),
     registerTotals(),
+    getCurrentSession(),
   ]);
   const outstanding = reports.reduce((a, r) => a + r.missing, 0);
+  const isOwner = session?.role === 'OWNER';
 
   // Returned units per platform, busiest first.
   const perPlatform = new Map<string, { units: number; count: number }>();
@@ -35,6 +38,15 @@ export default async function ReturnsPage() {
     perPlatform.set(key, e);
   }
   const platformStats = [...perPlatform.entries()].sort((a, b) => b[1].units - a[1].units);
+
+  // How every graded return came back — Owner only, since this is a quality/
+  // fraud signal rather than a day-to-day operating number.
+  const conditionCounts = { GOOD: 0, USED: 0, FAKED: 0, WRONG: 0 };
+  for (const r of rows) {
+    if (r.condition && r.condition in conditionCounts) {
+      conditionCounts[r.condition as keyof typeof conditionCounts] += 1;
+    }
+  }
 
   return (
     <main className="px-4 py-6 sm:px-6 sm:py-8">
@@ -84,6 +96,15 @@ export default async function ReturnsPage() {
                 hint={`${s.count} return${s.count === 1 ? '' : 's'}`}
               />
             ))}
+          </section>
+        ) : null}
+
+        {isOwner ? (
+          <section className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <StatCard label="Good" value={num(conditionCounts.GOOD)} tone="good" />
+            <StatCard label="Used" value={num(conditionCounts.USED)} tone="warn" />
+            <StatCard label="Faked" value={num(conditionCounts.FAKED)} tone="danger" />
+            <StatCard label="Wrong" value={num(conditionCounts.WRONG)} tone="danger" />
           </section>
         ) : null}
       </RevealableStats>

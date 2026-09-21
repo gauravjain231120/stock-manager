@@ -14,9 +14,16 @@ export interface PickerProduct extends VariantMeta {
 
 interface SizeNode { key: string; label: string; sku: string; stock: number }
 interface ColorNode { key: string; label: string; stock: number; sizes: SizeNode[] }
-interface GroupNode { key: string; label: string; imageUrl?: string; stock: number; colors: ColorNode[] }
+interface GroupNode { key: string; label: string; code: string | null; imageUrl?: string; stock: number; colors: ColorNode[] }
 
 const trim = (s?: string) => (s ?? '').trim();
+
+// Same numbering as the product print sheet (/products/print): the digit
+// segment right after the brand prefix, e.g. "RRC-007-CO-K-YL-3XL" -> "007".
+function skuCode(sku: string): string | null {
+  const seg = sku.split('-')[1];
+  return seg && /^\d+$/.test(seg) ? seg : null;
+}
 
 /**
  * Build the Product → Colour → Size tree straight from the SKUs, not from the
@@ -27,7 +34,7 @@ const trim = (s?: string) => (s ?? '').trim();
  */
 function buildGroups(products: PickerProduct[]): GroupNode[] {
   type Draft = {
-    key: string; label: string; imageUrl?: string; stock: number;
+    key: string; label: string; code: string | null; imageUrl?: string; stock: number;
     colors: Map<string, { key: string; label: string; stock: number; sizes: Map<string, SizeNode> }>;
   };
   const drafts = new Map<string, Draft>();
@@ -36,7 +43,14 @@ function buildGroups(products: PickerProduct[]): GroupNode[] {
     const gKey = trim(p.groupCode) || trim(p.category) || 'OTHER';
     let g = drafts.get(gKey);
     if (!g) {
-      g = { key: gKey, label: trim(p.groupName) || trim(p.category) || gKey, imageUrl: p.imageUrl, stock: 0, colors: new Map() };
+      g = {
+        key: gKey,
+        label: trim(p.groupName) || trim(p.category) || gKey,
+        code: skuCode(p.sku),
+        imageUrl: p.imageUrl,
+        stock: 0,
+        colors: new Map(),
+      };
       drafts.set(gKey, g);
     }
     if (!g.imageUrl && p.imageUrl) g.imageUrl = p.imageUrl;
@@ -62,6 +76,7 @@ function buildGroups(products: PickerProduct[]): GroupNode[] {
     .map((g) => ({
       key: g.key,
       label: g.label,
+      code: g.code,
       imageUrl: g.imageUrl,
       stock: g.stock,
       colors: [...g.colors.values()]
@@ -202,6 +217,7 @@ export function ProductPicker({
                 <img src={g.imageUrl} alt="" className="h-6 w-6 shrink-0 rounded object-cover object-top" />
               ) : null}
               {g.label}
+              {g.code ? <span className={`text-xs font-normal ${on ? 'text-white/75' : 'text-neutral-400'}`}>{g.code}</span> : null}
               <span className={`text-xs font-normal tabular-nums ${stockTone(g.stock, on)}`}>{g.stock}</span>
             </button>
           );
