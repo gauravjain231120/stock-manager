@@ -243,20 +243,15 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
                     <td className="py-1">
                       <div className="text-neutral-600 dark:text-neutral-300">{[v.color, v.size].filter(Boolean).join(' / ') || v.sku}</div>
                       <div className="mt-0.5 font-mono text-[11px] text-brand-700 dark:text-brand-500">{v.sku}</div>
+                      <Link
+                        href={skuPrintHref(group.category ?? '', v.sku)}
+                        target="_blank"
+                        className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-neutral-400 transition hover:text-neutral-700 dark:hover:text-neutral-200"
+                      >
+                        <Printer size={11} /> Print SKU
+                      </Link>
                     </td>
-                    <td className="py-1 text-right align-top">
-                      <div className="flex items-center justify-end gap-1">
-                        <Link
-                          href={skuPrintHref(group.category ?? '', v.sku)}
-                          target="_blank"
-                          className="inline-flex size-6 items-center justify-center rounded-md text-neutral-400 transition hover:bg-black/5 hover:text-neutral-700 dark:hover:bg-white/10 dark:hover:text-neutral-200"
-                          title="Print SKU label"
-                        >
-                          <Printer size={13} />
-                        </Link>
-                        <EditableStock sku={v.sku} value={v.onHand} />
-                      </div>
-                    </td>
+                    <td className="py-1 text-right align-top"><EditableStock sku={v.sku} value={v.onHand} /></td>
                   </tr>
                 ))}
               </tbody>
