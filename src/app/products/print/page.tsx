@@ -1,28 +1,25 @@
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
+import { getProductGroups } from '@/lib/products';
 import { PrintButton } from '@/components/PrintButton';
 
 export const dynamic = 'force-dynamic';
 
-// Chrome names the saved file after the document title.
-export async function generateMetadata({ searchParams }: { searchParams: Promise<{ sku?: string }> }) {
-  const sp = await searchParams;
-  return { title: sp.sku ? `SKU ${sp.sku}` : 'SKU label' };
-}
+export const metadata = { title: 'Rangrooh Product SKUs' };
+
+const th = 'border border-black px-2 py-1 text-left font-semibold';
+const td = 'border border-black px-2 py-1 align-top';
 
 /**
- * A single product tag — product name + one SKU, nothing else — for sticking
- * on the physical item or box. Screen chrome carries `no-print`, same pattern
- * as the other print pages (§ /ship/queue-print, /inventory/print).
+ * Every product's name + SKU (its group code), one row each, on one printable
+ * sheet — no per-product buttons, just this one page for the whole catalog.
+ * Screen chrome carries `no-print`, same pattern as the other print pages
+ * (§ /ship/queue-print, /inventory/print).
  */
-export default async function ProductSkuPrintPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ print?: string; sku?: string; name?: string }>;
-}) {
+export default async function ProductSkuPrintPage({ searchParams }: { searchParams: Promise<{ print?: string }> }) {
   const sp = await searchParams;
-  const sku = sp.sku?.trim() || '';
-  const name = sp.name?.trim() || '';
+  const { groups } = await getProductGroups();
+  const rows = [...groups].sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <main className="px-4 py-6 sm:px-6 sm:py-8 print:p-0">
@@ -34,17 +31,33 @@ export default async function ProductSkuPrintPage({
           <ArrowLeft size={14} />
           Back to Products
         </Link>
-        <PrintButton auto={sp.print === '1'} label="Print label" />
+        <PrintButton auto={sp.print === '1'} label="Print SKUs" />
       </div>
 
-      <div className="print-sheet flex justify-center">
-        {sku ? (
-          <div className="inline-flex flex-col items-center gap-1 rounded-xl border border-black/20 px-8 py-6 dark:border-white/20">
-            {name ? <div className="text-sm font-medium text-neutral-700 dark:text-neutral-200">{name}</div> : null}
-            <div className="font-mono text-xl font-bold tracking-wide">{sku}</div>
-          </div>
+      <div className="print-sheet">
+        <p className="mb-3 text-[10px] text-neutral-500 print-muted">
+          {rows.length} product{rows.length === 1 ? '' : 's'}
+        </p>
+
+        {rows.length > 0 ? (
+          <table className="w-full border-collapse text-xs">
+            <thead>
+              <tr>
+                <th className={th}>Product</th>
+                <th className={th}>SKU</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((g) => (
+                <tr key={g.code}>
+                  <td className={td}>{g.name}</td>
+                  <td className={`${td} font-mono`}>{g.code}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         ) : (
-          <p className="py-8 text-sm text-neutral-400">No SKU given.</p>
+          <p className="py-8 text-center text-sm text-neutral-400">No products yet.</p>
         )}
       </div>
     </main>

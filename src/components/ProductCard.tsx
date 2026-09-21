@@ -2,8 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { Pencil, Printer, Trash2, Upload } from 'lucide-react';
+import { Pencil, Trash2, Upload } from 'lucide-react';
 import { Badge } from '@/components/ui';
 import { useConfirm } from '@/components/ConfirmProvider';
 import { EditableStock } from '@/components/EditableStock';
@@ -42,12 +41,6 @@ function qtyColor(n: number) {
   if (n <= 0) return 'text-red-600';
   if (n <= 5) return 'text-amber-600';
   return 'text-emerald-600';
-}
-
-/** /products/print?name=...&sku=...&print=1 — same pattern as the other print pages. */
-function skuPrintHref(name: string, sku: string) {
-  const params = new URLSearchParams({ name, sku, print: '1' });
-  return `/products/print?${params.toString()}`;
 }
 
 export function ProductCard({ group, categories = [] }: { group: CardGroup; categories?: string[] }) {
@@ -249,13 +242,6 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
               </tbody>
             </table>
             <div className="mt-auto flex items-center justify-end gap-2 pt-3">
-              <Link
-                href={skuPrintHref(group.name, group.code)}
-                target="_blank"
-                className="inline-flex items-center gap-1.5 rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium transition hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
-              >
-                <Printer size={14} /> Print SKU
-              </Link>
               <button
                 onClick={startEdit}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium transition hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
