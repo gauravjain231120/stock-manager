@@ -12,16 +12,18 @@ import { isPathAllowed, sectionsForRole, NO_ACCESS_PATH, type Role } from '@/lib
 const PUBLIC_PATHS = new Set(['/login', '/api/login', '/api/logout', '/api/backup', '/api/cron/poll']);
 
 // The order-alert integration (a SEPARATE app — Myntra/Amazon order events
-// adding/removing rows in the Ready-to-Ship queue) is a server calling
-// another server, never a browser — it can never carry a real per-account
-// session cookie. It already sends the fixed shared secret the old
-// single-login system used, unchanged since before this per-account/role
-// system existed; recognizing that same value here (already configured in
-// that other app's own env, nothing to change there) keeps it working
-// without needing a session, but ONLY for the exact API surface it actually
-// calls — everything else still requires a real logged-in account.
+// adding/removing rows in the Ready-to-Ship queue, and now also its own
+// dashboard's "Scan a Myntra return" card writing straight into
+// /api/register) is a server calling another server, never a browser — it
+// can never carry a real per-account session cookie. It already sends the
+// fixed shared secret the old single-login system used, unchanged since
+// before this per-account/role system existed; recognizing that same value
+// here (already configured in that other app's own env, nothing to change
+// there) keeps it working without needing a session, but ONLY for the exact
+// API surface it actually calls — everything else still requires a real
+// logged-in account.
 const SERVICE_TOKEN = process.env.AUTH_TOKEN ?? 'rangrooh-stock-authed-9c4458';
-const SERVICE_API_PREFIXES = ['/api/pending'];
+const SERVICE_API_PREFIXES = ['/api/pending', '/api/register'];
 function isServiceRequest(pathname: string, token: string | undefined): boolean {
   return Boolean(token) && token === SERVICE_TOKEN && SERVICE_API_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
