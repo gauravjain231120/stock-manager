@@ -444,6 +444,27 @@ granting one never implies the other, §7), and — Owner-only, never grantable 
   "Show numbers" toggle by default (`RevealableStats` — pure client state, no request either way)
   — every fresh page load starts hidden.
 - The Sidebar footer shows just the logged-in username now, no role label next to it.
+- **Returns page, Owner-only (added 2026-09-21)**: a Good/Used/Faked/Wrong condition-count row
+  (tallied from the already-loaded `RETURNED` rows, no extra query) and a matching "Condition"
+  filter dropdown on `MovementTable` (`showConditionFilter` prop), both gated on
+  `session?.role === 'OWNER'` the same way the Dashboard's dev-tool buttons are (§4/§7) —
+  Manager/Viewer accounts never see either, even with Returns granted. `DEFECTIVE` is deliberately
+  left out of both, matching the count row's own scope.
+- **Returns list, per-row condition annotation (changed 2026-09-21)**: `MovementTable` no longer
+  shows the "Faked — back in stock" line under a return's product name — Used and Wrong item
+  still show exactly as before (`r.condition !== 'GOOD' && r.condition !== 'FAKED'` instead of just
+  `!== 'GOOD'`). This is display-only; the `condition` field itself, CSV export, and the owner-only
+  count row above all still reflect FAKED normally.
+- **Product picker SKU code (added 2026-09-21)**: `ProductPicker.tsx`'s "Or pick it" product chips
+  now show each style's numeric SKU code next to its name (e.g. "Full Sleeves 007"), derived from
+  a sample variant SKU the same way `/products/print` already numbers its sheet
+  (`sku.split('-')[1]` when that segment is all digits) — not a new/separate numbering, just
+  surfaced in one more place.
+- **One-off correction (2026-09-21, `scripts/mark-tracking-faked.ts`)**: 38 already-logged returns
+  across a list of ~42 Myntra tracking numbers were flipped from `GOOD` to `FAKED` via `editEntry`
+  (same code path the Returns page's own "Edit" dialog uses — MAIN→MAIN, no stock movement, just
+  relabelled), after a dry run confirmed every tracking number matched and none were already
+  graded something else. 4 of the 42 were already USED/WRONG and left untouched.
 
 **Reachable by direct URL, not in the sidebar / not grantable** (secondary/dev tools, Owner
 only): `/orders` (MarketplaceOrder history — automated pipeline), `/channels` (ChannelListing
@@ -622,6 +643,8 @@ src/app/
   login|no-access/    reachable without a section grant (§6, §7)
 src/proxy.ts             the RBAC gate on every route except PUBLIC_PATHS — renamed from middleware.ts, NOT cosmetic (§7)
 vercel.json                only schedules /api/backup — no cron for the marketplace pipeline (§7)
+scripts/                 one-off maintenance scripts (`tsx --tsconfig tsconfig.scripts.json scripts/<name>.ts [--dry]`), incl.
+  mark-tracking-faked.ts   the GOOD->FAKED tracking-number correction (§6)
 ```
 
 ## 10. Deployment workflow
