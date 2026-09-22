@@ -225,7 +225,13 @@ export function ProductPicker({
               ) : null}
               {g.label}
               {g.code ? (
-                <span className={`text-xs font-bold ${on ? 'text-white' : 'text-neutral-900 dark:text-white'}`}>{g.code}</span>
+                <span
+                  className={`rounded border px-1.5 py-0.5 text-xs font-bold leading-none ${
+                    on ? 'border-white/50 text-white' : 'border-neutral-900/40 text-neutral-900 dark:border-white/40 dark:text-white'
+                  }`}
+                >
+                  {g.code}
+                </span>
               ) : null}
               <span className={`text-xs font-normal tabular-nums ${stockTone(g.stock, on)}`}>{g.stock}</span>
             </button>
