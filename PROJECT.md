@@ -516,10 +516,11 @@ respectively).
   - The one exception: the sister order-alert bot (§8) is a server calling another server, never
     a browser, so it can't carry a real per-account session — `proxy.ts`'s `isServiceRequest()`
     recognizes the same fixed `AUTH_TOKEN` shared secret the old single-login system always used,
-    but narrowly, only for `/api/pending*` (exactly what that bot calls), nothing else. **Confirm
-    `AUTH_TOKEN` and `CRON_SECRET` are actually set in the Vercel project's env vars** — if
-    `AUTH_TOKEN` is unset it silently falls back to the hardcoded default
-    `'rangrooh-stock-authed-9c4458'`.
+    but narrowly, only for the API prefixes that bot actually calls (`SERVICE_API_PREFIXES` in
+    `proxy.ts`: `/api/pending` and, added 2026-09-22 for its dashboard's own "Scan a Myntra
+    return" write feature, `/api/register` — see §8), nothing else. **Confirm `AUTH_TOKEN` and
+    `CRON_SECRET` are actually set in the Vercel project's env vars** — if `AUTH_TOKEN` is unset
+    it silently falls back to the hardcoded default `'rangrooh-stock-authed-9c4458'`.
 - **Multi-collection operations that aren't wrapped in one transaction**: `renameVariantSku`
   touches 11 collections via separate `updateMany` calls; `removeVariant`/`deleteProductGroup`
   are similarly multi-step. A crash mid-operation could leave things partially updated. Worth
@@ -569,7 +570,7 @@ codebase or database directly.
 - Auth: it sends `Cookie: auth=<STOCK_MANAGER_AUTH_TOKEN>` on every call. That value must be the
   **exact same string** as this app's `AUTH_TOKEN` (or the hardcoded fallback if `AUTH_TOKEN` is
   unset here) — `proxy.ts`'s `isServiceRequest()` compares it with plain `===`, narrowly scoped to
-  `/api/pending*` only (§7); every other route needs a real per-account session now.
+  `SERVICE_API_PREFIXES` (§7); every other route needs a real per-account session now.
 - It calls five endpoints, all under `/api/pending*`: `GET /api/pending/check?orderId=` (dup-check
   before adding), `POST /api/pending` (`addPending`), and — for the cancellation sweep — `GET
   /api/pending/summary` (find the queue row(s) for a newly-cancelled order) then `DELETE
@@ -586,6 +587,16 @@ codebase or database directly.
   live order left to ship. Named/placed under `/api/pending` specifically so the sister bot's
   existing narrowly-scoped service token (see above) already covers it, without widening
   `SERVICE_API_PREFIXES` in `proxy.ts` into the rest of the Stock Log.
+- A sixth, added 2026-09-22: `POST /api/register` (`action: 'RETURN'`) — the sister bot's own
+  dashboard grew a "Scan a Myntra return" card (mirroring the one on this app's own Returns page)
+  that can resolve **and log** a Myntra return without stock-manager in the loop at all, using
+  this exact endpoint (`recordEntry`, the same write path this app's own Returns-page scan feature
+  uses). This required actually widening `SERVICE_API_PREFIXES` to `['/api/pending',
+  '/api/register']` — first attempt shipped without it and 502'd (`{"error":"Unauthorized"}`): the
+  bot's token was correct, but `isServiceRequest()` didn't recognize `/api/register` yet, so the
+  request fell through to the real-session lookup, found none, and `proxy.ts` 401'd it. Fixed by
+  adding the prefix; **any future write the sister bot needs to make directly must likewise be
+  added here explicitly** — the allowlist is intentionally narrow and doesn't grow implicitly.
 - It **never** touches `/api/cron/poll`, `/api/orders/ingest`, or anything in the
   marketplace-adapter pipeline. **The two order systems are completely independent and never
   need to reconcile** — the sister bot is a self-contained "detect → push to Ready to Ship"
