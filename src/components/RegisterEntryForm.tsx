@@ -2,13 +2,14 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Truck, Undo2, ScanLine } from 'lucide-react';
+import { Plus, Truck, Undo2, ScanLine, Camera } from 'lucide-react';
 import {
   PLATFORMS, PLATFORM_LABELS, Platform, MAX_TRACKING_LEN, normalizeTracking,
   RETURN_CONDITIONS, RETURN_CONDITION_LABELS, RETURN_CONDITION_HINTS, ReturnCondition,
 } from '@/lib/constants';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { ProductPicker, PickerProduct } from '@/components/ProductPicker';
+import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { useConfirm } from '@/components/ConfirmProvider';
 import { useToast } from '@/components/ToastProvider';
 
@@ -85,6 +86,7 @@ export function RegisterEntryForm({ products, lockedAction }: { products: Picker
   const [myntraCandidates, setMyntraCandidates] = useState<MyntraCandidate[]>([]);
   // Whichever candidate is currently loaded into the "scan the label" modal.
   const [myntraActive, setMyntraActive] = useState<MyntraCandidate | null>(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
 
   // Default the date to today on the client (after mount, to avoid an SSR
   // hydration mismatch since the server doesn't know the user's timezone).
@@ -186,10 +188,15 @@ export function RegisterEntryForm({ products, lockedAction }: { products: Picker
    * marketplace listings is a known, real thing here — see
    * stockSkuFor/addPending) — an item with no match still shows, with its
    * own error and no "Add this" button, instead of the whole scan failing.
+   *
+   * `idOverride` lets the camera scanner (below) resolve immediately with
+   * the just-decoded text, instead of setting state and waiting a render
+   * cycle for `myntraScanId` to actually update.
    */
-  async function resolveMyntraReturn() {
-    const id = myntraScanId.trim().toUpperCase();
+  async function resolveMyntraReturn(idOverride?: string) {
+    const id = (idOverride ?? myntraScanId).trim().toUpperCase();
     if (!id) return;
+    setMyntraScanId(id);
     setMyntraResolving(true);
     setMyntraResolveError(null);
     setMyntraCandidates([]);
@@ -237,6 +244,14 @@ export function RegisterEntryForm({ products, lockedAction }: { products: Picker
     setScanOpen(true);
   }
 
+  /** Mobile camera scan — the phone's rear camera reads the tracking barcode
+   *  straight off the return label, closes the camera, and resolves it
+   *  immediately, same as scanning/typing it into the box by hand. */
+  function handleBarcodeDetected(text: string) {
+    setCameraOpen(false);
+    resolveMyntraReturn(text);
+  }
+
   function closeScan() {
     setScanOpen(false);
     setMyntraActive(null);
@@ -259,7 +274,17 @@ export function RegisterEntryForm({ products, lockedAction }: { products: Picker
             />
             <button
               type="button"
-              onClick={resolveMyntraReturn}
+              onClick={() => setCameraOpen(true)}
+              disabled={myntraResolving}
+              title="Scan with camera"
+              aria-label="Scan with camera"
+              className="rounded-lg border border-black/15 px-3 py-2 text-sm font-medium hover:bg-black/5 disabled:opacity-50 dark:border-white/20 dark:hover:bg-white/10"
+            >
+              <Camera size={16} />
+            </button>
+            <button
+              type="button"
+              onClick={() => resolveMyntraReturn()}
               disabled={myntraResolving || !myntraScanId.trim()}
               className="rounded-lg border border-black/15 px-3 py-2 text-sm font-medium hover:bg-black/5 disabled:opacity-50 dark:border-white/20 dark:hover:bg-white/10"
             >
@@ -484,6 +509,8 @@ export function RegisterEntryForm({ products, lockedAction }: { products: Picker
           </div>
         </div>
       ) : null}
+
+      {cameraOpen ? <BarcodeScanner onDetected={handleBarcodeDetected} onClose={() => setCameraOpen(false)} /> : null}
     </form>
   );
 }

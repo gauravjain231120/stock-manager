@@ -633,6 +633,14 @@ codebase or database directly.
     single-item return and a real 2-item shipment (confirmed the resolved SKU for the single-item
     case exists as a real active product here; confirmed the 2-item case resolves to two distinct,
     correctly-matched candidates, not one item silently dropped).
+  - **Camera scan (added 2026-09-22, `BarcodeScanner.tsx`, `@zxing/browser`)**: a camera icon next
+    to the manual input opens a full-screen scanner (rear camera preferred automatically) —
+    continuous decode via `BrowserMultiFormatReader.decodeFromVideoDevice()` until a code is found
+    or cancelled; the media stream is explicitly stopped on unmount (`controls.stop()`) so the
+    camera doesn't stay on. Works on Android Chrome and iOS Safari (`playsInline` on the `<video>`
+    is required specifically for iOS, or Safari forces its own native fullscreen player instead of
+    showing the feed inline) over HTTPS or localhost. A scanned code resolves immediately via an
+    `idOverride` param on `resolveMyntraReturn()`, without waiting on React state propagation.
 
 ## 9. File map
 
