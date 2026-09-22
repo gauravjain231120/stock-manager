@@ -88,7 +88,14 @@ function buildGroups(products: PickerProduct[]): GroupNode[] {
         }))
         .sort((a, b) => a.label.localeCompare(b.label)),
     }))
-    .sort((a, b) => a.label.localeCompare(b.label));
+    // Ascending by SKU code (001, 002, ...), same convention as /products/print —
+    // groups with no code (shouldn't normally happen) sort after every coded one.
+    .sort((a, b) => {
+      if (a.code && b.code) return Number(a.code) - Number(b.code);
+      if (a.code) return -1;
+      if (b.code) return 1;
+      return a.label.localeCompare(b.label);
+    });
 }
 
 /** A rough dot colour for the swatch — the name next to it is the real answer. */
@@ -217,7 +224,9 @@ export function ProductPicker({
                 <img src={g.imageUrl} alt="" className="h-6 w-6 shrink-0 rounded object-cover object-top" />
               ) : null}
               {g.label}
-              {g.code ? <span className={`text-xs font-normal ${on ? 'text-white/75' : 'text-neutral-400'}`}>{g.code}</span> : null}
+              {g.code ? (
+                <span className={`text-xs font-bold ${on ? 'text-white' : 'text-neutral-900 dark:text-white'}`}>{g.code}</span>
+              ) : null}
               <span className={`text-xs font-normal tabular-nums ${stockTone(g.stock, on)}`}>{g.stock}</span>
             </button>
           );
