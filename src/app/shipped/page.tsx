@@ -33,7 +33,7 @@ export default async function ShippedPage() {
         <MovementDayPanel rows={rows} today={stats.today} title="Shipped on a day" verb="shipped" />
       </div>
 
-      <MovementTable rows={rows} title="Shipped" dateLabel="Shipped" verb="shipped" csvName="shipped" returnRows={returnRows} allowMoveToQueue />
+      <MovementTable rows={rows} title="Shipped" dateLabel="Shipped" verb="shipped" csvName="shipped" returnRows={returnRows} />
     </main>
   );
 }
