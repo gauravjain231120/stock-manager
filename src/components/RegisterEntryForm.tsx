@@ -2,39 +2,15 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Truck, Undo2, ScanLine, Camera } from 'lucide-react';
+import { Plus, Truck, Undo2, ScanLine } from 'lucide-react';
 import {
   PLATFORMS, PLATFORM_LABELS, Platform, MAX_TRACKING_LEN, normalizeTracking,
   RETURN_CONDITIONS, RETURN_CONDITION_LABELS, RETURN_CONDITION_HINTS, ReturnCondition,
 } from '@/lib/constants';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { ProductPicker, PickerProduct } from '@/components/ProductPicker';
-import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { useConfirm } from '@/components/ConfirmProvider';
 import { useToast } from '@/components/ToastProvider';
-
-/** Everything after the first "-" — marketplace SKUs sometimes use a different
- *  brand prefix (RR-/R-/RRC-) for the same physical variant, same convention
- *  stock-manager's own stockSkuFor/addPending already use. */
-function suffixOf(sku: string) {
-  const idx = sku.indexOf('-');
-  return idx === -1 ? sku : sku.slice(idx + 1);
-}
-
-/** One resolved line item from a scanned Myntra return tracking ID — a
- *  multi-item shipment resolves to several of these, not just one, so this
- *  is always handled as a list, never a single value. */
-interface MyntraCandidate {
-  resolvedSku: string; // the SKU string Myntra itself returned
-  matchedSku: string | null; // this page's own matching SKU, or null if none matched
-  productName: string | null; // this page's own product name for matchedSku
-  image: string | null;
-  returnReason: string | null;
-  size: string | null;
-  color: string | null;
-  matchError: string | null;
-  added: boolean;
-}
 
 function todayStr() {
   return new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD (local)
@@ -76,17 +52,6 @@ export function RegisterEntryForm({ products, lockedAction }: { products: Picker
   const [tracking, setTracking] = useState('');
   const [scanOpen, setScanOpen] = useState(false);
   const [condition, setCondition] = useState<ReturnCondition>('GOOD');
-  const [myntraScanId, setMyntraScanId] = useState('');
-  const [myntraResolving, setMyntraResolving] = useState(false);
-  const [myntraResolveError, setMyntraResolveError] = useState<string | null>(null);
-  // Every item found for the last scan — could be 1, could be several (a
-  // multi-item shipment resolves to one candidate per product). Not cleared
-  // between individual "Add this" clicks, so all of them stay pickable off
-  // one scan.
-  const [myntraCandidates, setMyntraCandidates] = useState<MyntraCandidate[]>([]);
-  // Whichever candidate is currently loaded into the "scan the label" modal.
-  const [myntraActive, setMyntraActive] = useState<MyntraCandidate | null>(null);
-  const [cameraOpen, setCameraOpen] = useState(false);
 
   // Default the date to today on the client (after mount, to avoid an SSR
   // hydration mismatch since the server doesn't know the user's timezone).
@@ -106,7 +71,6 @@ export function RegisterEntryForm({ products, lockedAction }: { products: Picker
     if (action === 'RETURN') {
       setTracking('');
       setCondition('GOOD');
-      setMyntraActive(null); // a manually-picked return shouldn't show a stale scan's photo/reason
       setScanOpen(true);
       return;
     }
@@ -160,14 +124,6 @@ export function RegisterEntryForm({ products, lockedAction }: { products: Picker
         setQty(action === 'RETURN' ? '1' : '');
         setTracking('');
         setScanOpen(false);
-        if (myntraActive) {
-          // Mark this one added rather than clearing the whole list — the
-          // other candidates from the same scan (a multi-item shipment)
-          // stay right there to add next, no re-scanning needed.
-          const justAdded = myntraActive;
-          setMyntraCandidates((list) => list.map((c) => (c === justAdded ? { ...c, added: true } : c)));
-          setMyntraActive(null);
-        }
         router.refresh();
       }
     } catch (e) {
@@ -177,168 +133,12 @@ export function RegisterEntryForm({ products, lockedAction }: { products: Picker
     }
   }
 
-  /**
-   * Scan a Myntra return tracking id (e.g. MYSR...) and resolve it — replaces
-   * manually looking it up on Myntra's own site twice (SPF claim -> original
-   * tracking id + photo, then that id -> real SKU + size). A shipment that
-   * carried more than one product resolves to more than one candidate here —
-   * this always renders as a list below the scan box, never assumes exactly
-   * one result. Matches each resolved SKU against this page's own product
-   * list by exact string first, then by suffix (brand-prefix drift across
-   * marketplace listings is a known, real thing here — see
-   * stockSkuFor/addPending) — an item with no match still shows, with its
-   * own error and no "Add this" button, instead of the whole scan failing.
-   *
-   * `idOverride` lets the camera scanner (below) resolve immediately with
-   * the just-decoded text, instead of setting state and waiting a render
-   * cycle for `myntraScanId` to actually update.
-   */
-  async function resolveMyntraReturn(idOverride?: string) {
-    const id = (idOverride ?? myntraScanId).trim().toUpperCase();
-    if (!id) return;
-    setMyntraScanId(id);
-    setMyntraResolving(true);
-    setMyntraResolveError(null);
-    setMyntraCandidates([]);
-    try {
-      const res = await fetch(`/api/resolve-myntra-return?trackingId=${encodeURIComponent(id)}`);
-      const data = await res.json();
-      if (!res.ok) {
-        setMyntraResolveError(data?.error || `Error ${res.status}`);
-        return;
-      }
-      const items: Array<{ sku: string; image: string | null; returnReason: string | null; size: string | null; color: string | null }> =
-        data.items ?? [];
-      const candidates: MyntraCandidate[] = items.map((it) => {
-        const match = products.find((p) => p.sku === it.sku) ?? products.find((p) => suffixOf(p.sku) === suffixOf(it.sku));
-        return {
-          resolvedSku: it.sku,
-          matchedSku: match?.sku ?? null,
-          productName: match?.name ?? null,
-          image: it.image,
-          returnReason: it.returnReason,
-          size: it.size,
-          color: it.color,
-          matchError: match ? null : `SKU ${it.sku} isn't in the product catalog here.`,
-          added: false,
-        };
-      });
-      setMyntraCandidates(candidates);
-    } catch (e) {
-      setMyntraResolveError(e instanceof Error ? e.message : 'Request failed');
-    } finally {
-      setMyntraResolving(false);
-    }
-  }
-
-  /** Loads one resolved candidate into the "scan the label" modal — the
-   *  scanned tracking id is reused as-is for whichever item is picked. */
-  function selectMyntraCandidate(candidate: MyntraCandidate) {
-    if (!candidate.matchedSku) return;
-    setSku(candidate.matchedSku);
-    setChannel('MYNTRA');
-    setQty('1');
-    setTracking(myntraScanId.trim().toUpperCase());
-    setCondition('GOOD');
-    setMyntraActive(candidate);
-    setScanOpen(true);
-  }
-
-  /** Mobile camera scan — the phone's rear camera reads the tracking barcode
-   *  straight off the return label, closes the camera, and resolves it
-   *  immediately, same as scanning/typing it into the box by hand. */
-  function handleBarcodeDetected(text: string) {
-    setCameraOpen(false);
-    resolveMyntraReturn(text);
-  }
-
   function closeScan() {
     setScanOpen(false);
-    setMyntraActive(null);
   }
 
   return (
     <form onSubmit={onSubmit} className="rounded-xl border border-black/10 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-neutral-900">
-      {lockedAction === 'RETURN' ? (
-        <div className="mb-4 rounded-lg border border-black/10 bg-black/5 p-3 dark:border-white/10 dark:bg-white/5">
-          <div className="flex items-center gap-1.5 text-xs font-medium text-neutral-500">
-            <ScanLine size={13} /> Scan a Myntra return tracking ID — auto-fills product, size &amp; photo
-          </div>
-          <div className="mt-1.5 flex gap-2">
-            <input
-              value={myntraScanId}
-              onChange={(e) => setMyntraScanId(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); resolveMyntraReturn(); } }}
-              placeholder="MYSR… / MYER… / MYEC…"
-              className={`flex-1 font-mono ${input}`}
-            />
-            <button
-              type="button"
-              onClick={() => setCameraOpen(true)}
-              disabled={myntraResolving}
-              title="Scan with camera"
-              aria-label="Scan with camera"
-              className="rounded-lg border border-black/15 px-3 py-2 text-sm font-medium hover:bg-black/5 disabled:opacity-50 dark:border-white/20 dark:hover:bg-white/10"
-            >
-              <Camera size={16} />
-            </button>
-            <button
-              type="button"
-              onClick={() => resolveMyntraReturn()}
-              disabled={myntraResolving || !myntraScanId.trim()}
-              className="rounded-lg border border-black/15 px-3 py-2 text-sm font-medium hover:bg-black/5 disabled:opacity-50 dark:border-white/20 dark:hover:bg-white/10"
-            >
-              {myntraResolving ? 'Looking up…' : 'Resolve'}
-            </button>
-          </div>
-          {myntraResolveError ? <div className="mt-1.5 text-xs text-red-600 dark:text-red-400">{myntraResolveError}</div> : null}
-
-          {myntraCandidates.length > 0 ? (
-            <div className="mt-3 flex flex-col gap-2">
-              <div className="text-xs text-neutral-500">
-                Found {myntraCandidates.length} item{myntraCandidates.length === 1 ? '' : 's'} for this tracking ID
-              </div>
-              {myntraCandidates.map((c, i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-3 rounded-lg border border-black/10 bg-white p-2 dark:border-white/10 dark:bg-neutral-900"
-                >
-                  {c.image ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={c.image} alt="" className="h-12 w-12 shrink-0 rounded object-cover" />
-                  ) : null}
-                  <div className="min-w-0 flex-1 text-xs">
-                    <div className="truncate font-medium text-neutral-700 dark:text-neutral-200">
-                      {c.productName ?? c.resolvedSku}
-                    </div>
-                    <div className="font-mono text-neutral-500">{c.matchedSku ?? c.resolvedSku}</div>
-                    {c.size ? (
-                      <div className="text-neutral-400">
-                        Size: {c.size}
-                        {c.color ? ` · ${c.color}` : ''}
-                      </div>
-                    ) : null}
-                    {c.matchError ? <div className="text-red-600 dark:text-red-400">{c.matchError}</div> : null}
-                  </div>
-                  {c.added ? (
-                    <span className="shrink-0 rounded-lg bg-emerald-600/10 px-3 py-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-                      ✓ Added
-                    </span>
-                  ) : c.matchedSku ? (
-                    <button
-                      type="button"
-                      onClick={() => selectMyntraCandidate(c)}
-                      className="shrink-0 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-700"
-                    >
-                      Add this
-                    </button>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </div>
-      ) : null}
       {err ? (
         <div className="mb-4 rounded-lg border border-red-300 bg-red-50 px-4 py-2.5 text-sm font-medium text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
           ⚠ {err}
@@ -434,25 +234,6 @@ export function RegisterEntryForm({ products, lockedAction }: { products: Picker
               </div>
             </div>
 
-            {myntraActive ? (
-              <div className="mt-3 flex items-center gap-3 rounded-lg border border-black/10 p-2 dark:border-white/10">
-                {myntraActive.image ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={myntraActive.image} alt="" className="h-16 w-16 shrink-0 rounded object-cover" />
-                ) : null}
-                <div className="min-w-0 text-xs text-neutral-500">
-                  <div className="font-medium text-neutral-600 dark:text-neutral-300">Resolved from Myntra SPF</div>
-                  {myntraActive.size ? (
-                    <div>
-                      Size: <b className="text-neutral-700 dark:text-neutral-200">{myntraActive.size}</b>
-                      {myntraActive.color ? ` · ${myntraActive.color}` : ''}
-                    </div>
-                  ) : null}
-                  {myntraActive.returnReason ? <div className="truncate">Reason: {myntraActive.returnReason}</div> : null}
-                </div>
-              </div>
-            ) : null}
-
             <div className="mt-4">
               <div className="text-xs text-neutral-500">What came back?</div>
               <div className="mt-1.5 flex flex-col gap-1.5">
@@ -509,8 +290,6 @@ export function RegisterEntryForm({ products, lockedAction }: { products: Picker
           </div>
         </div>
       ) : null}
-
-      {cameraOpen ? <BarcodeScanner onDetected={handleBarcodeDetected} onClose={() => setCameraOpen(false)} /> : null}
     </form>
   );
 }

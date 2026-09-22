@@ -388,7 +388,6 @@ re-login.
 | `/api/return-shipments` | GET, POST | Outstanding-parcel count / log an EXPECTED return |
 | `/api/return-shipments/[id]` | POST, PATCH, DELETE | Grade/receive, edit, delete |
 | `/api/return-shipments/scan` | POST | `{trackingId}` → matching parcel or 404 (scan-to-grade flow) |
-| `/api/resolve-myntra-return` | GET | `?trackingId=MYSR...` → proxies the sister bot's resolver (SKU/size/photo) for the Returns page's Myntra scan box, §8 |
 | `/api/returns` | GET | `?status=RECEIVED|GRADED` list |
 | `/api/returns/grade` | POST | Grade a `ReturnRecord` (automated pipeline) |
 | `/api/returns/ingest` | POST | Pull returns from all channels into QUARANTINE |
@@ -615,43 +614,20 @@ codebase or database directly.
   stale silently. Worth fixing properly on that side (it already has read-only access to this
   app's DB via `STOCK_MONGODB_URI` — it could just read `sharesStockWith` directly instead of
   hardcoding).
-- **New exception, the one call that goes the other way (added 2026-09-22)**: `GET
-  /api/resolve-myntra-return?trackingId=MYSR...` (`src/app/api/resolve-myntra-return/route.ts`)
-  proxies the sister bot's own `GET /api/resolve-return` — the bot holds the live Myntra session
-  this app doesn't, so this app calls it, not the reverse. Auth: `MYNTRA_BOT_URL` +
-  `MYNTRA_BOT_RESOLVE_SECRET` (sent as an `x-resolve-secret` header, must match that project's own
-  `RESOLVE_RETURN_SECRET`). Used by the Returns page's "Scan a Myntra return tracking ID" box
-  (`RegisterEntryForm.tsx`, `lockedAction === 'RETURN'` only) to replace two manual lookups on
-  Myntra's own site: chains the SPF claim (return tracking id -> original shipment tracking id +
-  one product photo) into a packed-order search (that id -> real seller SKU + size) — the bot side
-  resolves this data, the actual write still goes through the exact same `POST /api/register` the
-  manual flow already uses.
-  - **Always a list, never assumes one item.** The bot's response is `{ items: [...] }` — a
-    shipment carrying more than one product resolves to more than one item (confirmed real case),
-    so the scan box renders `myntraCandidates` as a dynamic list (any length, no cap), one small
-    card per item (photo, resolved SKU, size/color, an "Add this" button). Picking one loads it
-    into the existing "Return — scan the label" modal (product, platform=Myntra, tracking id = the
-    scanned number, qty=1); after saving, that candidate is marked "✓ Added" **without clearing the
-    rest of the list**, so every other item from the same scan (2, 3, or more) stays right there to
-    add next — no re-scanning per item.
-  - SKU matching tries an exact string match first, then falls back to matching by suffix
-    (everything after the first `-`) against this page's own product list — the same
-    brand-prefix-drift tolerance `stockSkuFor`/`addPending` already use elsewhere, since a
-    marketplace-resolved SKU isn't guaranteed to use the exact same prefix as this catalog. An
-    item with no match still shows in the list with its own error message and no "Add this"
-    button, instead of failing the whole scan.
-  - Verified end-to-end against production with real return tracking ids — both a normal
-    single-item return and a real 2-item shipment (confirmed the resolved SKU for the single-item
-    case exists as a real active product here; confirmed the 2-item case resolves to two distinct,
-    correctly-matched candidates, not one item silently dropped).
-  - **Camera scan (added 2026-09-22, `BarcodeScanner.tsx`, `@zxing/browser`)**: a camera icon next
-    to the manual input opens a full-screen scanner (rear camera preferred automatically) —
-    continuous decode via `BrowserMultiFormatReader.decodeFromVideoDevice()` until a code is found
-    or cancelled; the media stream is explicitly stopped on unmount (`controls.stop()`) so the
-    camera doesn't stay on. Works on Android Chrome and iOS Safari (`playsInline` on the `<video>`
-    is required specifically for iOS, or Safari forces its own native fullscreen player instead of
-    showing the feed inline) over HTTPS or localhost. A scanned code resolves immediately via an
-    `idOverride` param on `resolveMyntraReturn()`, without waiting on React state propagation.
+- **Removed (added 2026-09-22, removed 2026-09-22)**: this app briefly had its own "Scan a
+  Myntra return tracking ID" box on the Returns page (`GET /api/resolve-myntra-return`, proxying
+  the sister bot's `GET /api/resolve-return`, plus a camera scanner via `BarcodeScanner.tsx`/
+  `@zxing/browser`). The user asked for it to be removed the same day — the equivalent feature on
+  the bot's own dashboard (that project's §22, which can both resolve **and** write the return via
+  its own `POST /api/dashboard/add-return` → this app's `POST /api/register`) covers this need, so
+  keeping a second copy of the same flow here was redundant. Removed: the scan box + related state
+  from `RegisterEntryForm.tsx` (the plain "Return — scan the label" modal — manual SKU pick,
+  condition, tracking number — stays, unchanged), `src/app/api/resolve-myntra-return/route.ts`,
+  `src/components/BarcodeScanner.tsx`, the `@zxing/browser` dependency, the `/api/resolve-myntra-
+  return` entry in `SECTION_API_PREFIXES['/returns']` (`src/lib/permissions.ts`), and the now-
+  unused `MYNTRA_BOT_URL`/`MYNTRA_BOT_RESOLVE_SECRET` env vars. **If this is ever wanted back
+  here too**, the bot's own `RESOLVE_RETURN_SECRET`-gated `GET /api/resolve-return` (used only by
+  this now-removed proxy) is still sitting in that project — see its `PROJECT.md` §21.
 
 ## 9. File map
 

@@ -19,7 +19,6 @@
   },
   "dependencies": {
     "@vercel/blob": "^2.4.1",
-    "@zxing/browser": "^0.2.1",
     "csv-parse": "^7.0.0",
     "lucide-react": "^1.21.0",
     "mongoose": "^9.7.1",

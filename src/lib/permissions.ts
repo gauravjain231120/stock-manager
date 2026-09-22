@@ -58,7 +58,7 @@ export const SECTION_API_PREFIXES: Record<string, string[]> = {
   // /api/returns/ingest, /api/returns/simulate, the dormant automated-pipeline
   // admin actions behind '/returns/marketplace' (Owner-only, see above). The
   // real Returns page never calls bare /api/returns at all.
-  '/returns': ['/api/register', '/api/return-reports', '/api/return-shipments', '/api/resolve-myntra-return'],
+  '/returns': ['/api/register', '/api/return-reports', '/api/return-shipments'],
   '/products': ['/api/products', '/api/channel-listings', '/api/upload', '/api/bom'],
   '/inventory': ['/api/stock'],
   '/produce': ['/api/register', '/api/raw-materials', '/api/bom'],
