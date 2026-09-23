@@ -5,8 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Plus, Truck, Undo2, ScanLine } from 'lucide-react';
 import {
   PLATFORMS, PLATFORM_LABELS, Platform, MAX_TRACKING_LEN, normalizeTracking,
-  RETURN_CONDITIONS, RETURN_CONDITION_LABELS, RETURN_CONDITION_HINTS, ReturnCondition,
-} from '@/lib/constants';
+  RETURN_CONDITIONS, RETURN_CONDITION_LABELS, RETURN_CONDITION_HINTS, ReturnCondition, RETURN_TYPES, RETURN_TYPE_LABELS, ReturnType } from '@/lib/constants';
 import { SearchableSelect } from '@/components/SearchableSelect';
 import { ProductPicker, PickerProduct } from '@/components/ProductPicker';
 import { useConfirm } from '@/components/ConfirmProvider';
@@ -52,6 +51,8 @@ export function RegisterEntryForm({ products, lockedAction }: { products: Picker
   const [tracking, setTracking] = useState('');
   const [scanOpen, setScanOpen] = useState(false);
   const [condition, setCondition] = useState<ReturnCondition>('GOOD');
+  // Customer return vs RTO — Unknown unless picked.
+  const [returnType, setReturnType] = useState<ReturnType>('UNKNOWN');
 
   // Default the date to today on the client (after mount, to avoid an SSR
   // hydration mismatch since the server doesn't know the user's timezone).
@@ -113,6 +114,7 @@ export function RegisterEntryForm({ products, lockedAction }: { products: Picker
           date: date && date !== today ? date : undefined,
           trackingId: tracking.trim() || undefined,
           condition: action === 'RETURN' ? condition : undefined,
+          returnType: action === 'RETURN' ? returnType : undefined,
         }),
       });
       const data = await res.json();
@@ -123,6 +125,7 @@ export function RegisterEntryForm({ products, lockedAction }: { products: Picker
         toast.success(`${actionLabel} saved ✓`);
         setQty(action === 'RETURN' ? '1' : '');
         setTracking('');
+        setReturnType('UNKNOWN');
         setScanOpen(false);
         router.refresh();
       }
@@ -231,6 +234,26 @@ export function RegisterEntryForm({ products, lockedAction }: { products: Picker
               <div className="font-mono text-sm font-semibold text-brand-600 dark:text-brand-400">{sku}</div>
               <div className="mt-1 text-xs text-neutral-500">
                 {PLATFORM_LABELS[channel]} · {qty || 0} unit{Number(qty) === 1 ? '' : 's'} · {date && date !== todayStr() ? date : 'today'}
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <div className="text-xs text-neutral-500">Return type</div>
+              <div className="mt-1.5 flex gap-1.5">
+                {RETURN_TYPES.map((t) => (
+                  <button
+                    type="button"
+                    key={t}
+                    onClick={() => setReturnType(t)}
+                    className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                      returnType === t
+                        ? t === 'RTO' ? 'bg-orange-600 text-white' : t === 'CUSTOMER' ? 'bg-sky-600 text-white' : 'bg-neutral-600 text-white'
+                        : 'border border-black/15 text-neutral-600 hover:bg-black/5 dark:border-white/20 dark:text-neutral-300 dark:hover:bg-white/10'
+                    }`}
+                  >
+                    {RETURN_TYPE_LABELS[t]}
+                  </button>
+                ))}
               </div>
             </div>
 

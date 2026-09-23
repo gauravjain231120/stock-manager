@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { recordEntry, REGISTER_ACTIONS, RegisterAction } from '@/lib/register';
 import { InsufficientStockError } from '@/lib/stock';
-import { PLATFORMS, RETURN_CONDITIONS } from '@/lib/constants';
+import { PLATFORMS, RETURN_CONDITIONS, RETURN_TYPES } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,6 +14,7 @@ const Body = z
     date: z.string().optional(),
     trackingId: z.string().optional(),
     condition: z.enum(RETURN_CONDITIONS).optional(),
+    returnType: z.enum(RETURN_TYPES).optional(),
   })
   .refine((d) => d.action === 'PRODUCE' || !!d.channel, {
     message: 'Please choose a platform for Ship / Return',
@@ -28,7 +29,7 @@ export async function POST(request: Request) {
   }
   try {
     const date = parsed.data.date ? new Date(parsed.data.date) : undefined;
-    await recordEntry(parsed.data.sku, parsed.data.action as RegisterAction, parsed.data.qty, parsed.data.channel, date, parsed.data.trackingId, parsed.data.condition);
+    await recordEntry(parsed.data.sku, parsed.data.action as RegisterAction, parsed.data.qty, parsed.data.channel, date, parsed.data.trackingId, parsed.data.condition, parsed.data.returnType);
     return Response.json({ ok: true });
   } catch (err) {
     const status = err instanceof InsufficientStockError ? 409 : 400;

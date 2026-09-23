@@ -113,6 +113,23 @@ export const RETURN_CONDITION_LABELS: Record<ReturnCondition, string> = {
   WRONG: 'Wrong item',
   DEFECTIVE: 'Defective',
 };
+/**
+ * What KIND of return a parcel is — separate from its condition:
+ *   CUSTOMER  the customer received it and sent it back (return label)
+ *   RTO       it never reached the customer and came back (return to origin —
+ *             refused COD, undeliverable, cancelled in transit)
+ *   UNKNOWN   couldn't be told (e.g. logged by hand, or an old row)
+ * Set automatically by the Order Alerts bot's Myntra/Amazon Return scan pages;
+ * anything else defaults to UNKNOWN and can be corrected in the Edit dialog.
+ */
+export const RETURN_TYPES = ['CUSTOMER', 'RTO', 'UNKNOWN'] as const;
+export type ReturnType = (typeof RETURN_TYPES)[number];
+export const RETURN_TYPE_LABELS: Record<ReturnType, string> = {
+  CUSTOMER: 'Customer return',
+  RTO: 'RTO',
+  UNKNOWN: 'Unknown',
+};
+
 export const RETURN_CONDITION_HINTS: Record<ReturnCondition, string> = {
   GOOD: 'back to sellable stock',
   USED: 'back to stock, marked used',

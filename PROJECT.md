@@ -475,6 +475,23 @@ granting one never implies the other, §7), and — Owner-only, never grantable 
   `deleteEntry` (DAMAGED −1 each) with their auto-added return-report entries pulled. Net effect:
   only the 9 relabels. Lesson: a paid claim with no return tracking id can still have its return
   logged here — look it up by the claim's return (fetchNewClaim by tracking) before adding one.
+- **Return type — Customer return vs RTO (added 2026-09-23)**: every `RETURNED` row now has a
+  `returnType` (`RETURN_TYPES` in `src/lib/constants.ts`): `CUSTOMER` (the customer received it and
+  sent it back), `RTO` (never reached the customer and came back — refused COD, undeliverable,
+  cancelled in transit) or `UNKNOWN`. Separate from `condition` — an RTO can still come back
+  faked/wrong. Set automatically by the bot's Myntra Return / Amazon Return scan pages (sent on
+  `POST /api/register` as `returnType`, optional — omitted = `UNKNOWN`, so older callers keep
+  working); the manual "Log a return" form has a Customer / RTO / Unknown toggle (default
+  Unknown); the Edit dialog can correct it (`PATCH /api/register/[id]`); Undo (restore) now keeps
+  both `condition` and `returnType` (it used to drop `condition` too). Returns page: a coloured tag
+  under each product, an "All return types" filter, and a "Return type" CSV column. Rows with no
+  value read as `UNKNOWN` (`listMovementRows`).
+  - **Backfill (2026-09-23, `scripts/apply-return-types.ts`)**: all 681 existing `RETURNED` rows
+    tagged from the bot's read-only `scripts/classify-return-types.js` (asks Myntra/Amazon per
+    row). Result: Myntra 373 CUSTOMER / 138 RTO / 4 UNKNOWN; Amazon 57 CUSTOMER / 5 RTO / 97
+    UNKNOWN (mostly logged by hand with no tracking or order id, or an RTO logged under its own
+    return-label number, which Amazon doesn't link to the order); Flipkart 7 UNKNOWN. Only
+    `returnType` was set — no stock, condition or date changed.
 - **Amazon returns from the bot (2026-09-23)**: the Order Alerts bot's new Amazon Return page
   logs returns through the same `POST /api/register` (service token) the Myntra flow uses, just
   with `channel: 'AMAZON'` and the Amazon return label's tracking id — nothing changed on this
@@ -692,6 +709,9 @@ src/proxy.ts             the RBAC gate on every route except PUBLIC_PATHS — re
 vercel.json                only schedules /api/backup — no cron for the marketplace pipeline (§7)
 scripts/                 one-off maintenance scripts (`tsx --tsconfig tsconfig.scripts.json scripts/<name>.ts [--dry]`), incl.
   mark-tracking-faked.ts   the GOOD->FAKED tracking-number correction (§6)
+  fix-spf-paid-grades.ts   SPF reconciliation: 9 paid-claim returns relabelled FAKED (§6, 2026-09-23)
+  remove-spf-duplicate-returns.ts   undid 3 duplicate WRONG returns added by the above (§6, 2026-09-23)
+  apply-return-types.ts    backfilled returnType (CUSTOMER/RTO/UNKNOWN) on existing returns from the bot's classifier (§6, 2026-09-23)
 ```
 
 ## 10. Deployment workflow

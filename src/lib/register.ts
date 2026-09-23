@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import { connectDB } from '@/lib/db';
-import { MovementType, SystemLocation, cleanTracking, ReturnCondition } from '@/lib/constants';
+import { MovementType, SystemLocation, cleanTracking, ReturnCondition, RETURN_CONDITIONS, ReturnType, RETURN_TYPES } from '@/lib/constants';
 import { stockSkuFor } from '@/lib/stockShare';
 import { applyMovement, sellUnits } from '@/lib/stock';
 import { ProductModel } from '@/models/Product';
@@ -52,6 +52,7 @@ export async function recordEntry(
   date?: Date,
   trackingId?: string,
   condition?: ReturnCondition,
+  returnType?: ReturnType,
 ) {
   if (qty <= 0) throw new Error('Quantity must be greater than 0');
   const s = sku.trim().toUpperCase();
@@ -80,6 +81,8 @@ export async function recordEntry(
         refType: 'REGISTER',
         trackingId: tracking,
         condition: cond,
+        // Customer return vs RTO — UNKNOWN unless the caller knows.
+        returnType: returnType && RETURN_TYPES.includes(returnType) ? returnType : 'UNKNOWN',
       });
       break;
     }
@@ -131,6 +134,7 @@ export async function editEntry(
     trackingId?: string;
     orderId?: string;
     condition?: ReturnCondition;
+    returnType?: ReturnType;
   },
 ) {
   await connectDB();
@@ -167,6 +171,8 @@ export async function editEntry(
     trackingId: changes.trackingId !== undefined ? cleanTracking(changes.trackingId) : mv.trackingId ?? undefined,
     orderId: changes.orderId !== undefined ? changes.orderId.trim() || undefined : mv.orderId ?? undefined,
     condition: newCondition,
+    // Returns only; left alone unless the edit changes it.
+    returnType: isReturn ? changes.returnType ?? (mv.returnType as ReturnType | null) ?? undefined : undefined,
   };
   const set: Record<string, unknown> = {
     sku: newSku,
@@ -281,6 +287,8 @@ export async function deleteEntry(movementId: string) {
       trackingId: mv.trackingId ?? undefined,
       orderId: mv.orderId ?? undefined,
       note: mv.note ?? undefined,
+      condition: mv.condition ?? undefined,
+      returnType: mv.returnType ?? undefined,
       createdAt: (mv.createdAt as unknown as Date).toISOString(),
     },
   };
@@ -398,6 +406,9 @@ export interface EntrySnapshot {
   trackingId?: string;
   orderId?: string;
   note?: string;
+  /** Returns only — restored too, so an undone return keeps its grading. */
+  condition?: string;
+  returnType?: string;
   createdAt: string;
 }
 
@@ -440,6 +451,12 @@ export async function restoreEntry(snap: EntrySnapshot) {
           trackingId: snap.trackingId,
           orderId: snap.orderId,
           note: snap.note,
+          ...(snap.type === MovementType.RETURNED
+            ? {
+                condition: RETURN_CONDITIONS.includes(snap.condition as ReturnCondition) ? (snap.condition as ReturnCondition) : undefined,
+                returnType: RETURN_TYPES.includes(snap.returnType as ReturnType) ? (snap.returnType as ReturnType) : undefined,
+              }
+            : {}),
           createdAt,
         }],
         { session, timestamps: false },

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { deleteEntry, editEntry } from '@/lib/register';
-import { PLATFORMS, RETURN_CONDITIONS } from '@/lib/constants';
+import { PLATFORMS, RETURN_CONDITIONS, RETURN_TYPES } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,6 +12,7 @@ const Patch = z.object({
   trackingId: z.string().optional(),
   orderId: z.string().optional(),
   condition: z.enum(RETURN_CONDITIONS).optional(),
+  returnType: z.enum(RETURN_TYPES).optional(),
 });
 
 /** PATCH /api/register/[id] -> edit a Stock Log entry (quantity / platform / date). */
@@ -30,6 +31,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       trackingId: parsed.data.trackingId,
       orderId: parsed.data.orderId,
       condition: parsed.data.condition,
+      returnType: parsed.data.returnType,
     });
     return Response.json({ ok: true });
   } catch (err) {

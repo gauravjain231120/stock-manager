@@ -12,6 +12,9 @@ import {
   RETURN_CONDITION_LABELS,
   RETURN_CONDITION_HINTS,
   ReturnCondition,
+  RETURN_TYPES,
+  RETURN_TYPE_LABELS,
+  ReturnType,
 } from '@/lib/constants';
 import { useToast } from '@/components/ToastProvider';
 import { SearchableSelect } from '@/components/SearchableSelect';
@@ -43,6 +46,7 @@ export function EditMovementButton({
   const [qty, setQty] = useState(String(row.qty));
   const [date, setDate] = useState(row.at.slice(0, 10));
   const [condition, setCondition] = useState<ReturnCondition>((row.condition as ReturnCondition) ?? 'GOOD');
+  const [returnType, setReturnType] = useState<ReturnType>((row.returnType as ReturnType) ?? 'UNKNOWN');
   const [sku, setSku] = useState(row.sku);
 
   const trackingLen = (normalizeTracking(tracking) ?? '').length;
@@ -68,6 +72,7 @@ export function EditMovementButton({
     setQty(String(row.qty));
     setDate(row.at.slice(0, 10));
     setCondition((row.condition as ReturnCondition) ?? 'GOOD');
+    setReturnType((row.returnType as ReturnType) ?? 'UNKNOWN');
     setSku(row.sku);
     setOpen(true);
   }
@@ -86,7 +91,7 @@ export function EditMovementButton({
           channel,
           qty: Number(qty),
           date,
-          ...(isReturn ? { condition, sku } : {}),
+          ...(isReturn ? { condition, sku, returnType } : {}),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -173,6 +178,14 @@ export function EditMovementButton({
                 Date
                 <input className={input} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
               </label>
+              {isReturn ? (
+                <label className="flex flex-col gap-1 text-xs text-neutral-500">
+                  Return type
+                  <select className={input} value={returnType} onChange={(e) => setReturnType(e.target.value as ReturnType)}>
+                    {RETURN_TYPES.map((t) => <option key={t} value={t}>{RETURN_TYPE_LABELS[t]}</option>)}
+                  </select>
+                </label>
+              ) : null}
               {isReturn ? (
                 <div className="flex flex-col gap-1 text-xs text-neutral-500">
                   What came back?

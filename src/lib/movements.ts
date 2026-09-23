@@ -20,6 +20,8 @@ export interface MovementRow {
   orderId: string | null;
   /** Returns only: what came back (GOOD / USED / WRONG). */
   condition: string | null;
+  /** Returns only: CUSTOMER / RTO / UNKNOWN (missing on old rows = UNKNOWN). */
+  returnType: string | null;
 }
 
 export interface MovementStats {
@@ -74,6 +76,7 @@ export async function listMovementRows(type: MovementType, limit = 2000): Promis
       trackingId: m.trackingId ?? null,
       orderId: m.orderId ?? null,
       condition: m.condition ?? null,
+      returnType: m.type === MovementType.RETURNED ? m.returnType ?? 'UNKNOWN' : null,
     };
   });
 }

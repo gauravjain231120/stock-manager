@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Panel, Table, Th, Td, Tr } from '@/components/ui';
 import { dateOnly, dayKey, matchesSearch, num } from '@/lib/format';
-import { PLATFORMS, PLATFORM_LABELS, Platform, RETURN_CONDITION_LABELS, ReturnCondition } from '@/lib/constants';
+import { PLATFORMS, PLATFORM_LABELS, Platform, RETURN_CONDITION_LABELS, ReturnCondition, RETURN_TYPES, RETURN_TYPE_LABELS, ReturnType } from '@/lib/constants';
 
 // Same 4 conditions the owner-only count row on the Returns page shows —
 // Defective is a real condition too, but was deliberately left out of that
@@ -20,6 +20,18 @@ const filterCls = 'rounded-lg border border-black/15 bg-transparent px-3 py-1.5 
 const pagerBtnCls =
   'rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/20 dark:hover:bg-white/10';
 const PER_PAGE_OPTIONS = [20, 50, 80, 100, 200, 300];
+
+// Customer return vs RTO tag colours — RTO stands out (it never reached the
+// customer), Unknown stays quiet.
+const RETURN_TYPE_TAG: Record<ReturnType, string> = {
+  CUSTOMER: 'bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300',
+  RTO: 'bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300',
+  UNKNOWN: 'bg-neutral-100 text-neutral-500 dark:bg-white/10 dark:text-neutral-400',
+};
+
+function returnTypeLabel(t: string | null) {
+  return RETURN_TYPE_LABELS[(t ?? 'UNKNOWN') as ReturnType] ?? t ?? 'Unknown';
+}
 
 function platformLabel(c: string | null) {
   if (!c) return '—';
@@ -76,6 +88,7 @@ export function MovementTable({
   const [fCategory, setFCategory] = useState('all');
   const [fPlatform, setFPlatform] = useState('all');
   const [fCondition, setFCondition] = useState('all');
+  const [fReturnType, setFReturnType] = useState('all');
   const [onlyUntracked, setOnlyUntracked] = useState(false);
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
@@ -90,6 +103,7 @@ export function MovementTable({
     if (fCategory !== 'all' && r.category !== fCategory) return false;
     if (fPlatform !== 'all' && r.channel !== fPlatform) return false;
     if (fCondition !== 'all' && r.condition !== fCondition) return false;
+    if (withCondition && fReturnType !== 'all' && (r.returnType ?? 'UNKNOWN') !== fReturnType) return false;
     if (onlyUntracked && r.trackingId) return false;
     // Compare India-time calendar days, so a date means the day you'd see on screen.
     if (fromDate || toDate) {
@@ -106,7 +120,7 @@ export function MovementTable({
 
   function buildCsv() {
     const headers = ['Date', 'Time', 'SKU', 'Product', 'Colour', 'Size', 'Qty', 'Platform', 'Tracking / AWB', 'Order no.'];
-    if (withCondition) headers.push('Condition', 'Back in stock');
+    if (withCondition) headers.push('Condition', 'Back in stock', 'Return type');
 
     return toCsv(
       headers,
@@ -131,6 +145,7 @@ export function MovementTable({
             r.condition ? RETURN_CONDITION_LABELS[r.condition as ReturnCondition] ?? r.condition : '',
             // Wrong item and Defective are both held back; good/used/faked all go on the shelf.
             r.condition === 'WRONG' || r.condition === 'DEFECTIVE' ? 'No' : 'Yes',
+            returnTypeLabel(r.returnType),
           );
         }
         return row;
@@ -217,6 +232,17 @@ export function MovementTable({
             <option value="all">All platforms</option>
             {PLATFORMS.map((p) => <option key={p} value={p}>{PLATFORM_LABELS[p]}</option>)}
           </select>
+          {withCondition ? (
+            <select
+              value={fReturnType}
+              onChange={(e) => { setFReturnType(e.target.value); setPage(1); }}
+              aria-label="Filter by return type"
+              className={filterCls}
+            >
+              <option value="all">All return types</option>
+              {RETURN_TYPES.map((t) => <option key={t} value={t}>{RETURN_TYPE_LABELS[t]}</option>)}
+            </select>
+          ) : null}
           {showConditionFilter ? (
             <select
               value={fCondition}
@@ -328,6 +354,13 @@ export function MovementTable({
               </div>
               <div className="font-mono text-[11px] text-neutral-500">{r.sku}</div>
               {r.orderId ? <div className="text-[11px] text-neutral-400">Order {r.orderId}</div> : null}
+              {withCondition ? (
+                <span
+                  className={`mt-0.5 inline-block rounded px-1.5 py-px text-[10px] font-semibold ${RETURN_TYPE_TAG[(r.returnType ?? 'UNKNOWN') as ReturnType] ?? RETURN_TYPE_TAG.UNKNOWN}`}
+                >
+                  {returnTypeLabel(r.returnType)}
+                </span>
+              ) : null}
               {r.condition && r.condition !== 'GOOD' && r.condition !== 'FAKED' ? (
                 <div
                   className={`text-[11px] ${
