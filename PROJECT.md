@@ -525,7 +525,8 @@ granting one never implies the other, §7), and — Owner-only, never grantable 
 only): `/orders` (MarketplaceOrder history — automated pipeline), `/channels` (ChannelListing
 management), `/replenishment`, `/reports`, `/production` (batch history, distinct from
 `/produce`), `/returns/marketplace` (automated ReturnRecord grading, separate from `/returns`),
-`/ship/queue-print` (printable queue sheet), `/ship/stock-report` (printable post-queue PDF).
+`/ship/queue-print` (printable queue sheet), `/ship/stock-report` (printable post-queue PDF; its
+table scrolls sideways on a phone, prints full width).
 `/login` and `/no-access` are reachable by anyone (logged out / logged in with nothing granted,
 respectively).
 
