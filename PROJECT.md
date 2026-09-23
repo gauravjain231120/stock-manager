@@ -504,6 +504,10 @@ granting one never implies the other, §7), and — Owner-only, never grantable 
     UNKNOWN (mostly logged by hand with no tracking or order id, or an RTO logged under its own
     return-label number, which Amazon doesn't link to the order); Flipkart 7 UNKNOWN. Only
     `returnType` was set — no stock, condition or date changed.
+- **Order id on bot-logged returns (2026-09-23)**: `POST /api/register` accepts an optional
+  `orderId` (trimmed, ≤64 chars), stored on the RETURNED row — `recordEntry(..., returnType, orderId)`.
+  The bot's Amazon Return page sends the Amazon order id with every add. Omitted = no order id,
+  exactly as before.
 - **Amazon returns from the bot (2026-09-23)**: the Order Alerts bot's new Amazon Return page
   logs returns through the same `POST /api/register` (service token) the Myntra flow uses, just
   with `channel: 'AMAZON'` and the Amazon return label's tracking id — nothing changed on this

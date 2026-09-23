@@ -53,6 +53,9 @@ export async function recordEntry(
   trackingId?: string,
   condition?: ReturnCondition,
   returnType?: ReturnType,
+  // Marketplace order number, when the caller has it (e.g. the bot's Amazon
+  // Return page) — returns only; stored exactly as the Edit dialog would.
+  orderId?: string,
 ) {
   if (qty <= 0) throw new Error('Quantity must be greater than 0');
   const s = sku.trim().toUpperCase();
@@ -83,6 +86,7 @@ export async function recordEntry(
         condition: cond,
         // Customer return vs RTO — UNKNOWN unless the caller knows.
         returnType: returnType && RETURN_TYPES.includes(returnType) ? returnType : 'UNKNOWN',
+        orderId: orderId && orderId.trim() ? orderId.trim() : undefined,
       });
       break;
     }

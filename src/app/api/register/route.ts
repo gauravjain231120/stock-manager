@@ -16,6 +16,7 @@ const Body = z
     trackingId: z.string().optional(),
     condition: z.enum(RETURN_CONDITIONS).optional(),
     returnType: z.enum(RETURN_TYPES).optional(),
+    orderId: z.string().trim().max(64).optional(),
   })
   .refine((d) => d.action === 'PRODUCE' || !!d.channel, {
     message: 'Please choose a platform for Ship / Return',
@@ -32,7 +33,7 @@ export async function POST(request: Request) {
     const date = parsed.data.date ? new Date(parsed.data.date) : undefined;
     // Owner / bot only — anyone else's return is stored as UNKNOWN.
     const returnType = parsed.data.returnType && (await canSetReturnType()) ? parsed.data.returnType : undefined;
-    await recordEntry(parsed.data.sku, parsed.data.action as RegisterAction, parsed.data.qty, parsed.data.channel, date, parsed.data.trackingId, parsed.data.condition, returnType);
+    await recordEntry(parsed.data.sku, parsed.data.action as RegisterAction, parsed.data.qty, parsed.data.channel, date, parsed.data.trackingId, parsed.data.condition, returnType, parsed.data.orderId);
     return Response.json({ ok: true });
   } catch (err) {
     const status = err instanceof InsufficientStockError ? 409 : 400;
