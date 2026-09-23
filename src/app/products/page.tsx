@@ -30,7 +30,7 @@ export default async function ProductsPage() {
         }
       />
 
-      <section className="mb-6 grid grid-cols-3 gap-4 sm:max-w-2xl">
+      <section className="mb-6 grid grid-cols-3 gap-2 sm:max-w-2xl sm:gap-4">
         <StatCard label="Products" value={groups.length} />
         <StatCard label="Variants" value={totalVariants} hint="colour × size" />
         <StatCard label="Units in stock" value={num(totalUnits)} />

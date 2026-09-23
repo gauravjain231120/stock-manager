@@ -82,6 +82,7 @@ export default async function StockReportPage({
           ) : null}
         </p>
 
+        <div className="overflow-x-auto print:overflow-visible">
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr>
@@ -133,6 +134,7 @@ export default async function StockReportPage({
             </tr>
           </tfoot>
         </table>
+        </div>
 
         {shown.length === 0 ? (
           <p className="py-8 text-center text-sm text-neutral-400">
