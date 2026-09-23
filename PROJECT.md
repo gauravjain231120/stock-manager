@@ -475,6 +475,10 @@ granting one never implies the other, §7), and — Owner-only, never grantable 
   `deleteEntry` (DAMAGED −1 each) with their auto-added return-report entries pulled. Net effect:
   only the 9 relabels. Lesson: a paid claim with no return tracking id can still have its return
   logged here — look it up by the claim's return (fetchNewClaim by tracking) before adding one.
+- **Amazon returns from the bot (2026-09-23)**: the Order Alerts bot's new Amazon Return page
+  logs returns through the same `POST /api/register` (service token) the Myntra flow uses, just
+  with `channel: 'AMAZON'` and the Amazon return label's tracking id — nothing changed on this
+  side (`AMAZON` was already in `PLATFORMS`). See the bot's PROJECT.md §26.
 - **Return `condition` now feeds the bot's SPF paid split (2026-09-23)**: the Order Alerts bot's
   SPF Status page splits the ₹ Myntra paid out on SPF claims into Fake / Wrong by reading
   `RETURNED` rows' `condition` (+ `trackingId`) straight from this database, read-only — see
