@@ -467,6 +467,14 @@ granting one never implies the other, §7), and — Owner-only, never grantable 
   (same code path the Returns page's own "Edit" dialog uses — MAIN→MAIN, no stock movement, just
   relabelled), after a dry run confirmed every tracking number matched and none were already
   graded something else. 4 of the 42 were already USED/WRONG and left untouched.
+- **Return `condition` now feeds the bot's SPF paid split (2026-09-23)**: the Order Alerts bot's
+  SPF Status page splits the ₹ Myntra paid out on SPF claims into Fake / Wrong by reading
+  `RETURNED` rows' `condition` (+ `trackingId`) straight from this database, read-only — see
+  `myntra-order-alert-web`'s PROJECT.md §24 and `lib/spfPaid.js`. So the `FAKED`/`WRONG` values
+  and normalised `trackingId` are now relied on outside this app: renaming a condition value or
+  storing tracking ids un-normalised would silently break that split. A paid claim whose return
+  is graded GOOD/USED/DEFECTIVE shows up there as "to check" — fixing the grade here fixes it
+  there.
 
 **Reachable by direct URL, not in the sidebar / not grantable** (secondary/dev tools, Owner
 only): `/orders` (MarketplaceOrder history — automated pipeline), `/channels` (ChannelListing
