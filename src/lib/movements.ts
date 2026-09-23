@@ -125,3 +125,24 @@ export async function movementStats(type: MovementType): Promise<MovementStats> 
     today: dayKey(new Date()),
   };
 }
+
+// Conditions only an Owner may see. Wrong item / Defective stay visible to
+// everyone — they decide which shelf the units are on — while Faked and Used
+// are a quality/fraud signal, like the Owner-only condition counts.
+const OWNER_ONLY_CONDITIONS = ['FAKED', 'USED'];
+
+/**
+ * Strip Owner-only return info from rows before they're handed to a
+ * non-Owner's page, so it never reaches their browser at all (hiding it in the
+ * UI alone would still ship it in the page data): customer return vs RTO
+ * (`returnType`), and the Faked / Used conditions (shown as no condition —
+ * both sit in sellable stock like Good, so "back in stock" stays correct).
+ */
+export function rowsForViewer(rows: MovementRow[], isOwner: boolean): MovementRow[] {
+  if (isOwner) return rows;
+  return rows.map((r) => ({
+    ...r,
+    returnType: null,
+    condition: r.condition && OWNER_ONLY_CONDITIONS.includes(r.condition) ? null : r.condition,
+  }));
+}

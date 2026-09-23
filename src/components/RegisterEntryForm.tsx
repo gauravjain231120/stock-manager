@@ -33,7 +33,16 @@ type ActionKey = (typeof ACTIONS)[number]['key'];
 
 /** `lockedAction` embeds this form pre-set to one action with no Produce/Ship/Return
  *  toggle shown — used on the Returns page, where only logging a Return makes sense. */
-export function RegisterEntryForm({ products, lockedAction }: { products: PickerProduct[]; lockedAction?: ActionKey }) {
+export function RegisterEntryForm({
+  products,
+  lockedAction,
+  showReturnType = false,
+}: {
+  products: PickerProduct[];
+  lockedAction?: ActionKey;
+  /** Owner only: the Customer / RTO / Unknown toggle on a return (others' returns save as Unknown). */
+  showReturnType?: boolean;
+}) {
   const router = useRouter();
   const ask = useConfirm();
   const toast = useToast();
@@ -114,7 +123,7 @@ export function RegisterEntryForm({ products, lockedAction }: { products: Picker
           date: date && date !== today ? date : undefined,
           trackingId: tracking.trim() || undefined,
           condition: action === 'RETURN' ? condition : undefined,
-          returnType: action === 'RETURN' ? returnType : undefined,
+          returnType: action === 'RETURN' && showReturnType ? returnType : undefined,
         }),
       });
       const data = await res.json();
@@ -237,6 +246,7 @@ export function RegisterEntryForm({ products, lockedAction }: { products: Picker
               </div>
             </div>
 
+            {showReturnType ? (
             <div className="mt-4">
               <div className="text-xs text-neutral-500">Return type</div>
               <div className="mt-1.5 flex gap-1.5">
@@ -256,6 +266,7 @@ export function RegisterEntryForm({ products, lockedAction }: { products: Picker
                 ))}
               </div>
             </div>
+            ) : null}
 
             <div className="mt-4">
               <div className="text-xs text-neutral-500">What came back?</div>

@@ -1,4 +1,4 @@
-import { listMovementRows, movementStats } from '@/lib/movements';
+import { listMovementRows, movementStats, rowsForViewer } from '@/lib/movements';
 import { MovementType } from '@/lib/constants';
 import { PageHeader, StatCard } from '@/components/ui';
 import { MovementTable } from '@/components/MovementTable';
@@ -9,12 +9,14 @@ import { num } from '@/lib/format';
 export const dynamic = 'force-dynamic';
 
 export default async function ShippedPage() {
-  const [rows, stats, returnRows] = await Promise.all([
+  const [rows, stats, allReturnRows] = await Promise.all([
     listMovementRows(MovementType.SOLD),
     movementStats(MovementType.SOLD),
     // So the table's totals can say how much of the same slice came back.
     listMovementRows(MovementType.RETURNED),
   ]);
+  // Only used for totals here — never ship the Owner-only return fields.
+  const returnRows = rowsForViewer(allReturnRows, false);
 
   return (
     <main className="px-4 py-6 sm:px-6 sm:py-8">

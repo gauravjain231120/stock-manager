@@ -28,11 +28,14 @@ export function EditMovementButton({
   row,
   title,
   products,
+  ownerView = false,
 }: {
   row: MovementRow;
   title: string;
   /** Returns only: every active product, so the return can be reassigned to a different one. */
   products?: ProductOption[];
+  /** Owner only: show/edit the customer-return / RTO type. */
+  ownerView?: boolean;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -91,7 +94,12 @@ export function EditMovementButton({
           channel,
           qty: Number(qty),
           date,
-          ...(isReturn ? { condition, sku, returnType } : {}),
+          ...(isReturn ? { sku } : {}),
+          // Only send the condition when it was actually changed — a non-Owner
+          // never sees Faked/Used (their row arrives with no condition), so
+          // re-sending the dialog's default would silently overwrite it.
+          ...(isReturn && condition !== ((row.condition as ReturnCondition) ?? 'GOOD') ? { condition } : {}),
+          ...(isReturn && ownerView ? { returnType } : {}),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -178,7 +186,7 @@ export function EditMovementButton({
                 Date
                 <input className={input} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
               </label>
-              {isReturn ? (
+              {isReturn && ownerView ? (
                 <label className="flex flex-col gap-1 text-xs text-neutral-500">
                   Return type
                   <select className={input} value={returnType} onChange={(e) => setReturnType(e.target.value as ReturnType)}>

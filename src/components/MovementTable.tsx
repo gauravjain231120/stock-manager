@@ -65,6 +65,7 @@ export function MovementTable({
   csvName,
   withCondition = false,
   showConditionFilter = false,
+  ownerView = false,
   returnRows,
   allowMoveToQueue = false,
   products,
@@ -77,6 +78,12 @@ export function MovementTable({
   withCondition?: boolean;
   /** Returns + Owner only: a Good/Used/Faked/Wrong dropdown, next to the other filters. */
   showConditionFilter?: boolean;
+  /**
+   * Returns + Owner only: the customer-return / RTO tag, filter and CSV column,
+   * and the Faked / Used labels. The page also strips those fields server-side
+   * for anyone else (rowsForViewer), so this only controls what's drawn.
+   */
+  ownerView?: boolean;
   /** The returns ledger, run through these same filters — shown alongside the total. */
   returnRows?: MovementRow[];
   /** Shipped only: offer "Move to Ready to Ship" to undo a shipment marked by mistake. */
@@ -103,7 +110,7 @@ export function MovementTable({
     if (fCategory !== 'all' && r.category !== fCategory) return false;
     if (fPlatform !== 'all' && r.channel !== fPlatform) return false;
     if (fCondition !== 'all' && r.condition !== fCondition) return false;
-    if (withCondition && fReturnType !== 'all' && (r.returnType ?? 'UNKNOWN') !== fReturnType) return false;
+    if (withCondition && ownerView && fReturnType !== 'all' && (r.returnType ?? 'UNKNOWN') !== fReturnType) return false;
     if (onlyUntracked && r.trackingId) return false;
     // Compare India-time calendar days, so a date means the day you'd see on screen.
     if (fromDate || toDate) {
@@ -120,7 +127,8 @@ export function MovementTable({
 
   function buildCsv() {
     const headers = ['Date', 'Time', 'SKU', 'Product', 'Colour', 'Size', 'Qty', 'Platform', 'Tracking / AWB', 'Order no.'];
-    if (withCondition) headers.push('Condition', 'Back in stock', 'Return type');
+    if (withCondition) headers.push('Condition', 'Back in stock');
+    if (withCondition && ownerView) headers.push('Return type');
 
     return toCsv(
       headers,
@@ -145,8 +153,8 @@ export function MovementTable({
             r.condition ? RETURN_CONDITION_LABELS[r.condition as ReturnCondition] ?? r.condition : '',
             // Wrong item and Defective are both held back; good/used/faked all go on the shelf.
             r.condition === 'WRONG' || r.condition === 'DEFECTIVE' ? 'No' : 'Yes',
-            returnTypeLabel(r.returnType),
           );
+          if (ownerView) row.push(returnTypeLabel(r.returnType));
         }
         return row;
       }),
@@ -232,7 +240,7 @@ export function MovementTable({
             <option value="all">All platforms</option>
             {PLATFORMS.map((p) => <option key={p} value={p}>{PLATFORM_LABELS[p]}</option>)}
           </select>
-          {withCondition ? (
+          {withCondition && ownerView ? (
             <select
               value={fReturnType}
               onChange={(e) => { setFReturnType(e.target.value); setPage(1); }}
@@ -354,17 +362,17 @@ export function MovementTable({
               </div>
               <div className="font-mono text-[11px] text-neutral-500">{r.sku}</div>
               {r.orderId ? <div className="text-[11px] text-neutral-400">Order {r.orderId}</div> : null}
-              {withCondition ? (
+              {withCondition && ownerView ? (
                 <span
                   className={`mt-0.5 inline-block rounded px-1.5 py-px text-[10px] font-semibold ${RETURN_TYPE_TAG[(r.returnType ?? 'UNKNOWN') as ReturnType] ?? RETURN_TYPE_TAG.UNKNOWN}`}
                 >
                   {returnTypeLabel(r.returnType)}
                 </span>
               ) : null}
-              {r.condition && r.condition !== 'GOOD' && r.condition !== 'FAKED' ? (
+              {r.condition && r.condition !== 'GOOD' && (ownerView || (r.condition !== 'FAKED' && r.condition !== 'USED')) ? (
                 <div
                   className={`text-[11px] ${
-                    r.condition === 'WRONG' || r.condition === 'DEFECTIVE' ? 'text-red-500' : 'text-amber-500'
+                    r.condition === 'WRONG' || r.condition === 'DEFECTIVE' ? 'text-red-500' : r.condition === 'FAKED' ? 'text-purple-500' : 'text-amber-500'
                   }`}
                 >
                   {RETURN_CONDITION_LABELS[r.condition as ReturnCondition] ?? r.condition}
@@ -391,7 +399,7 @@ export function MovementTable({
                 />
               </Td>
             ) : null}
-            <Td right><EditMovementButton row={r} title={dateLabel === 'Returned' ? 'return' : 'shipment'} products={products} /></Td>
+            <Td right><EditMovementButton row={r} title={dateLabel === 'Returned' ? 'return' : 'shipment'} products={products} ownerView={ownerView} /></Td>
             <Td right>
               <ActionButton
                 label="Delete"

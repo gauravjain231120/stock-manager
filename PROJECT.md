@@ -486,6 +486,18 @@ granting one never implies the other, §7), and — Owner-only, never grantable 
   both `condition` and `returnType` (it used to drop `condition` too). Returns page: a coloured tag
   under each product, an "All return types" filter, and a "Return type" CSV column. Rows with no
   value read as `UNKNOWN` (`listMovementRows`).
+  - **Owner-only (2026-09-23)**: return type AND the Faked / Used conditions are visible to the
+    Owner role only, enforced server-side: `rowsForViewer()` (`src/lib/movements.ts`) strips
+    `returnType` and masks FAKED/USED (to "no condition" — both are sellable like Good, so "back in
+    stock" stays right) before rows reach a non-Owner's Returns page; the Shipped page's return rows
+    (used only for totals) are always stripped. Only an Owner or the bot's service token may SET a
+    return type (`canSetReturnType()`, `src/lib/auth.ts`) — others' values are ignored (new returns
+    -> UNKNOWN, edits keep the stored value). UI: the type tag, filter, CSV column, the new
+    Customer / RTO / Unknown count row, the manual form's type toggle and the Edit dialog's type
+    selector all render only for Owners; Faked/Used row labels only for Owners (Wrong item /
+    Defective still for everyone — they decide the shelf). The Edit dialog now only sends the
+    condition when it was actually changed, so a non-Owner editing e.g. the quantity can't
+    overwrite a Faked/Used grading they can't see.
   - **Backfill (2026-09-23, `scripts/apply-return-types.ts`)**: all 681 existing `RETURNED` rows
     tagged from the bot's read-only `scripts/classify-return-types.js` (asks Myntra/Amazon per
     row). Result: Myntra 373 CUSTOMER / 138 RTO / 4 UNKNOWN; Amazon 57 CUSTOMER / 5 RTO / 97

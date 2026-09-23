@@ -73,3 +73,19 @@ export async function getCurrentSession(): Promise<SessionData | null> {
     allowedSections: doc.allowedSections,
   };
 }
+
+/**
+ * Customer-return-vs-RTO (`returnType`) is Owner-only information. It can be
+ * SET by an Owner or by the Order Alerts bot's service token (same token and
+ * default as src/proxy.ts's SERVICE_TOKEN — its Myntra/Amazon Return scan pages
+ * send it), never by any other role. Viewing it is Owner-only too — see
+ * hideReturnType() in src/lib/movements.ts.
+ */
+export async function canSetReturnType(): Promise<boolean> {
+  const store = await cookies();
+  const token = store.get(SESSION_COOKIE)?.value;
+  const serviceToken = process.env.AUTH_TOKEN ?? 'rangrooh-stock-authed-9c4458';
+  if (token && token === serviceToken) return true;
+  const session = await getCurrentSession();
+  return session?.role === 'OWNER';
+}

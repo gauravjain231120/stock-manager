@@ -1,4 +1,4 @@
-import { listMovementRows, movementStats } from '@/lib/movements';
+import { listMovementRows, movementStats, rowsForViewer } from '@/lib/movements';
 import { listReturnReports } from '@/lib/returnReports';
 import { listProductOptions } from '@/lib/products';
 import { registerTotals } from '@/lib/register';
@@ -17,7 +17,7 @@ import { num } from '@/lib/format';
 export const dynamic = 'force-dynamic';
 
 export default async function ReturnsPage() {
-  const [rows, stats, reports, products, registerRows, session] = await Promise.all([
+  const [allRows, stats, reports, products, registerRows, session] = await Promise.all([
     listMovementRows(MovementType.RETURNED),
     movementStats(MovementType.RETURNED),
     listReturnReports(),
@@ -27,6 +27,8 @@ export default async function ReturnsPage() {
   ]);
   const outstanding = reports.reduce((a, r) => a + r.missing, 0);
   const isOwner = session?.role === 'OWNER';
+  // Return type + Faked/Used are Owner-only — stripped server-side for anyone else.
+  const rows = rowsForViewer(allRows, isOwner);
 
   // Returned units per platform, busiest first.
   const perPlatform = new Map<string, { units: number; count: number }>();
@@ -42,10 +44,13 @@ export default async function ReturnsPage() {
   // How every graded return came back — Owner only, since this is a quality/
   // fraud signal rather than a day-to-day operating number.
   const conditionCounts = { GOOD: 0, USED: 0, FAKED: 0, WRONG: 0 };
+  const returnTypeCounts = { CUSTOMER: 0, RTO: 0, UNKNOWN: 0 };
   for (const r of rows) {
     if (r.condition && r.condition in conditionCounts) {
       conditionCounts[r.condition as keyof typeof conditionCounts] += 1;
     }
+    const t = (r.returnType ?? 'UNKNOWN') as keyof typeof returnTypeCounts;
+    if (t in returnTypeCounts) returnTypeCounts[t] += 1;
   }
 
   return (
@@ -55,6 +60,7 @@ export default async function ReturnsPage() {
       <div className="mb-6">
         <RegisterEntryForm
           lockedAction="RETURN"
+          showReturnType={isOwner}
           products={registerRows.map((r) => ({
             sku: r.sku,
             name: r.name,
@@ -107,6 +113,14 @@ export default async function ReturnsPage() {
             <StatCard label="Wrong" value={num(conditionCounts.WRONG)} tone="danger" />
           </section>
         ) : null}
+
+        {isOwner ? (
+          <section className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <StatCard label="Customer returns" value={num(returnTypeCounts.CUSTOMER)} />
+            <StatCard label="RTO" value={num(returnTypeCounts.RTO)} tone="warn" />
+            <StatCard label="Type unknown" value={num(returnTypeCounts.UNKNOWN)} />
+          </section>
+        ) : null}
       </RevealableStats>
 
       <div className="mb-6">
@@ -129,6 +143,7 @@ export default async function ReturnsPage() {
         csvName="returns"
         withCondition
         showConditionFilter={isOwner}
+        ownerView={isOwner}
         products={products}
       />
     </main>

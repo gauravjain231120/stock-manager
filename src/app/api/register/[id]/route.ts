@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { deleteEntry, editEntry } from '@/lib/register';
 import { PLATFORMS, RETURN_CONDITIONS, RETURN_TYPES } from '@/lib/constants';
+import { canSetReturnType } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,7 +32,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       trackingId: parsed.data.trackingId,
       orderId: parsed.data.orderId,
       condition: parsed.data.condition,
-      returnType: parsed.data.returnType,
+      // Owner only — ignored for anyone else, so the stored value is kept.
+      returnType: parsed.data.returnType && (await canSetReturnType()) ? parsed.data.returnType : undefined,
     });
     return Response.json({ ok: true });
   } catch (err) {
