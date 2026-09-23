@@ -467,6 +467,14 @@ granting one never implies the other, §7), and — Owner-only, never grantable 
   (same code path the Returns page's own "Edit" dialog uses — MAIN→MAIN, no stock movement, just
   relabelled), after a dry run confirmed every tracking number matched and none were already
   graded something else. 4 of the 42 were already USED/WRONG and left untouched.
+- **One-off SPF reconciliation (2026-09-23, `scripts/fix-spf-paid-grades.ts` +
+  `scripts/remove-spf-duplicate-returns.ts`)**: 9 returns Myntra had paid SPF claims on but that
+  were graded GOOD/USED were relabelled FAKED via `editEntry` (MAIN→MAIN, no stock moved). 3 "not
+  logged" paid claims were added as WRONG, then found to be duplicates — each was already logged
+  under its return tracking id (the claims' own data just lacked it) — and removed again via
+  `deleteEntry` (DAMAGED −1 each) with their auto-added return-report entries pulled. Net effect:
+  only the 9 relabels. Lesson: a paid claim with no return tracking id can still have its return
+  logged here — look it up by the claim's return (fetchNewClaim by tracking) before adding one.
 - **Return `condition` now feeds the bot's SPF paid split (2026-09-23)**: the Order Alerts bot's
   SPF Status page splits the ₹ Myntra paid out on SPF claims into Fake / Wrong by reading
   `RETURNED` rows' `condition` (+ `trackingId`) straight from this database, read-only — see
