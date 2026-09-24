@@ -22,6 +22,8 @@ const Body = z
     orderId: z.string().trim().max(64).optional(),
     // Returns only: log it even if this tracking + product is already logged.
     allowDuplicate: z.boolean().optional(),
+    // Returns only: how many units of this product the parcel holds.
+    expectedUnits: z.number().int().positive().max(100).optional(),
   })
   .refine((d) => d.action === 'PRODUCE' || !!d.channel, {
     message: 'Please choose a platform for Ship / Return',
@@ -49,6 +51,7 @@ export async function POST(request: Request) {
       returnType,
       parsed.data.orderId,
       parsed.data.allowDuplicate === true,
+      parsed.data.expectedUnits,
     );
     return Response.json({ ok: true });
   } catch (err) {

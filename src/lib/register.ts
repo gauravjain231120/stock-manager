@@ -24,9 +24,13 @@ function todayIstEndOfDay(): Date {
 /**
  * A return that's already logged — same tracking number, same product (any
  * brand prefix). A double tap / rescan used to log one parcel twice (found
- * live: MYEP1133606842 × RRC-002-CO-C-RED-M twice). Refused unless the
- * caller confirms (`allowDuplicate`) — a genuine second unit of the same
- * product in one parcel is real, just rare.
+ * live: MYEP1133606842 × RRC-002-CO-C-RED-M logged twice — Myntra shows that
+ * parcel held ONE unit). A parcel CAN hold 2+ units of one product (Myntra
+ * lists one claim per unit), so the caller says how many it holds
+ * (`expectedUnits`, the bot's scan pages know): up to that many log
+ * normally, only extra ones are refused. Without it (a manual entry) any
+ * second log of the same tracking + product is refused. Either way the
+ * caller can confirm and log anyway (`allowDuplicate`).
  */
 export class DuplicateReturnError extends Error {
   constructor(message: string) {
@@ -40,22 +44,27 @@ const suffixOf = (sku: string) => {
   return (i === -1 ? sku : sku.slice(i + 1)).trim().toUpperCase();
 };
 
-async function assertNotAlreadyReturned(sku: string, tracking: string) {
+async function assertNotAlreadyReturned(sku: string, tracking: string, qty: number, expectedUnits?: number) {
   const earlier = await StockMovementModel.find(
     { type: MovementType.RETURNED, trackingId: tracking },
-    { sku: 1, condition: 1, createdAt: 1 },
+    { sku: 1, qty: 1, condition: 1, createdAt: 1 },
   ).lean();
-  const same = earlier.find((e) => suffixOf(e.sku) === suffixOf(sku));
-  if (!same) return;
-  const when = new Date(same.createdAt as unknown as Date).toLocaleDateString('en-IN', {
+  const same = earlier.filter((e) => suffixOf(e.sku) === suffixOf(sku));
+  const loggedUnits = same.reduce((sum, e) => sum + Math.abs(e.qty), 0);
+  if (loggedUnits === 0) return;
+  // The parcel holds more units of this product than are logged so far.
+  if (expectedUnits && loggedUnits + qty <= expectedUnits) return;
+  const first = same[0];
+  const when = new Date(first.createdAt as unknown as Date).toLocaleDateString('en-IN', {
     timeZone: 'Asia/Kolkata',
     day: 'numeric',
     month: 'short',
     year: 'numeric',
   });
+  const held = expectedUnits ? ` — the parcel holds ${expectedUnits}` : '';
   throw new DuplicateReturnError(
-    `Already logged: this return (${tracking}, ${same.sku}) was logged on ${when}${same.condition ? ` as ${same.condition}` : ''}. ` +
-      'Log it again only if a second unit of it really came back.',
+    `Already logged: ${loggedUnits} unit${loggedUnits === 1 ? '' : 's'} of ${first.sku} for ${tracking} (first on ${when}` +
+      `${first.condition ? `, ${first.condition}` : ''})${held}. Log it again only if another unit really came back.`,
   );
 }
 
@@ -96,6 +105,9 @@ export async function recordEntry(
   orderId?: string,
   // Returns only: log it even if this tracking + product is already logged.
   allowDuplicate = false,
+  // Returns only: how many units of this product the parcel holds (when the
+  // caller knows) — that many log without a duplicate warning.
+  expectedUnits?: number,
 ) {
   if (qty <= 0) throw new Error('Quantity must be greater than 0');
   const s = sku.trim().toUpperCase();
@@ -111,7 +123,7 @@ export async function recordEntry(
     case 'RETURN': {
       if (tracking && !allowDuplicate) {
         await connectDB();
-        await assertNotAlreadyReturned(s, tracking);
+        await assertNotAlreadyReturned(s, tracking, qty, expectedUnits);
       }
       // Good, used, and faked parcels all go back on the shelf (used/faked are
       // just flagged); a wrong item was never ours (parked in DAMAGED to be
