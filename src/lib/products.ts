@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { connectDB } from '@/lib/db';
 import { MovementType, SystemLocation } from '@/lib/constants';
 import { stockSkuFor, invalidateStockShareCache } from '@/lib/stockShare';
@@ -325,6 +326,91 @@ export async function editVariantAttributes(sku: string, changes: { color?: stri
 }
 
 /**
+ * After `sku`'s stock link changed (its pile moved from `oldPool` to
+ * `newPool`), make the stored counts follow, in one transaction:
+ *  - on hand: units recorded on `sku`'s OWN rows (it owned its pile until
+ *    now) move onto the new pile, location by location. They used to be left
+ *    behind on rows nothing reads any more — invisible stock (found live:
+ *    10 units on RRC-009-CO-J-GRN-D-*, linked after they already had stock).
+ *    Only when linking — unlinking (newPool === sku) leaves the units with the
+ *    product they were physically drawn from.
+ *  - reserved: recomputed from the Ready-to-Ship queue for both piles, since
+ *    every queued row of `sku` (and of anything sharing through it) now
+ *    reserves on the new pile.
+ * No ledger rows are written: entries stay on their own SKU and
+ * reconcileFromLedger already folds them onto the shared pile, so ledger and
+ * counts agree afterwards.
+ */
+async function rehomeStockAfterLinkChange(sku: string, oldPool: string, newPool: string) {
+  const moved: { locationCode: string; onHand: number }[] = [];
+  if (oldPool === newPool) return { moved };
+  const session = await mongoose.startSession();
+  try {
+    await session.withTransaction(async () => {
+      moved.length = 0; // withTransaction may retry the whole callback
+      if (newPool !== sku) {
+        const own = await SkuStockModel.find({ sku, onHand: { $ne: 0 } }, null, { session }).lean();
+        for (const row of own) {
+          await SkuStockModel.updateOne(
+            { sku: newPool, locationCode: row.locationCode },
+            { $inc: { onHand: row.onHand }, $setOnInsert: { reserved: 0, buffer: 0 } },
+            { session, upsert: true },
+          );
+          await SkuStockModel.updateOne({ _id: row._id }, { $set: { onHand: 0 } }, { session });
+          moved.push({ locationCode: row.locationCode, onHand: row.onHand });
+        }
+      }
+      const pending = await PendingShipmentModel.find({}, { sku: 1, qty: 1 }, { session }).lean();
+      const reserved = new Map<string, number>([[oldPool, 0], [newPool, 0]]);
+      for (const p of pending) {
+        const pool = await stockSkuFor(p.sku);
+        if (reserved.has(pool)) reserved.set(pool, (reserved.get(pool) ?? 0) + p.qty);
+      }
+      for (const [pool, qty] of reserved) {
+        await SkuStockModel.updateOne(
+          { sku: pool, locationCode: SystemLocation.MAIN },
+          { $set: { reserved: qty }, $setOnInsert: { onHand: 0, buffer: 0 } },
+          { session, upsert: qty > 0 },
+        );
+      }
+    });
+  } finally {
+    await session.endSession();
+  }
+  return { moved };
+}
+
+/**
+ * Units stranded on a variant that shares another variant's stock — they sit
+ * on the variant's own rows, which nothing reads (every read goes to the
+ * shared pile). What the one-off scripts/merge-bundle-stock.ts reports and,
+ * with --apply, moves (see rehomeStockAfterLinkChange for why this happened).
+ */
+export async function findStrandedBundleStock() {
+  await connectDB();
+  // Read the links fresh — never trust the short-lived share cache here.
+  invalidateStockShareCache();
+  const linked = await ProductModel.find({ sharesStockWith: { $exists: true, $ne: null } }, { sku: 1 }).lean();
+  const rows = await SkuStockModel.find({ sku: { $in: linked.map((l) => l.sku) }, onHand: { $ne: 0 } }).lean();
+  return Promise.all(
+    rows.map(async (r) => ({ sku: r.sku, locationCode: r.locationCode, onHand: r.onHand, pool: await stockSkuFor(r.sku) })),
+  );
+}
+
+/** Moves every stranded row found by findStrandedBundleStock onto its shared pile. */
+export async function mergeStrandedBundleStock() {
+  const stranded = await findStrandedBundleStock();
+  const done: { sku: string; pool: string; moved: { locationCode: string; onHand: number }[] }[] = [];
+  for (const sku of [...new Set(stranded.map((s) => s.sku))]) {
+    const pool = await stockSkuFor(sku);
+    // oldPool = the variant itself, whose own rows hold the units.
+    const res = await rehomeStockAfterLinkChange(sku, sku, pool);
+    done.push({ sku, pool, moved: res.moved });
+  }
+  return done;
+}
+
+/**
  * Point a variant at another SKU's physical stock (or clear it back to its
  * own) — the same mechanism that already powers "Halter with Palazzos"
  * sharing "Halter Neck"'s pile, now configurable per variant instead of
@@ -341,12 +427,16 @@ export async function setSharesStockWith(sku: string, targetSku: string | null) 
   const s = sku.trim().toUpperCase();
   const product = await ProductModel.findOne({ sku: s });
   if (!product) throw new Error('Variant not found');
+  // Where this variant's stock lives right now — its units and reservations
+  // follow it to the new pile below (rehomeStockAfterLinkChange).
+  const oldPool = await stockSkuFor(s);
 
   if (!targetSku || !targetSku.trim()) {
     product.sharesStockWith = undefined;
     await product.save();
     invalidateStockShareCache();
-    return { sku: s, sharesStockWith: null };
+    const { moved } = await rehomeStockAfterLinkChange(s, oldPool, await stockSkuFor(s));
+    return { sku: s, sharesStockWith: null, moved };
   }
 
   const t = targetSku.trim().toUpperCase();
@@ -368,7 +458,8 @@ export async function setSharesStockWith(sku: string, targetSku: string | null) 
   product.sharesStockWith = t;
   await product.save();
   invalidateStockShareCache();
-  return { sku: s, sharesStockWith: t };
+  const { moved } = await rehomeStockAfterLinkChange(s, oldPool, await stockSkuFor(s));
+  return { sku: s, sharesStockWith: t, moved };
 }
 
 /** Remove a single variant SKU and its stock/history. */
@@ -406,26 +497,35 @@ export async function renameVariantSku(oldSku: string, newSku: string) {
   if (!(await ProductModel.exists({ sku: o }))) throw new Error('Variant not found');
   if (await ProductModel.exists({ sku: n })) throw new Error(`SKU "${n}" already exists`);
 
-  await Promise.all([
-    ProductModel.updateOne({ sku: o }, { $set: { sku: n } }),
-    SkuStockModel.updateMany({ sku: o }, { $set: { sku: n } }),
-    StockMovementModel.updateMany({ sku: o }, { $set: { sku: n } }),
-    ChannelListingModel.updateMany({ sku: o }, { $set: { sku: n } }),
-    ChannelInventoryStateModel.updateMany({ sku: o }, { $set: { sku: n } }),
-    // Work in flight: an unshipped queue row, a marketplace order, a return being
-    // processed or a production batch would otherwise point at a dead SKU.
-    PendingShipmentModel.updateMany({ sku: o }, { $set: { sku: n } }),
-    MarketplaceOrderModel.updateMany({ sku: o }, { $set: { sku: n } }),
-    ReturnRecordModel.updateMany({ sku: o }, { $set: { sku: n } }),
-    ReturnShipmentModel.updateMany({ sku: o }, { $set: { sku: n } }),
-    ProductionBatchModel.updateMany({ sku: o }, { $set: { sku: n } }),
-    BomModel.updateMany({ sku: o }, { $set: { sku: n } }),
-    ReorderPolicyModel.updateMany({ sku: o }, { $set: { sku: n } }),
-    // Any OTHER variant sharing stock with this one must keep pointing at it
-    // under its new name, or it silently falls back to tracking its own
-    // (empty) pile instead.
-    ProductModel.updateMany({ sharesStockWith: o }, { $set: { sharesStockWith: n } }),
-  ]);
+  // All in ONE transaction: a failure part-way used to leave some records on
+  // the old SKU and some on the new (e.g. stock renamed, history not) — the
+  // kind of split that shows up as ledger/stock drift later.
+  const session = await mongoose.startSession();
+  try {
+    await session.withTransaction(async () => {
+      const opt = { session };
+      await ProductModel.updateOne({ sku: o }, { $set: { sku: n } }, opt);
+      await SkuStockModel.updateMany({ sku: o }, { $set: { sku: n } }, opt);
+      await StockMovementModel.updateMany({ sku: o }, { $set: { sku: n } }, opt);
+      await ChannelListingModel.updateMany({ sku: o }, { $set: { sku: n } }, opt);
+      await ChannelInventoryStateModel.updateMany({ sku: o }, { $set: { sku: n } }, opt);
+      // Work in flight: an unshipped queue row, a marketplace order, a return being
+      // processed or a production batch would otherwise point at a dead SKU.
+      await PendingShipmentModel.updateMany({ sku: o }, { $set: { sku: n } }, opt);
+      await MarketplaceOrderModel.updateMany({ sku: o }, { $set: { sku: n } }, opt);
+      await ReturnRecordModel.updateMany({ sku: o }, { $set: { sku: n } }, opt);
+      await ReturnShipmentModel.updateMany({ sku: o }, { $set: { sku: n } }, opt);
+      await ProductionBatchModel.updateMany({ sku: o }, { $set: { sku: n } }, opt);
+      await BomModel.updateMany({ sku: o }, { $set: { sku: n } }, opt);
+      await ReorderPolicyModel.updateMany({ sku: o }, { $set: { sku: n } }, opt);
+      // Any OTHER variant sharing stock with this one must keep pointing at it
+      // under its new name, or it silently falls back to tracking its own
+      // (empty) pile instead.
+      await ProductModel.updateMany({ sharesStockWith: o }, { $set: { sharesStockWith: n } }, opt);
+    });
+  } finally {
+    await session.endSession();
+  }
   invalidateStockShareCache();
   return { sku: n };
 }

@@ -729,6 +729,7 @@ scripts/                 one-off maintenance scripts (`tsx --tsconfig tsconfig.s
   fix-spf-paid-grades.ts   SPF reconciliation: 9 paid-claim returns relabelled FAKED (§6, 2026-09-23)
   remove-spf-duplicate-returns.ts   undid 3 duplicate WRONG returns added by the above (§6, 2026-09-23)
   apply-return-types.ts    backfilled returnType (CUSTOMER/RTO/UNKNOWN) on existing returns from the bot's classifier (§6, 2026-09-23)
+  merge-bundle-stock.ts    moves units stranded on a linked (shares-stock) variant's own rows onto its shared pile — report only unless --apply (§11, 2026-09-24)
 ```
 
 ## 10. Deployment workflow
@@ -748,3 +749,48 @@ scripts/                 one-off maintenance scripts (`tsx --tsconfig tsconfig.s
 5. If a change touches the `/api/pending*` routes, verify the sister order-alert project's
    integration still works end to end (its `PROJECT.md` §16 has its own test workflow) — that's
    the one external caller with zero visibility into this app's internals.
+
+## 11. Full review + live integrity check (2026-09-24)
+
+Every file read; the live data checked **read-only** with `reconcileFromLedger` (ledger vs stock
+counts), a reserved-vs-queue check, negative/oversold stock, orphan SKUs and duplicate returns.
+Fixes tested on a throwaway local replica set (`mongod --replSet`) — new scenarios below plus the
+existing `verify` (8/8) and `verify:e2e` (23/23) suites, all passing, ledger in sync after every step.
+
+**What the live check found**
+- **Reserved counts: exact** (255 MAIN rows vs the queue: 0 drift). No negative stock.
+- **Stranded stock (real):** 10 units sit on the OWN rows of `RRC-009-CO-J-GRN-D-{S,M,L,XL,XXL}`
+  (5 sellable MAIN, 5 DAMAGED) — those variants were linked to `RRC-009-CO-J-GRN-*` ("shares stock
+  with") after they already had stock, and linking didn't move it, so nothing shows those units
+  (e.g. J-GRN-S shows 2, ledger says 4). Repair: `scripts/merge-bundle-stock.ts --apply` —
+  **not run**; check the shelf first (the shared SKUs have manual "set stock" corrections, which
+  may already include those units — then applying would double-count).
+- **Renamed SKUs' history split:** ledger rows of `RRC-002-CO-C-RED-F-*`, `RRC-002-CO-CI-RED-GRN-F-*`,
+  `RRC-002-CO-HI-GRN-*` (no longer in the catalog) kept their old names while the stock moved to
+  the new SKUs; per product the sums match exactly — the counts are right, the history is split.
+  (Today's `renameVariantSku` already carries history along; these predate it.)
+- **Missing links (config):** in 6 "012" colours, sizes S–XXL share stock with `002` but **XS and
+  3XL don't** (`RRC-012-CO-{A-BLU,B-BL,C-RED,C-RED-F,CI-RED-GRN-F,F-BLU}-{XS,3XL}`) — an XS/3XL order
+  reserves an empty own pile. Link them on the Products page if they're the same garment.
+- 1 oversold row (`RRC-007-CO-J-GRN-L`: 0 on hand, 1 reserved) — a real "make" item.
+- 1 duplicate return: `MYEP1133606842` × `RRC-002-CO-C-RED-M` logged twice (check if 2 units came).
+
+**Fixes**
+- **Linking carries stock** (`lib/products.ts` `rehomeStockAfterLinkChange`, called by
+  `setSharesStockWith` for link, re-link and unlink): the variant's own on-hand rows move onto the
+  new pile (per location) and `reserved` is recomputed from the queue for both piles — one
+  transaction. No ledger rows needed (reconcile already folds bundle entries onto the pile).
+  Unlinking leaves units with the product they were drawn from; reservations follow.
+- **Duplicate-return guard** (`lib/register.ts` `DuplicateReturnError`): a RETURN with a tracking
+  number is refused (409, `duplicate: true`) when that tracking + product (any brand prefix / any
+  formatting of the number) is already logged; `allowDuplicate: true` logs it anyway. The Stock Log
+  / Returns form asks "Already logged — Log it again?"; the bot's return pages show "Log it again
+  anyway". No tracking number / different product = never blocked.
+- `addPending`: reservation + queue row in **one transaction** (a failure between them used to leave
+  a stray reservation — e.g. a too-long tracking number was refused *after* reserving).
+- `renameVariantSku`: all 13 collection renames in **one transaction** (a part-failure used to split
+  a SKU's records across old/new names — the kind of split found above).
+- `/api/register` + `/api/register/[id]`: an invalid `date` is refused instead of stored broken.
+
+**Recommended (owner's call, not changed):** set `AUTH_TOKEN` and `CRON_SECRET` in Vercel if they
+aren't — without them the code falls back to a built-in service token / an open cron route.

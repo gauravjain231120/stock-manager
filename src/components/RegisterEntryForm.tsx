@@ -103,7 +103,10 @@ export function RegisterEntryForm({
     await save();
   }
 
-  async function save() {
+  // allowDuplicate: the server refuses a second return with the same
+  // tracking + product (409 duplicate) — we ask, and resend with this only
+  // if it really is a second unit.
+  async function save(allowDuplicate = false) {
     if (trackingTooLong) return;
     const actionLabel = ACTIONS.find((a) => a.key === action)?.label ?? action;
     setBusy(true);
@@ -124,9 +127,20 @@ export function RegisterEntryForm({
           trackingId: tracking.trim() || undefined,
           condition: action === 'RETURN' ? condition : undefined,
           returnType: action === 'RETURN' && showReturnType ? returnType : undefined,
+          allowDuplicate: allowDuplicate || undefined,
         }),
       });
       const data = await res.json();
+      if (res.status === 409 && data?.duplicate) {
+        setBusy(false);
+        const again = await ask({
+          title: 'Already logged',
+          description: data.error,
+          confirmLabel: 'Log it again',
+        });
+        if (again) await save(true);
+        return;
+      }
       if (!res.ok) {
         const raw = data?.error || `Error ${res.status}`;
         setErr(/insufficient stock|not enough stock/i.test(raw) ? `Not enough stock to ship ${qty}.` : raw);
@@ -315,7 +329,7 @@ export function RegisterEntryForm({
               <button type="button" onClick={closeScan} className="rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">
                 Cancel
               </button>
-              <button type="button" onClick={save} disabled={busy || trackingTooLong} className={`rounded-lg px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50 ${
+              <button type="button" onClick={() => save()} disabled={busy || trackingTooLong} className={`rounded-lg px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50 ${
                 condition === 'GOOD' ? 'bg-emerald-600 hover:bg-emerald-700' : condition === 'USED' ? 'bg-amber-600 hover:bg-amber-700' : condition === 'FAKED' ? 'bg-purple-600 hover:bg-purple-700' : 'bg-red-600 hover:bg-red-700'
               }`}>
                 {busy ? 'Saving…' : 'Save return'}

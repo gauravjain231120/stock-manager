@@ -21,6 +21,44 @@ function todayIstEndOfDay(): Date {
   return new Date(Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth(), ist.getUTCDate(), 23, 59, 59, 999) - IST_OFFSET_MS);
 }
 
+/**
+ * A return that's already logged — same tracking number, same product (any
+ * brand prefix). A double tap / rescan used to log one parcel twice (found
+ * live: MYEP1133606842 × RRC-002-CO-C-RED-M twice). Refused unless the
+ * caller confirms (`allowDuplicate`) — a genuine second unit of the same
+ * product in one parcel is real, just rare.
+ */
+export class DuplicateReturnError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DuplicateReturnError';
+  }
+}
+
+const suffixOf = (sku: string) => {
+  const i = sku.indexOf('-');
+  return (i === -1 ? sku : sku.slice(i + 1)).trim().toUpperCase();
+};
+
+async function assertNotAlreadyReturned(sku: string, tracking: string) {
+  const earlier = await StockMovementModel.find(
+    { type: MovementType.RETURNED, trackingId: tracking },
+    { sku: 1, condition: 1, createdAt: 1 },
+  ).lean();
+  const same = earlier.find((e) => suffixOf(e.sku) === suffixOf(sku));
+  if (!same) return;
+  const when = new Date(same.createdAt as unknown as Date).toLocaleDateString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+  throw new DuplicateReturnError(
+    `Already logged: this return (${tracking}, ${same.sku}) was logged on ${when}${same.condition ? ` as ${same.condition}` : ''}. ` +
+      'Log it again only if a second unit of it really came back.',
+  );
+}
+
 export type RegisterAction = 'PRODUCE' | 'SHIP' | 'RETURN';
 export const REGISTER_ACTIONS: RegisterAction[] = ['PRODUCE', 'SHIP', 'RETURN'];
 
@@ -56,6 +94,8 @@ export async function recordEntry(
   // Marketplace order number, when the caller has it (e.g. the bot's Amazon
   // Return page) — returns only; stored exactly as the Edit dialog would.
   orderId?: string,
+  // Returns only: log it even if this tracking + product is already logged.
+  allowDuplicate = false,
 ) {
   if (qty <= 0) throw new Error('Quantity must be greater than 0');
   const s = sku.trim().toUpperCase();
@@ -69,6 +109,10 @@ export async function recordEntry(
       movementId = await applyMovement({ sku: s, locationCode: loc, qty, type: MovementType.PRODUCED, refType: 'REGISTER' });
       break;
     case 'RETURN': {
+      if (tracking && !allowDuplicate) {
+        await connectDB();
+        await assertNotAlreadyReturned(s, tracking);
+      }
       // Good, used, and faked parcels all go back on the shelf (used/faked are
       // just flagged); a wrong item was never ours (parked in DAMAGED to be
       // claimed) and a defective one won't be resold (parked in DAMAGED too) —

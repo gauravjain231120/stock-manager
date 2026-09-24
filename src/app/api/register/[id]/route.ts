@@ -9,7 +9,10 @@ const Patch = z.object({
   sku: z.string().optional(),
   qty: z.number().int().positive().optional(),
   channel: z.enum(PLATFORMS).nullable().optional(),
-  date: z.string().optional(),
+  date: z
+    .string()
+    .refine((v) => !Number.isNaN(Date.parse(v)), 'That date is not valid')
+    .optional(),
   trackingId: z.string().optional(),
   orderId: z.string().optional(),
   condition: z.enum(RETURN_CONDITIONS).optional(),

@@ -106,12 +106,39 @@ export async function addPending(input: {
   }
 
   const channel = input.channel || undefined;
-  // Reserve on the physical stock SKU (a bundle reserves its component's units).
-  await SkuStockModel.updateOne(
-    { sku: await stockSkuFor(sku), locationCode: MAIN },
-    { $inc: { reserved: qty }, $setOnInsert: { onHand: 0, buffer: 0 } },
-    { upsert: true },
-  );
+  const pool = await stockSkuFor(sku);
+  const orderId = input.orderId?.trim() || undefined;
+  // Reservation + queue row in ONE transaction: a failure between the two
+  // used to leave stock reserved for a row that never got created (only
+  // "Fix reserved" could undo it).
+  let resultId = '';
+  const session = await mongoose.startSession();
+  try {
+    await session.withTransaction(async () => {
+      // Reserve on the physical stock SKU (a bundle reserves its component's units).
+      await SkuStockModel.updateOne(
+        { sku: pool, locationCode: MAIN },
+        { $inc: { reserved: qty }, $setOnInsert: { onHand: 0, buffer: 0 } },
+        { session, upsert: true },
+      );
+      resultId = await addPendingRow(session, { sku, qty, channel, orderId, input });
+    });
+  } finally {
+    await session.endSession();
+  }
+  return { id: resultId };
+}
+
+async function addPendingRow(
+  session: mongoose.ClientSession,
+  {
+    sku,
+    qty,
+    channel,
+    orderId,
+    input,
+  }: { sku: string; qty: number; channel?: string; orderId?: string; input: { trackingId?: string; placedAt?: string | Date; shipByAt?: string | Date; noMerge?: boolean } },
+): Promise<string> {
   // ONLY the same order number merges — two units of one product on one order are
   // one row of qty 2. Everything else gets its own row: two customers who bought
   // the same product are two parcels to pack, and collapsing them into a single
@@ -119,29 +146,29 @@ export async function addPending(input: {
   // there's nothing to say they belong together. noMerge skips this entirely —
   // used by the order-alert integrations, which add one unit at a time so every
   // physical piece keeps its own row instead of collapsing into a qty count.
-  const orderId = input.orderId?.trim() || undefined;
   if (orderId && !input.noMerge) {
-    const existing = await PendingShipmentModel.findOne({
-      sku,
-      ...(channel ? { channel } : {}),
-      orderId,
-    });
-    if (existing) {
-      existing.qty += qty;
-      await existing.save();
-      return { id: String(existing._id) };
-    }
+    const existing = await PendingShipmentModel.findOneAndUpdate(
+      { sku, ...(channel ? { channel } : {}), orderId },
+      { $inc: { qty } },
+      { session, returnDocument: 'after' },
+    );
+    if (existing) return String(existing._id);
   }
-  const doc = await PendingShipmentModel.create({
-    sku,
-    qty,
-    channel,
-    orderId,
-    trackingId: cleanTracking(input.trackingId),
-    placedAt: input.placedAt,
-    shipByAt: input.shipByAt,
-  });
-  return { id: String(doc._id) };
+  const [doc] = await PendingShipmentModel.create(
+    [
+      {
+        sku,
+        qty,
+        channel,
+        orderId,
+        trackingId: cleanTracking(input.trackingId),
+        placedAt: input.placedAt,
+        shipByAt: input.shipByAt,
+      },
+    ],
+    { session },
+  );
+  return String(doc._id);
 }
 
 export async function listPending(): Promise<PendingRow[]> {
