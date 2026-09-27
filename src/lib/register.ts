@@ -9,6 +9,7 @@ import { StockMovementModel } from '@/models/StockMovement';
 import { SkuStockModel } from '@/models/SkuStock';
 import { LocationModel } from '@/models/Location';
 import { PendingShipmentModel } from '@/models/PendingShipment';
+import { CancelReversalModel } from '@/models/CancelReversal';
 import { autoAddToDayReport } from '@/lib/returnReports';
 import { VariantMeta, attrsOf, variantMeta } from '@/lib/variants';
 
@@ -44,27 +45,41 @@ const suffixOf = (sku: string) => {
   return (i === -1 ? sku : sku.slice(i + 1)).trim().toUpperCase();
 };
 
-async function assertNotAlreadyReturned(sku: string, tracking: string, qty: number, expectedUnits?: number) {
-  const earlier = await StockMovementModel.find(
-    { type: MovementType.RETURNED, trackingId: tracking },
-    { sku: 1, qty: 1, condition: 1, createdAt: 1 },
-  ).lean();
+const istDate = (d: Date) =>
+  new Date(d).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric' });
+
+async function assertNotAlreadyReturned(sku: string, tracking: string | undefined, qty: number, expectedUnits?: number, orderId?: string) {
+  const earlier = tracking
+    ? await StockMovementModel.find(
+        { type: MovementType.RETURNED, trackingId: tracking },
+        { sku: 1, qty: 1, condition: 1, createdAt: 1 },
+      ).lean()
+    : [];
   const same = earlier.filter((e) => suffixOf(e.sku) === suffixOf(sku));
   const loggedUnits = same.reduce((sum, e) => sum + Math.abs(e.qty), 0);
-  if (loggedUnits === 0) return;
-  // The parcel holds more units of this product than are logged so far.
-  if (expectedUnits && loggedUnits + qty <= expectedUnits) return;
-  const first = same[0];
-  const when = new Date(first.createdAt as unknown as Date).toLocaleDateString('en-IN', {
-    timeZone: 'Asia/Kolkata',
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
+  // Units of this order + product whose stock was ALREADY put back when the
+  // marketplace cancelled it after it was marked shipped — the RTO parcel
+  // arriving now must not add them a second time.
+  const reversals = orderId
+    ? await CancelReversalModel.find({ orderId: orderId.trim(), skuSuffix: suffixOf(sku) }, { qty: 1, createdAt: 1 }).lean()
+    : [];
+  const reversedUnits = reversals.reduce((sum, r) => sum + r.qty, 0);
+  const accounted = loggedUnits + reversedUnits;
+  if (accounted === 0) return;
+  // The parcel holds more units of this product than are accounted for so far.
+  if (expectedUnits && accounted + qty <= expectedUnits) return;
   const held = expectedUnits ? ` — the parcel holds ${expectedUnits}` : '';
+  if (loggedUnits === 0) {
+    throw new DuplicateReturnError(
+      `Stock for ${reversedUnits} unit${reversedUnits === 1 ? '' : 's'} of this product on order ${orderId} was already put back ` +
+        `when the order was cancelled after shipping (${istDate(reversals[0].createdAt as unknown as Date)})${held}. ` +
+        `Log it again only if this is an extra unit beyond that.`,
+    );
+  }
+  const first = same[0];
   throw new DuplicateReturnError(
-    `Already logged: ${loggedUnits} unit${loggedUnits === 1 ? '' : 's'} of ${first.sku} for ${tracking} (first on ${when}` +
-      `${first.condition ? `, ${first.condition}` : ''})${held}. Log it again only if another unit really came back.`,
+    `Already logged: ${loggedUnits} unit${loggedUnits === 1 ? '' : 's'} of ${first.sku} for ${tracking} (first on ${istDate(first.createdAt as unknown as Date)}` +
+      `${first.condition ? `, ${first.condition}` : ''})${reversedUnits ? ` (+${reversedUnits} put back on cancellation)` : ''}${held}. Log it again only if another unit really came back.`,
   );
 }
 
@@ -121,9 +136,9 @@ export async function recordEntry(
       movementId = await applyMovement({ sku: s, locationCode: loc, qty, type: MovementType.PRODUCED, refType: 'REGISTER' });
       break;
     case 'RETURN': {
-      if (tracking && !allowDuplicate) {
+      if ((tracking || orderId) && !allowDuplicate) {
         await connectDB();
-        await assertNotAlreadyReturned(s, tracking, qty, expectedUnits);
+        await assertNotAlreadyReturned(s, tracking, qty, expectedUnits, orderId);
       }
       // Good, used, and faked parcels all go back on the shelf (used/faked are
       // just flagged); a wrong item was never ours (parked in DAMAGED to be
@@ -451,6 +466,12 @@ export async function unshipCancelledLine({ orderId, sku, qty }: { orderId: stri
     await deleteEntry(String(mv._id));
     reversedIds.push(String(mv._id));
     remaining -= mvQty;
+  }
+
+  // Remember it: if this was an RTO, the parcel is scanned back in later —
+  // that scan must not add the same stock again (assertNotAlreadyReturned).
+  if (reversedIds.length) {
+    await CancelReversalModel.create({ orderId, skuSuffix: suffix, sku, qty: qty - remaining, movementIds: reversedIds });
   }
 
   return { reversedQty: qty - remaining, remaining, movementIds: reversedIds };

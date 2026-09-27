@@ -794,3 +794,22 @@ existing `verify` (8/8) and `verify:e2e` (23/23) suites, all passing, ledger in 
 
 **Recommended (owner's call, not changed):** set `AUTH_TOKEN` and `CRON_SECRET` in Vercel if they
 aren't — without them the code falls back to a built-in service token / an open cron route.
+
+## 12. Cancel-after-ship is remembered; queue lookups return row ids (2026-09-27)
+
+Found in a review of the order-alert bot's cancellation flow (bot PROJECT.md §41):
+- **Double stock on RTOs.** `unshipCancelledLine` (bot → `POST /api/pending/unship-cancelled`, when a
+  marketplace cancels an order that was already marked shipped) deletes the SOLD entry — stock back
+  at once, which is right: "shipped" is marked at packing, so the parcel may still be here. But when
+  the parcel was really on its way and comes back as an RTO, scanning it on the bot's Return page
+  logged a RETURN and added the same stock again (`assertNotAlreadyReturned` only looked at earlier
+  RETURNED rows by tracking). Now `unshipCancelledLine` records a **`CancelReversal`**
+  (`src/models/CancelReversal.ts`: orderId, sku suffix, qty, reversed movement ids), and
+  `assertNotAlreadyReturned` counts those units (by order id + product) as already returned: the
+  scan gets "Stock for N unit(s) … was already put back when the order was cancelled after
+  shipping" (409 duplicate → the bot's "Log it again anyway" still works for a genuine extra unit).
+  The check now also runs when a return has an order id but no tracking. Other return paths (the
+  marketplace-pull adapters, the expected-returns list) are unchanged.
+- **`GET /api/pending/check?orderId=` returns each QUEUE row's `id`.** The bot's cancellation sweep
+  uses it to cancel exactly that order's rows (light, one order) instead of reading the whole
+  `/api/pending/summary`; it falls back to the summary if `id` is missing. Additive only.

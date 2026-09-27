@@ -287,6 +287,8 @@ export function queueRows(pending: PendingRow[]): QueueRow[] {
 
 export interface OrderIdUse {
   where: 'QUEUE' | 'SHIPPED';
+  /** Queue rows only: the row's id, so the order-alert app can cancel exactly these rows. */
+  id?: string;
   sku: string;
   name: string;
   qty: number;
@@ -315,6 +317,7 @@ export async function findOrderIdUses(orderId: string): Promise<OrderIdUse[]> {
   return [
     ...queued.map((q) => ({
       where: 'QUEUE' as const,
+      id: String(q._id),
       sku: q.sku,
       name: nameBy.get(q.sku) ?? q.sku,
       qty: q.qty,
