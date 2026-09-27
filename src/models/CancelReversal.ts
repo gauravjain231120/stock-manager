@@ -10,6 +10,10 @@ import mongoose, { Schema, InferSchemaType, Model } from 'mongoose';
 const CancelReversalSchema = new Schema(
   {
     orderId: { type: String, required: true },
+    // Other numbers the same order goes by — Myntra returns are logged with the
+    // item's portalOrderReleaseId (e.g. 100333710323), not the M-Direct order id
+    // the cancellation used (e.g. 6017668763); verified on 5/5 real returns.
+    altOrderIds: { type: [String], default: [] },
     skuSuffix: { type: String, required: true },
     sku: { type: String, required: true },
     qty: { type: Number, required: true, min: 1 },
@@ -19,6 +23,7 @@ const CancelReversalSchema = new Schema(
 );
 
 CancelReversalSchema.index({ orderId: 1, skuSuffix: 1 });
+CancelReversalSchema.index({ altOrderIds: 1, skuSuffix: 1 });
 
 export type CancelReversal = InferSchemaType<typeof CancelReversalSchema>;
 

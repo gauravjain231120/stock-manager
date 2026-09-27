@@ -813,3 +813,11 @@ Found in a review of the order-alert bot's cancellation flow (bot PROJECT.md §4
 - **`GET /api/pending/check?orderId=` returns each QUEUE row's `id`.** The bot's cancellation sweep
   uses it to cancel exactly that order's rows (light, one order) instead of reading the whole
   `/api/pending/summary`; it falls back to the summary if `id` is missing. Additive only.
+
+**Addendum, same day — Myntra returns use a different order number.** A read-only check showed
+Myntra returns are logged with the item's `portalOrderReleaseId` (e.g. `100333710323`), not the
+M-Direct order id the cancellation uses (e.g. `6017668763`) — verified on 5 of 5 real returns, so
+the reversal memory above could never match a Myntra RTO. `unship-cancelled` now also accepts
+`altOrderIds` (the bot sends the cancelled items' release ids), `CancelReversal.altOrderIds` stores
+them, and the return check matches either number. Amazon order ids were already the same (7 of 8
+returns matched a shipped order).

@@ -18,13 +18,16 @@ export async function POST(req: Request) {
   const orderId = String(body?.orderId ?? '').trim();
   const sku = String(body?.sku ?? '').trim();
   const qty = Number(body?.qty);
+  // Optional: other numbers the order goes by (Myntra portalOrderReleaseIds) —
+  // remembered so a return logged under one of them isn't counted twice.
+  const altOrderIds = Array.isArray(body?.altOrderIds) ? body.altOrderIds.map((a: unknown) => String(a)).filter(Boolean) : [];
 
   if (!orderId || !sku || !Number.isInteger(qty) || qty <= 0) {
     return Response.json({ error: 'orderId, sku, and a positive integer qty are required' }, { status: 400 });
   }
 
   try {
-    const result = await unshipCancelledLine({ orderId, sku, qty });
+    const result = await unshipCancelledLine({ orderId, sku, qty, altOrderIds });
     return Response.json({ ok: result.remaining === 0, ...result });
   } catch (err) {
     return Response.json({ error: err instanceof Error ? err.message : String(err) }, { status: 400 });

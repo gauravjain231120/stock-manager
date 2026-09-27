@@ -61,7 +61,10 @@ async function assertNotAlreadyReturned(sku: string, tracking: string | undefine
   // marketplace cancelled it after it was marked shipped — the RTO parcel
   // arriving now must not add them a second time.
   const reversals = orderId
-    ? await CancelReversalModel.find({ orderId: orderId.trim(), skuSuffix: suffixOf(sku) }, { qty: 1, createdAt: 1 }).lean()
+    ? await CancelReversalModel.find(
+        { $or: [{ orderId: orderId.trim() }, { altOrderIds: orderId.trim() }], skuSuffix: suffixOf(sku) },
+        { qty: 1, createdAt: 1 },
+      ).lean()
     : [];
   const reversedUnits = reversals.reduce((sum, r) => sum + r.qty, 0);
   const accounted = loggedUnits + reversedUnits;
@@ -443,7 +446,18 @@ export async function moveManyShippedToQueue(ids: string[]) {
  * partial-quantity mode). The caller gets back exactly how much it managed to
  * reverse, so it can flag anything left over for a human to check.
  */
-export async function unshipCancelledLine({ orderId, sku, qty }: { orderId: string; sku: string; qty: number }) {
+export async function unshipCancelledLine({
+  orderId,
+  sku,
+  qty,
+  altOrderIds = [],
+}: {
+  orderId: string;
+  sku: string;
+  qty: number;
+  /** Other numbers this order goes by (Myntra: the items' portalOrderReleaseIds) — returns may be logged under those. */
+  altOrderIds?: string[];
+}) {
   await connectDB();
   const idx = sku.indexOf('-');
   const suffix = (idx === -1 ? sku : sku.slice(idx + 1)).trim().toUpperCase();
@@ -471,7 +485,14 @@ export async function unshipCancelledLine({ orderId, sku, qty }: { orderId: stri
   // Remember it: if this was an RTO, the parcel is scanned back in later —
   // that scan must not add the same stock again (assertNotAlreadyReturned).
   if (reversedIds.length) {
-    await CancelReversalModel.create({ orderId, skuSuffix: suffix, sku, qty: qty - remaining, movementIds: reversedIds });
+    await CancelReversalModel.create({
+      orderId,
+      altOrderIds: [...new Set(altOrderIds.map((a) => String(a).trim()).filter(Boolean))].slice(0, 20),
+      skuSuffix: suffix,
+      sku,
+      qty: qty - remaining,
+      movementIds: reversedIds,
+    });
   }
 
   return { reversedQty: qty - remaining, remaining, movementIds: reversedIds };
