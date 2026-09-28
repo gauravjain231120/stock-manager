@@ -13,6 +13,12 @@
  *                  QUARANTINE -> DAMAGED.
  *  RESERVED     (reserved counter only) held for an unshipped order
  *  RELEASED     (reserved counter only) reservation cancelled
+ *  CANCELLED    0  a packed parcel cancelled before it left — marked by the
+ *                  Order Alerts bot's Myntra Cancel scan (cancelPackedLine).
+ *                  A Shipped entry becomes this (its −qty goes to 0, so its
+ *                  units are back in stock); an order still in Ready to Ship
+ *                  gets one too (its reservation is released). Shown on the
+ *                  Shipped page as Cancelled; `cancelledQty` = the units.
  */
 export const MovementType = {
   PRODUCED: 'PRODUCED',
@@ -22,6 +28,7 @@ export const MovementType = {
   TRANSFERRED: 'TRANSFERRED',
   RESERVED: 'RESERVED',
   RELEASED: 'RELEASED',
+  CANCELLED: 'CANCELLED',
 } as const;
 
 export type MovementType = (typeof MovementType)[keyof typeof MovementType];

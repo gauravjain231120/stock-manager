@@ -119,7 +119,7 @@ export function MovementTable({
       if (toDate && day > toDate) return false;
     }
     if (!q.trim()) return true;
-    const hay = `${r.sku} ${r.name} ${r.category} ${r.color} ${r.size} ${r.trackingId ?? ''} ${r.orderId ?? ''} ${platformLabel(r.channel)}`;
+    const hay = `${r.sku} ${r.name} ${r.category} ${r.color} ${r.size} ${r.trackingId ?? ''} ${r.orderId ?? ''} ${platformLabel(r.channel)}${r.cancelled ? ' cancelled' : ''}`;
     return matchesSearch(hay, q, r.sku);
   }
 
@@ -129,6 +129,8 @@ export function MovementTable({
     const headers = ['Date', 'Time', 'SKU', 'Product', 'Colour', 'Size', 'Qty', 'Platform', 'Tracking / AWB', 'Order no.'];
     if (withCondition) headers.push('Condition', 'Back in stock');
     if (withCondition && ownerView) headers.push('Return type');
+    // Shipped: a parcel cancelled before it left is listed too, marked here.
+    if (!withCondition) headers.push('Status');
 
     return toCsv(
       headers,
@@ -156,14 +158,18 @@ export function MovementTable({
           );
           if (ownerView) row.push(returnTypeLabel(r.returnType));
         }
+        if (!withCondition) row.push(r.cancelled ? 'Cancelled' : 'Shipped');
         return row;
       }),
     );
   }
 
   // Everything the filters left in view — the number you came for when you
-  // picked a category and a date range.
-  const units = filtered.reduce((a, r) => a + r.qty, 0);
+  // picked a category and a date range. A cancelled parcel never went out, so
+  // it isn't counted (just noted next to the total).
+  const counted = filtered.filter((r) => !r.cancelled);
+  const units = counted.reduce((a, r) => a + r.qty, 0);
+  const cancelledInView = filtered.length - counted.length;
 
   // The same slice of the returns ledger: returns *logged* in this window, not
   // necessarily returns of these exact shipments — near enough to read as a rate.
@@ -180,8 +186,10 @@ export function MovementTable({
   // Recomputed from `selected` × the current page every render, so a row that
   // disappears after being moved (or a page/filter change) drops out on its
   // own instead of leaving a stale, un-clickable count behind.
-  const selectedRows = pageRows.filter((r) => selected.has(r.id));
-  const allOnPageChecked = pageRows.length > 0 && pageRows.every((r) => selected.has(r.id));
+  // A cancelled parcel has nothing to move back (it never left).
+  const movable = pageRows.filter((r) => !r.cancelled);
+  const selectedRows = movable.filter((r) => selected.has(r.id));
+  const allOnPageChecked = movable.length > 0 && movable.every((r) => selected.has(r.id));
 
   function toggleRow(id: string) {
     setSelected((s) => {
@@ -195,8 +203,8 @@ export function MovementTable({
   function toggleAllOnPage() {
     setSelected((s) => {
       const next = new Set(s);
-      if (allOnPageChecked) pageRows.forEach((r) => next.delete(r.id));
-      else pageRows.forEach((r) => next.add(r.id));
+      if (allOnPageChecked) movable.forEach((r) => next.delete(r.id));
+      else movable.forEach((r) => next.add(r.id));
       return next;
     });
   }
@@ -295,7 +303,8 @@ export function MovementTable({
           <div className="flex flex-wrap items-baseline gap-2">
             <span className="text-2xl font-semibold tabular-nums">{num(units)}</span>
             <span className="text-sm text-neutral-500">
-              unit{units === 1 ? '' : 's'} {verb} in {num(filtered.length)} entr{filtered.length === 1 ? 'y' : 'ies'}
+              unit{units === 1 ? '' : 's'} {verb} in {num(counted.length)} entr{counted.length === 1 ? 'y' : 'ies'}
+              {cancelledInView ? <span className="text-red-500"> · {num(cancelledInView)} cancelled (not counted)</span> : null}
             </span>
           </div>
           {returnRows ? (
@@ -326,7 +335,7 @@ export function MovementTable({
                   type="checkbox"
                   checked={allOnPageChecked}
                   onChange={toggleAllOnPage}
-                  disabled={pageRows.length === 0}
+                  disabled={movable.length === 0}
                   aria-label="Select all shipments on this page"
                   className="size-4 accent-brand-600 disabled:cursor-not-allowed disabled:opacity-40"
                 />
@@ -344,13 +353,15 @@ export function MovementTable({
           <Tr key={r.id}>
             {allowMoveToQueue ? (
               <Td>
-                <input
-                  type="checkbox"
-                  checked={selected.has(r.id)}
-                  onChange={() => toggleRow(r.id)}
-                  aria-label={`Select ${r.name}`}
-                  className="size-4 accent-brand-600"
-                />
+                {r.cancelled ? null : (
+                  <input
+                    type="checkbox"
+                    checked={selected.has(r.id)}
+                    onChange={() => toggleRow(r.id)}
+                    aria-label={`Select ${r.name}`}
+                    className="size-4 accent-brand-600"
+                  />
+                )}
               </Td>
             ) : null}
             <Td>{dateOnly(r.at)}</Td>
@@ -362,6 +373,18 @@ export function MovementTable({
               </div>
               <div className="font-mono text-[11px] text-neutral-500">{r.sku}</div>
               {r.orderId ? <div className="text-[11px] text-neutral-400">Order {r.orderId}</div> : null}
+              {r.cancelled ? (
+                <div className="mt-0.5">
+                  <span className="inline-block rounded bg-red-100 px-1.5 py-px text-[10px] font-bold uppercase tracking-wide text-red-700 dark:bg-red-500/15 dark:text-red-300">
+                    ✕ Cancelled
+                  </span>
+                  <span className="ml-1.5 text-[11px] text-red-500">
+                    {r.cancelled.from === 'QUEUE' ? 'before it was shipped — taken out of Ready to Ship' : `${r.qty} back in stock`}
+                    {r.cancelled.at ? ` · ${dateOnly(r.cancelled.at)}` : ''}
+                  </span>
+                  {r.cancelled.note ? <div className="text-[11px] text-neutral-400">{r.cancelled.note}</div> : null}
+                </div>
+              ) : null}
               {withCondition && ownerView ? (
                 <span
                   className={`mt-0.5 inline-block rounded px-1.5 py-px text-[10px] font-semibold ${RETURN_TYPE_TAG[(r.returnType ?? 'UNKNOWN') as ReturnType] ?? RETURN_TYPE_TAG.UNKNOWN}`}
@@ -385,10 +408,10 @@ export function MovementTable({
             </Td>
             <Td>{r.orderId ? <span className="font-mono text-xs">{r.orderId}</span> : <span className="text-xs text-neutral-400">—</span>}</Td>
             <Td>{platformLabel(r.channel)}</Td>
-            <Td right>{r.qty}</Td>
+            <Td right>{r.cancelled ? <span className="text-neutral-400 line-through">{r.qty}</span> : r.qty}</Td>
             {allowMoveToQueue ? (
               <Td right>
-                <ActionButton
+                {r.cancelled ? <span className="text-xs text-neutral-400">—</span> : <ActionButton
                   label="Move to queue"
                   endpoint={`/api/register/${r.id}/move-to-queue`}
                   method="POST"
@@ -396,12 +419,18 @@ export function MovementTable({
                   confirm={`${r.name}${r.orderId ? ` (Order ${r.orderId})` : ''} will come off Shipped, its stock will be un-deducted, and it'll reappear in the Ready-to-Ship queue, due today.`}
                   confirmLabel="Move to queue"
                   successMessage="Moved to Ready to Ship ✓"
-                />
+                />}
               </Td>
             ) : null}
-            <Td right><EditMovementButton row={r} title={dateLabel === 'Returned' ? 'return' : 'shipment'} products={products} ownerView={ownerView} /></Td>
             <Td right>
-              <ActionButton
+              {r.cancelled ? (
+                <span className="text-xs text-neutral-400" title="Undo it on the Order Alerts bot's Myntra Cancel page">—</span>
+              ) : (
+                <EditMovementButton row={r} title={dateLabel === 'Returned' ? 'return' : 'shipment'} products={products} ownerView={ownerView} />
+              )}
+            </Td>
+            <Td right>
+              {r.cancelled ? <span className="text-xs text-neutral-400">—</span> : <ActionButton
                 label="Delete"
                 endpoint={`/api/register/${r.id}`}
                 method="DELETE"
@@ -417,7 +446,7 @@ export function MovementTable({
                 confirmLabel="Delete"
                 successMessage="Deleted ✓"
                 undoEndpoint="/api/register/restore"
-              />
+              />}
             </Td>
           </Tr>
         ))}

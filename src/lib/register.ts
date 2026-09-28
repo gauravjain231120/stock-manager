@@ -505,6 +505,31 @@ export async function unshipCancelledLine({
   const movementIds: string[] = already.flatMap((r) => r.movementIds ?? []);
   let remaining = qty - alreadyQty;
 
+  // Units of this order cancelled here by hand first (cancelPackedLine — the
+  // parcel never left) are already back: they count toward this request
+  // instead of another shipment being reversed. Each is claimed by this
+  // request, so it's counted once (a repeat finds it again by `claimedBy`)
+  // and can no longer be undone.
+  const claimKey = requestId || `unship:${new mongoose.Types.ObjectId()}`;
+  if (requestId) {
+    const claimed = await CancelReversalModel.find({ claimedBy: requestId, skuSuffix: suffix }, { qty: 1, movementIds: 1 }).lean();
+    remaining -= claimed.reduce((sum, r) => sum + r.qty, 0);
+    movementIds.push(...claimed.flatMap((r) => r.movementIds ?? []));
+  }
+  const claimManual = async () => {
+    while (remaining > 0) {
+      const manual = await CancelReversalModel.findOneAndUpdate(
+        { source: 'MANUAL', claimedBy: null, skuSuffix: suffix, qty: { $lte: remaining }, $or: [{ orderId }, { altOrderIds: orderId }] },
+        { $set: { claimedBy: claimKey }, ...(alts.length ? { $addToSet: { altOrderIds: { $each: alts } } } : {}) },
+        { sort: { createdAt: 1 }, returnDocument: 'after' },
+      ).lean();
+      if (!manual) return;
+      remaining -= manual.qty;
+      movementIds.push(...(manual.movementIds ?? []));
+    }
+  };
+  await claimManual();
+
   const candidates =
     remaining > 0
       ? await StockMovementModel.find({
@@ -554,11 +579,303 @@ export async function unshipCancelledLine({
     remaining -= mvQty;
   }
 
+  // Cancelled by hand while the shipments above were being looked at.
+  if (!error) await claimManual();
+
   // Everything this request put back (earlier tries included) — more than
   // `qty` when a repeat asks for less than it already did; the caller must
   // count all of it.
   const reversedQty = qty - remaining;
   return { reversedQty, remaining: Math.max(0, remaining), movementIds, ...(error ? { error } : {}) };
+}
+
+/**
+ * A packed parcel cancelled by hand before it left — the Order Alerts bot's
+ * Myntra Cancel scan (the courier refused it at pickup, or the order was
+ * cancelled after packing and the marketplace hasn't said so yet). Up to
+ * `qty` units of `sku` on `orderId`, matched by everything after the first
+ * "-" like unshipCancelledLine:
+ *   1. marked Shipped → that entry stays on the Shipped page, turned into a
+ *      CANCELLED one (its −qty goes to 0, so the ledger still adds up), and
+ *      its units go back on the shelf;
+ *   2. still in Ready to Ship → taken out of the queue (its reservation
+ *      released), with a CANCELLED entry (qty 0) so it shows on Shipped as
+ *      Cancelled too.
+ * Each step is remembered as a MANUAL CancelReversal in the same transaction:
+ * a later marketplace cancellation of the order counts it instead of
+ * reversing another shipment, a return scan of the order won't add it twice,
+ * and a repeat of the same `requestId` only does what earlier tries didn't.
+ * A merged Shipped entry holding more units than asked for is left alone
+ * (`remaining` says so), like unshipCancelledLine.
+ */
+export async function cancelPackedLine({
+  orderId,
+  sku,
+  qty,
+  trackingId,
+  requestId,
+  note,
+}: {
+  orderId: string;
+  sku: string;
+  qty: number;
+  trackingId?: string;
+  requestId: string;
+  /** Who / why, shown with the Cancelled entry. */
+  note?: string;
+}) {
+  await connectDB();
+  const id = orderId.trim();
+  const suffix = suffixOf(sku);
+  const skuRe = new RegExp(`-${suffix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
+  let tracking: string | undefined;
+  try {
+    tracking = cleanTracking(trackingId);
+  } catch {
+    tracking = undefined; // not a usable tracking number — the entry just keeps what it had
+  }
+  const cancelNote = note?.trim().slice(0, 200) || 'Cancelled before it left';
+  const MAIN = SystemLocation.MAIN;
+
+  // What earlier tries of this very request did.
+  const mine = await CancelReversalModel.find({ requestId, source: 'MANUAL' }, { qty: 1, cancelledFrom: 1, movementIds: 1 }).lean();
+  let fromShipped = mine.filter((r) => r.cancelledFrom === 'SHIPPED').reduce((sum, r) => sum + r.qty, 0);
+  let fromQueue = mine.filter((r) => r.cancelledFrom === 'QUEUE').reduce((sum, r) => sum + r.qty, 0);
+  const movementIds: string[] = mine.flatMap((r) => r.movementIds ?? []);
+  let remaining = qty - fromShipped - fromQueue;
+
+  // 1. Shipped entries, oldest first.
+  if (remaining > 0) {
+    const shipped = await StockMovementModel.find({ orderId: id, type: MovementType.SOLD, sku: skuRe }).sort({ createdAt: 1 }).lean();
+    for (const mv of shipped) {
+      if (remaining <= 0) break;
+      const n = Math.abs(mv.qty);
+      if (!n || n > remaining) continue;
+      const pool = await stockSkuFor(mv.sku);
+      let done = false;
+      const session = await mongoose.startSession();
+      try {
+        await session.withTransaction(async () => {
+          done = false;
+          // Only while it is still that Shipped entry — deleted, moved back or
+          // cancelled at the same moment, its stock must not come back twice.
+          const upd = await StockMovementModel.updateOne(
+            { _id: mv._id, type: MovementType.SOLD, qty: mv.qty },
+            {
+              $set: {
+                type: MovementType.CANCELLED,
+                qty: 0,
+                cancelledQty: n,
+                cancelledAt: new Date(),
+                cancelledFrom: 'SHIPPED',
+                cancelNote,
+                ...(tracking && !mv.trackingId ? { trackingId: tracking } : {}),
+              },
+            },
+            { session },
+          );
+          if (!upd.modifiedCount) return;
+          await SkuStockModel.updateOne(
+            { sku: pool, locationCode: mv.locationCode },
+            { $inc: { onHand: n }, $setOnInsert: { reserved: 0, buffer: 0 } },
+            { session, upsert: true },
+          );
+          await CancelReversalModel.create(
+            [{ orderId: id, altOrderIds: [], skuSuffix: suffix, sku: mv.sku, qty: n, movementIds: [String(mv._id)], requestId, source: 'MANUAL', cancelledFrom: 'SHIPPED' }],
+            { session },
+          );
+          done = true;
+        });
+      } finally {
+        await session.endSession();
+      }
+      if (!done) continue;
+      movementIds.push(String(mv._id));
+      fromShipped += n;
+      remaining -= n;
+    }
+  }
+
+  // 2. Still in Ready to Ship, oldest first.
+  if (remaining > 0) {
+    const queued = await PendingShipmentModel.find({ orderId: id, sku: skuRe }).sort({ createdAt: 1 }).lean();
+    for (const row of queued) {
+      if (remaining <= 0) break;
+      const take = Math.min(row.qty, remaining);
+      const pool = await stockSkuFor(row.sku);
+      let markerId = '';
+      const session = await mongoose.startSession();
+      try {
+        await session.withTransaction(async () => {
+          markerId = '';
+          // The row only if it still holds what was read (shipped or cancelled
+          // at the same moment, it's left to that).
+          const changed =
+            take >= row.qty
+              ? (await PendingShipmentModel.deleteOne({ _id: row._id, qty: row.qty }, { session })).deletedCount
+              : (await PendingShipmentModel.updateOne({ _id: row._id, qty: row.qty }, { $inc: { qty: -take } }, { session })).modifiedCount;
+          if (!changed) return;
+          await SkuStockModel.updateOne({ sku: pool, locationCode: MAIN }, { $inc: { reserved: -take } }, { session });
+          const at = new Date();
+          // Dated like a shipment (its ship-by day), so it sits on the Shipped
+          // page where it would have been. timestamps:false keeps that date.
+          const [marker] = await StockMovementModel.create(
+            [
+              {
+                sku: row.sku,
+                locationCode: MAIN,
+                qty: 0,
+                type: MovementType.CANCELLED,
+                channel: row.channel ?? undefined,
+                refType: 'CANCEL',
+                orderId: id,
+                trackingId: tracking ?? row.trackingId ?? undefined,
+                cancelledQty: take,
+                cancelledAt: at,
+                cancelledFrom: 'QUEUE',
+                cancelNote,
+                createdAt: row.shipByAt ?? at,
+              },
+            ],
+            { session, timestamps: false },
+          );
+          await CancelReversalModel.create(
+            [
+              {
+                orderId: id,
+                altOrderIds: [],
+                skuSuffix: suffix,
+                sku: row.sku,
+                qty: take,
+                movementIds: [String(marker._id)],
+                requestId,
+                source: 'MANUAL',
+                cancelledFrom: 'QUEUE',
+                queueRows: [
+                  {
+                    sku: row.sku,
+                    qty: take,
+                    channel: row.channel ?? undefined,
+                    orderId: row.orderId ?? undefined,
+                    trackingId: row.trackingId ?? undefined,
+                    buyer: row.buyer ?? undefined,
+                    placedAt: row.placedAt ?? undefined,
+                    shipByAt: row.shipByAt ?? undefined,
+                    ready: row.ready ?? false,
+                    createdAt: row.createdAt ?? undefined,
+                  },
+                ],
+              },
+            ],
+            { session },
+          );
+          markerId = String(marker._id);
+        });
+      } finally {
+        await session.endSession();
+      }
+      if (!markerId) continue;
+      movementIds.push(markerId);
+      fromQueue += take;
+      remaining -= take;
+    }
+  }
+
+  // Put back for this order + product some other way already — the
+  // marketplace's own cancellation, or another scan — so the caller can say
+  // why nothing was left to change.
+  const others = await CancelReversalModel.find(
+    { $or: [{ orderId: id }, { altOrderIds: id }], skuSuffix: suffix, requestId: { $ne: requestId } },
+    { qty: 1 },
+  ).lean();
+  const alreadyBack = others.reduce((sum, r) => sum + r.qty, 0);
+
+  return {
+    cancelled: fromShipped + fromQueue,
+    fromShipped,
+    fromQueue,
+    remaining: Math.max(0, remaining),
+    alreadyBack,
+    movementIds,
+  };
+}
+
+const CLAIMED_MESSAGE = 'The marketplace has since cancelled this order too, so it stays cancelled — nothing to undo.';
+
+/**
+ * Undo cancelPackedLine (the parcel was marked cancelled by mistake): each
+ * Shipped entry it turned Cancelled is Shipped again (its units taken off the
+ * shelf again), each queue row it took out goes back where it was in the
+ * queue (reserved again). Refused once the marketplace's own cancellation has
+ * counted it (`claimedBy`), or when the units put back have been used since.
+ */
+export async function undoPackedCancel(requestId: string) {
+  await connectDB();
+  const mine = await CancelReversalModel.find({ requestId, source: 'MANUAL' }).sort({ createdAt: 1 }).lean();
+  if (mine.some((r) => r.claimedBy)) throw new EntryRuleError(CLAIMED_MESSAGE);
+  const MAIN = SystemLocation.MAIN;
+  let undone = 0;
+  for (const r of mine) {
+    const session = await mongoose.startSession();
+    try {
+      await session.withTransaction(async () => {
+        // Checked again inside: a marketplace cancellation claiming it at the
+        // same moment wins.
+        const del = await CancelReversalModel.deleteOne({ _id: r._id, claimedBy: null }, { session });
+        if (!del.deletedCount) throw new EntryRuleError(CLAIMED_MESSAGE);
+        const mvId = r.movementIds?.[0];
+        const mv = mvId ? await StockMovementModel.findById(mvId, null, { session }).lean() : null;
+        if (r.cancelledFrom === 'SHIPPED') {
+          if (!mv || mv.type !== MovementType.CANCELLED) throw new EntryRuleError('Its Shipped entry was changed since — fix it by hand on the Shipped page.');
+          const n = mv.cancelledQty ?? r.qty;
+          const pool = await stockSkuFor(mv.sku);
+          const upd = await SkuStockModel.findOneAndUpdate(
+            { sku: pool, locationCode: mv.locationCode, $expr: { $gte: [{ $subtract: ['$onHand', n] }, 0] } },
+            { $inc: { onHand: -n } },
+            { session, returnDocument: 'after' },
+          );
+          if (!upd) throw new EntryRuleError(`Can't undo: the ${n} unit${n === 1 ? '' : 's'} put back ${n === 1 ? 'has' : 'have'} been used since (stock would go negative).`);
+          await StockMovementModel.updateOne(
+            { _id: mv._id, type: MovementType.CANCELLED },
+            { $set: { type: MovementType.SOLD, qty: -n }, $unset: { cancelledQty: '', cancelledAt: '', cancelledFrom: '', cancelNote: '' } },
+            { session },
+          );
+        } else {
+          for (const q of r.queueRows ?? []) {
+            const pool = await stockSkuFor(q.sku!);
+            await SkuStockModel.updateOne(
+              { sku: pool, locationCode: MAIN },
+              { $inc: { reserved: q.qty! }, $setOnInsert: { onHand: 0, buffer: 0 } },
+              { session, upsert: true },
+            );
+            await PendingShipmentModel.create(
+              [
+                {
+                  sku: q.sku!,
+                  qty: q.qty!,
+                  channel: q.channel ?? undefined,
+                  orderId: q.orderId ?? undefined,
+                  trackingId: q.trackingId ?? undefined,
+                  buyer: q.buyer ?? undefined,
+                  placedAt: q.placedAt ?? undefined,
+                  shipByAt: q.shipByAt ?? undefined,
+                  ready: q.ready ?? false,
+                  createdAt: q.createdAt ?? new Date(),
+                  updatedAt: new Date(),
+                },
+              ],
+              { session, timestamps: false },
+            );
+          }
+          if (mv && mv.type === MovementType.CANCELLED) await StockMovementModel.deleteOne({ _id: mv._id }, { session });
+        }
+      });
+    } finally {
+      await session.endSession();
+    }
+    undone += r.qty;
+  }
+  return { undone };
 }
 
 export interface EntrySnapshot {

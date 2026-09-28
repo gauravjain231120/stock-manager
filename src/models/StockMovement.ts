@@ -32,6 +32,13 @@ const StockMovementSchema = new Schema(
     // For RETURNED rows: CUSTOMER / RTO / UNKNOWN (see RETURN_TYPES). Rows from
     // before this field existed have no value — treat missing as UNKNOWN.
     returnType: { type: String, enum: [...RETURN_TYPES, null], default: null },
+    // For CANCELLED rows (see MovementType): the units the cancellation put
+    // back, when, where they were (SHIPPED = a Shipped entry turned into this
+    // one; QUEUE = still in Ready to Ship), and who/why.
+    cancelledQty: { type: Number },
+    cancelledAt: { type: Date },
+    cancelledFrom: { type: String, enum: ['SHIPPED', 'QUEUE'] },
+    cancelNote: { type: String, trim: true },
   },
   { timestamps: { createdAt: true, updatedAt: false } },
 );

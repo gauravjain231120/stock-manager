@@ -41,7 +41,8 @@ export function MovementDayPanel({
 }) {
   const [day, setDay] = useState(today);
 
-  const dayRows = day ? rows.filter((r) => dayKey(r.at) === day) : [];
+  // A parcel cancelled before it left (Shipped page) never went out — not counted.
+  const dayRows = day ? rows.filter((r) => !r.cancelled && dayKey(r.at) === day) : [];
   const units = dayRows.reduce((a, r) => a + r.qty, 0);
   // A row with no order number can't be grouped with anything else, so it
   // counts as its own order — same convention as the Ready-to-Ship queue.

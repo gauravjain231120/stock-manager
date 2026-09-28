@@ -287,7 +287,8 @@ export function queueRows(pending: PendingRow[]): QueueRow[] {
 }
 
 export interface OrderIdUse {
-  where: 'QUEUE' | 'SHIPPED';
+  /** CANCELLED: marked cancelled before it left (cancelPackedLine) — never to be queued again. */
+  where: 'QUEUE' | 'SHIPPED' | 'CANCELLED';
   /** Queue rows only: the row's id, so the order-alert app can cancel exactly these rows. */
   id?: string;
   sku: string;
@@ -309,7 +310,7 @@ export async function findOrderIdUses(orderId: string): Promise<OrderIdUse[]> {
 
   const [queued, shipped] = await Promise.all([
     PendingShipmentModel.find({ orderId: id }).lean(),
-    StockMovementModel.find({ orderId: id, type: MovementType.SOLD }).sort({ createdAt: -1 }).lean(),
+    StockMovementModel.find({ orderId: id, type: { $in: [MovementType.SOLD, MovementType.CANCELLED] } }).sort({ createdAt: -1 }).lean(),
   ]);
   const skus = [...new Set([...queued, ...shipped].map((r) => r.sku))];
   const products = await ProductModel.find({ sku: { $in: skus } }, { sku: 1, name: 1 }).lean();
@@ -326,10 +327,10 @@ export async function findOrderIdUses(orderId: string): Promise<OrderIdUse[]> {
       at: null,
     })),
     ...shipped.map((s) => ({
-      where: 'SHIPPED' as const,
+      where: s.type === MovementType.CANCELLED ? ('CANCELLED' as const) : ('SHIPPED' as const),
       sku: s.sku,
       name: nameBy.get(s.sku) ?? s.sku,
-      qty: Math.abs(s.qty),
+      qty: s.type === MovementType.CANCELLED ? s.cancelledQty ?? 0 : Math.abs(s.qty),
       channel: s.channel ?? null,
       at: (s.createdAt as unknown as Date).toISOString(),
     })),

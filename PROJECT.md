@@ -863,3 +863,48 @@ From the four-project review (bot PROJECT.md §44):
 `requestId` / `cancelled` answer; this version works with the old bot unchanged). `unship-cancelled`
 now also reports everything a repeated request already put back, even beyond what the repeat asks
 (`reversedQty` = all of it) — the bot counts it all.
+
+## 14. Packed parcels cancelled by hand — a Cancelled status on Shipped (2026-09-28)
+
+The Order Alerts bot has a new **Myntra Cancel** page. When a packed parcel won't go out (the
+courier refused it at pickup, or the order was cancelled after packing and Myntra hasn't said so
+yet), someone scans it there and the bot finds its order. This app then does
+`cancelPackedLine` (`src/lib/register.ts`, `POST /api/pending/cancel-packed { orderId, sku, qty,
+requestId, trackingId?, note? }`):
+
+1. **Marked shipped** → the SOLD entry stays on the Shipped page, turned into a new movement type
+   **CANCELLED**: `qty` 0 (so the ledger still adds up — `reconcileFromLedger` stays in sync),
+   `cancelledQty` = the units, `cancelledAt`, `cancelledFrom: 'SHIPPED'`, `cancelNote` (who/why).
+   The scanned tracking id goes on it if it had none. The units go back on the shelf (on the pile a
+   bundle shares, like every other stock change).
+2. **Still in Ready to Ship** → the queue row comes out (its reservation released) and a CANCELLED
+   entry with qty 0 (`cancelledFrom: 'QUEUE'`, dated its ship-by day) records it on Shipped.
+
+Each step is saved as a `CancelReversal` with `source: 'MANUAL'` in the same transaction. For a
+queued row it also keeps the row as it was, so Undo can put it back in its place. A repeat of the
+same `requestId` only does what earlier tries didn't. A merged multi-unit Shipped entry bigger than
+what's cancelled is left alone (`remaining` says so), and `alreadyBack` reports units of that order
+already put back another way.
+
+- **Myntra's own cancellation later** (`unshipCancelledLine`) first counts these MANUAL units and
+  claims them (`claimedBy` = its request id, its `altOrderIds` added). It checks again after the
+  shipments too. So it never reverses another shipment of the order, and a retry of it finds them
+  again. `assertNotAlreadyReturned` sees them like any put-back, so a return scan won't add them twice.
+- **Undo** (`undoPackedCancel`, `POST /api/pending/cancel-packed/undo { requestId }`, scanned by
+  mistake): Cancelled → Shipped again (units taken off the shelf again), or the queue row back where
+  it was (same place, Ready flag, tracking, reserved again). It's refused with 409 once Myntra's
+  cancellation has claimed it, or if the units have been used since (stock would go negative).
+- **Shipped page**: lists SOLD and CANCELLED entries. A cancelled one has a red "✕ Cancelled" tag
+  ("N back in stock", or "before it was shipped — taken out of Ready to Ship") and a struck-through
+  qty. It has no Move back / Edit / Delete, and it isn't counted in the totals bar, the day panel or
+  the stats (those are SOLD only, as are reports and replenishment). The CSV gets a Status column.
+- `GET /api/pending/check` lists them as `where: 'CANCELLED'`, so the bot never queues that order
+  again. The add form calls them "Cancelled".
+- Tested on a throwaway local replica set, 16 scenarios: shipped / queued / mixed / two units /
+  merged entry / bundle pile, repeat and parallel repeat, Myntra's cancellation later (claim, its
+  retry, no double) and first, undo (shipped, queue in place, refused when claimed or used),
+  Shipped rows and stats. The ledger stayed in sync after each. `verify` and `verify:e2e` pass;
+  `tsc` and the build are clean.
+
+**Deploy order for §14: this app first, then the bot** (the bot's Myntra Cancel page calls the new
+routes; nothing else changes for the old bot).

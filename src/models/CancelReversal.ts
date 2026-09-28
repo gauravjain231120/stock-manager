@@ -21,6 +21,36 @@ const CancelReversalSchema = new Schema(
     // The order-alert app's id for the request that made it (a retried
     // request is answered from these instead of reversing more).
     requestId: { type: String },
+    // MANUAL = marked cancelled by hand (the bot's Myntra Cancel scan,
+    // cancelPackedLine) before the marketplace said so; missing = the
+    // marketplace's own cancellation (unshipCancelledLine). A later
+    // marketplace cancellation of the same order counts a MANUAL one instead
+    // of reversing another shipment, and claims it (`claimedBy` = that
+    // request's id) so it's counted once — and can no longer be undone.
+    source: { type: String, enum: ['MANUAL'] },
+    claimedBy: { type: String },
+    // MANUAL only: where the units were (SHIPPED / QUEUE), and for QUEUE the
+    // Ready-to-Ship rows taken out, so Undo can put them back as they were.
+    cancelledFrom: { type: String, enum: ['SHIPPED', 'QUEUE'] },
+    queueRows: {
+      type: [
+        {
+          _id: false,
+          sku: String,
+          qty: Number,
+          channel: String,
+          orderId: String,
+          trackingId: String,
+          buyer: String,
+          placedAt: Date,
+          shipByAt: Date,
+          ready: Boolean,
+          // Its place in the queue (first come, first served) — kept on Undo.
+          createdAt: Date,
+        },
+      ],
+      default: undefined,
+    },
   },
   { timestamps: true },
 );
@@ -28,6 +58,7 @@ const CancelReversalSchema = new Schema(
 CancelReversalSchema.index({ orderId: 1, skuSuffix: 1 });
 CancelReversalSchema.index({ altOrderIds: 1, skuSuffix: 1 });
 CancelReversalSchema.index({ requestId: 1 }, { sparse: true });
+CancelReversalSchema.index({ claimedBy: 1 }, { sparse: true });
 
 export type CancelReversal = InferSchemaType<typeof CancelReversalSchema>;
 

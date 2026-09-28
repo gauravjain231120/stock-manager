@@ -10,7 +10,9 @@ export const dynamic = 'force-dynamic';
 
 export default async function ShippedPage() {
   const [rows, stats, allReturnRows] = await Promise.all([
-    listMovementRows(MovementType.SOLD),
+    // Cancelled parcels too (marked on the bot's Myntra Cancel page) — listed
+    // with a Cancelled tag, never counted as shipped (the stats are SOLD only).
+    listMovementRows([MovementType.SOLD, MovementType.CANCELLED]),
     movementStats(MovementType.SOLD),
     // So the table's totals can say how much of the same slice came back.
     listMovementRows(MovementType.RETURNED),

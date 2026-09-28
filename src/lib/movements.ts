@@ -22,6 +22,12 @@ export interface MovementRow {
   condition: string | null;
   /** Returns only: CUSTOMER / RTO / UNKNOWN (missing on old rows = UNKNOWN). */
   returnType: string | null;
+  /**
+   * Shipped page only: a parcel cancelled before it left (a CANCELLED entry —
+   * see MovementType). `qty` is then the units it put back; it's not counted
+   * as shipped. SHIPPED = it had been marked shipped, QUEUE = still queued.
+   */
+  cancelled: { at: string | null; from: 'SHIPPED' | 'QUEUE' | null; note: string | null } | null;
 }
 
 export interface MovementStats {
@@ -38,10 +44,10 @@ export interface MovementStats {
   today: string;
 }
 
-/** Movements of one type, newest first, with product name / colour / size resolved. */
-export async function listMovementRows(type: MovementType, limit = 2000): Promise<MovementRow[]> {
+/** Movements of one type (or several), newest first, with product name / colour / size resolved. */
+export async function listMovementRows(type: MovementType | MovementType[], limit = 2000): Promise<MovementRow[]> {
   await connectDB();
-  const movements = await StockMovementModel.find({ type }).sort({ createdAt: -1 }).limit(limit).lean();
+  const movements = await StockMovementModel.find({ type: Array.isArray(type) ? { $in: type } : type }).sort({ createdAt: -1 }).limit(limit).lean();
 
   const skus = [...new Set(movements.map((m) => m.sku))];
   const products = await ProductModel.find({ sku: { $in: skus } }, { sku: 1, name: 1, category: 1, attributes: 1 }).lean();
@@ -63,6 +69,7 @@ export async function listMovementRows(type: MovementType, limit = 2000): Promis
 
   return movements.map((m) => {
     const info = infoBy.get(m.sku);
+    const cancelled = m.type === MovementType.CANCELLED;
     return {
       id: String(m._id),
       at: (m.createdAt as unknown as Date).toISOString(),
@@ -70,13 +77,20 @@ export async function listMovementRows(type: MovementType, limit = 2000): Promis
       name: info?.name ?? m.sku,
       color: info?.color ?? '',
       size: info?.size ?? '',
-      qty: Math.abs(m.qty),
+      qty: cancelled ? m.cancelledQty ?? 0 : Math.abs(m.qty),
       category: info?.category ?? '',
       channel: m.channel ?? null,
       trackingId: m.trackingId ?? null,
       orderId: m.orderId ?? null,
       condition: m.condition ?? null,
       returnType: m.type === MovementType.RETURNED ? m.returnType ?? 'UNKNOWN' : null,
+      cancelled: cancelled
+        ? {
+            at: m.cancelledAt ? (m.cancelledAt as unknown as Date).toISOString() : null,
+            from: (m.cancelledFrom as 'SHIPPED' | 'QUEUE' | undefined) ?? null,
+            note: m.cancelNote ?? null,
+          }
+        : null,
     };
   });
 }

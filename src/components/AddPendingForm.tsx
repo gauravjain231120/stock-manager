@@ -12,7 +12,13 @@ import { dateOnly, dayKey } from '@/lib/format';
 import type { VariantMeta } from '@/lib/variants';
 
 interface P extends VariantMeta { sku: string; name: string; onHand: number; available: number }
-interface Use { where: 'QUEUE' | 'SHIPPED'; sku: string; name: string; qty: number; at: string | null }
+interface Use { where: 'QUEUE' | 'SHIPPED' | 'CANCELLED'; sku: string; name: string; qty: number; at: string | null }
+
+const USE_WORDS: Record<Use['where'], { inline: string; label: string }> = {
+  SHIPPED: { inline: 'shipped', label: 'Already shipped' },
+  QUEUE: { inline: 'in the queue', label: 'Already queued' },
+  CANCELLED: { inline: 'marked cancelled', label: 'Cancelled' },
+};
 
 const input = 'rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm text-neutral-900 dark:border-white/20 dark:text-white';
 
@@ -70,7 +76,7 @@ export function AddPendingForm({ products }: { products: P[] }) {
       title: dupes.length ? 'This order number is already used' : 'Add to Ready to Ship?',
       description: dupes.length
         ? sameProduct.length
-          ? `Order ${orderId.trim()} already has this exact product ${sameProduct[0].where === 'SHIPPED' ? 'shipped' : 'in the queue'}. Adding it again may ship a duplicate.`
+          ? `Order ${orderId.trim()} already has this exact product ${USE_WORDS[sameProduct[0].where].inline}. Adding it again may ship a duplicate.`
           : `Order ${orderId.trim()} is already used for another product. That's fine if the order has more than one item.`
         : 'Double-check the platform is correct before adding.',
       tone: sameProduct.length ? 'danger' : 'default',
@@ -82,7 +88,7 @@ export function AddPendingForm({ products }: { products: P[] }) {
         ...(orderId.trim() ? [{ label: 'Order no.', value: orderId.trim() }] : []),
         ...(shipByAt ? [{ label: 'Ship by', value: dateOnly(shipByAt) }] : []),
         ...dupes.map((d) => ({
-          label: d.where === 'SHIPPED' ? 'Already shipped' : 'Already queued',
+          label: USE_WORDS[d.where].label,
           value: `${d.qty} × ${d.name}${d.at ? ` on ${dateOnly(d.at)}` : ''}`,
         })),
       ],
