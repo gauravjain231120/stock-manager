@@ -24,8 +24,16 @@ const PUBLIC_PATHS = new Set(['/login', '/api/login', '/api/logout', '/api/backu
 // logged-in account.
 const SERVICE_TOKEN = process.env.AUTH_TOKEN ?? 'rangrooh-stock-authed-9c4458';
 const SERVICE_API_PREFIXES = ['/api/pending', '/api/register'];
+// Constant-time (a plain === reveals, char by char, how much of a guess was
+// right). Plain JS on purpose — no runtime-specific crypto import in here.
+function sameSecret(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
 function isServiceRequest(pathname: string, token: string | undefined): boolean {
-  return Boolean(token) && token === SERVICE_TOKEN && SERVICE_API_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+  return Boolean(token) && sameSecret(String(token), SERVICE_TOKEN) && SERVICE_API_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
 /**

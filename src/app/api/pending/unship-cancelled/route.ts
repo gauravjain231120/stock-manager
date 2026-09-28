@@ -3,7 +3,7 @@ import { unshipCancelledLine } from '@/lib/register';
 export const dynamic = 'force-dynamic';
 
 /**
- * POST /api/pending/unship-cancelled { orderId, sku, qty }
+ * POST /api/pending/unship-cancelled { orderId, sku, qty, altOrderIds?, requestId? }
  *
  * Called by the order-alert app when a marketplace reports an order
  * cancelled after it was already shipped (presumed RTO) — restores up to
@@ -21,15 +21,21 @@ export async function POST(req: Request) {
   // Optional: other numbers the order goes by (Myntra portalOrderReleaseIds) —
   // remembered so a return logged under one of them isn't counted twice.
   const altOrderIds = Array.isArray(body?.altOrderIds) ? body.altOrderIds.map((a: unknown) => String(a)).filter(Boolean) : [];
+  // Optional: makes a retry of the same request safe (see unshipCancelledLine).
+  const requestId = typeof body?.requestId === 'string' && body.requestId.trim() ? body.requestId.trim().slice(0, 200) : undefined;
 
   if (!orderId || !sku || !Number.isInteger(qty) || qty <= 0) {
     return Response.json({ error: 'orderId, sku, and a positive integer qty are required' }, { status: 400 });
   }
 
   try {
-    const result = await unshipCancelledLine({ orderId, sku, qty, altOrderIds });
+    const result = await unshipCancelledLine({ orderId, sku, qty, altOrderIds, requestId });
     return Response.json({ ok: result.remaining === 0, ...result });
   } catch (err) {
-    return Response.json({ error: err instanceof Error ? err.message : String(err) }, { status: 400 });
+    // A stock rule refusing it is reported in the answer above; anything that
+    // reaches here is a real failure (database down…) — 500, so the caller
+    // retries instead of treating the units as unfindable.
+    console.error('unship-cancelled failed:', err);
+    return Response.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
   }
 }

@@ -821,3 +821,45 @@ the reversal memory above could never match a Myntra RTO. `unship-cancelled` now
 `altOrderIds` (the bot sends the cancelled items' release ids), `CancelReversal.altOrderIds` stores
 them, and the return check matches either number. Amazon order ids were already the same (7 of 8
 returns matched a shipped order).
+
+## 13. Retry-safe cancel calls; constant-time service token (2026-09-28)
+
+From the four-project review (bot PROJECT.md §44):
+- **`unship-cancelled` is idempotent per request.** The bot now sends `requestId`
+  (`cancel:<order>:<variant>:<n>`). `unshipCancelledLine` counts what earlier calls with that id
+  already put back (their `CancelReversal` rows) and reverses only the rest — a call that timed out
+  on the bot's side after it went through here no longer reverses a second shipment when retried.
+  Calls without `requestId` behave as before.
+- **One `CancelReversal` per reversed movement, written in the same transaction as the reversal**
+  (`deleteEntry(id, { inTransaction })`) — was one row after the whole loop, so a failure part-way
+  left reversed stock unremembered (its RTO return scan would add it twice, and a retry couldn't
+  see it). New optional field `requestId` (sparse index); the lookup is scoped to the same order +
+  variant.
+- **Concurrent changes to one row can't double-count.** `deleteEntry` and `moveShippedToQueue` now
+  delete the entry first and abort unless it was really still there (two at once used to undo its
+  stock twice — a transaction retried after a write conflict re-applied the stock change).
+  `shipPending` changes the queue row only if it still holds the quantity it read, else the whole
+  shipment is rolled back (a cancel landing mid-ship used to release the reservation twice and log
+  a cancelled order as shipped).
+- **Refusals vs failures.** `deleteEntry`'s own rule refusals are now an `EntryRuleError` (same
+  messages). In `unshipCancelledLine` a movement already gone is skipped, any other rule refusal
+  ("stock would go negative") stops and is returned as `error` with `remaining` — the bot reports
+  that unit to the owner. Anything else (database down) is thrown, and the route answers **500**
+  (was 400 for everything) so the bot retries instead of calling the units unfindable.
+- **`cancelPending` (DELETE `/api/pending/[id]`) takes `requestId` too**: each cancel made with one
+  is recorded (`src/models/QueueCancel.ts`, unique id, 30-day TTL) in the same transaction as the
+  queue change; a repeat is answered from the record (`repeat: true`) — the bot re-sends a delete
+  whose answer got lost, and it's never applied twice. A row already gone answers `cancelled: 0`
+  explicitly (the bot counts only what `cancelled` says). The row and its reservation change in one
+  transaction, the row only if it still holds the quantity that was read; a row that changed
+  meanwhile is read again (up to 3 times) — gone then means `cancelled: 0`, not an error.
+- The service-token checks (`src/proxy.ts`, `canSetReturnType` in `src/lib/auth.ts`) compare in
+  constant time. `proxy.ts` uses plain JS for it (no runtime-specific import there).
+- Not changed, needs the owner: `AUTH_TOKEN` falls back to a value written in the code when the env
+  var is missing. Set `AUTH_TOKEN` in Vercel (same value the bot sends), then the fallback can go —
+  and since that value is in the git history, rotating it (both apps) is the safer end state.
+
+**Deploy order for §13: this app first, then the bot** (the new bot relies on the queue delete's
+`requestId` / `cancelled` answer; this version works with the old bot unchanged). `unship-cancelled`
+now also reports everything a repeated request already put back, even beyond what the repeat asks
+(`reversedQty` = all of it) — the bot counts it all.

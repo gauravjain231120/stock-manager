@@ -3,6 +3,7 @@ import { connectDB } from '@/lib/db';
 import { ProductModel } from '@/models/Product';
 import { ProductGroupModel } from '@/models/ProductGroup';
 import { SkuStockModel } from '@/models/SkuStock';
+import { QueueCancelModel } from '@/models/QueueCancel';
 import { PendingShipmentModel } from '@/models/PendingShipment';
 import { StockMovementModel } from '@/models/StockMovement';
 import { postMovement } from '@/lib/stock';
@@ -412,11 +413,17 @@ export async function shipPending(id: string, qty?: number, trackingId?: string,
       if (p.shipByAt) {
         await StockMovementModel.collection.updateOne({ _id: movementId }, { $set: { createdAt: p.shipByAt } }, { session });
       }
+      // The queue row only if it still holds what was read — cancelled (or
+      // shipped) at the same moment, this whole shipment is undone instead of
+      // releasing a reservation that's already gone.
+      const changed =
+        shipQty >= p.qty
+          ? (await PendingShipmentModel.deleteOne({ _id: p._id, qty: p.qty }, { session })).deletedCount
+          : // What's left needs its own label: drop the AWB that just went out, so the
+            // remainder doesn't sit in the queue looking like it already shipped.
+            (await PendingShipmentModel.updateOne({ _id: p._id, qty: p.qty }, { $inc: { qty: -shipQty }, $unset: { trackingId: '' } }, { session })).modifiedCount;
+      if (!changed) throw new Error('This order line changed at the same moment (cancelled or shipped) — refresh and try again.');
       await SkuStockModel.updateOne({ sku: pool, locationCode: MAIN }, { $inc: { reserved: -shipQty } }, { session });
-      if (shipQty >= p.qty) await PendingShipmentModel.deleteOne({ _id: p._id }, { session });
-      // What's left needs its own label: drop the AWB that just went out, so the
-      // remainder doesn't sit in the queue looking like it already shipped.
-      else await PendingShipmentModel.updateOne({ _id: p._id }, { $inc: { qty: -shipQty }, $unset: { trackingId: '' } }, { session });
     });
   } finally {
     await session.endSession();
@@ -506,20 +513,74 @@ export async function setPendingReady(id: string, ready: boolean) {
  * that many reservations, and remove the entry or just reduce its quantity.
  * No stock is deducted.
  */
-export async function cancelPending(id: string, qty?: number) {
+/**
+ * `requestId` (the order-alert bot sends one): a repeat of the same request is
+ * answered from its QueueCancel record — what it took the first time —
+ * instead of taking more.
+ */
+export async function cancelPending(id: string, qty?: number, requestId?: string) {
   await connectDB();
-  const p = await PendingShipmentModel.findById(id);
-  if (!p) return { ok: true };
-  const cancelQty = qty && qty > 0 ? Math.min(Math.floor(qty), p.qty) : p.qty;
-  await SkuStockModel.updateOne({ sku: await stockSkuFor(p.sku), locationCode: MAIN }, { $inc: { reserved: -cancelQty } });
-  if (cancelQty >= p.qty) await PendingShipmentModel.deleteOne({ _id: p._id });
-  else await PendingShipmentModel.updateOne({ _id: p._id }, { $inc: { qty: -cancelQty } });
-  return {
-    ok: true,
-    cancelled: cancelQty,
-    // Re-queueing these values puts the order back exactly as it was (Undo).
-    undo: { sku: p.sku, qty: cancelQty, channel: p.channel ?? undefined, orderId: p.orderId ?? undefined },
+  const earlier = requestId ? await QueueCancelModel.findOne({ requestId }).lean() : null;
+  if (earlier) return { ok: true, cancelled: earlier.cancelled, repeat: true };
+  const remember = async (session: mongoose.ClientSession, cancelled: number) => {
+    if (requestId) await QueueCancelModel.create([{ requestId, rowId: String(id), cancelled }], { session });
   };
+  // A row that changed between reading and writing (shipped or cancelled at the
+  // same moment) is read again; a row that's gone took nothing.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const p = await PendingShipmentModel.findById(id);
+    // Already gone (shipped or cancelled meanwhile): nothing taken — said
+    // explicitly, so a caller never counts it as removed.
+    if (!p) {
+      if (requestId) {
+        const session = await mongoose.startSession();
+        try {
+          await session.withTransaction(() => remember(session, 0));
+        } catch (err) {
+          // Recorded meanwhile by a parallel repeat: answer from it.
+          const again = await QueueCancelModel.findOne({ requestId }).lean();
+          if (again) return { ok: true, cancelled: again.cancelled, repeat: true };
+          throw err;
+        } finally {
+          await session.endSession();
+        }
+      }
+      return { ok: true, cancelled: 0 };
+    }
+    const cancelQty = qty && qty > 0 ? Math.min(Math.max(1, Math.floor(qty)), p.qty) : p.qty;
+    const pool = await stockSkuFor(p.sku);
+    // The queue row and its reservation together, and the row only if it still
+    // holds what was read — two changes racing on one row can't both take it.
+    let changed = false;
+    const session = await mongoose.startSession();
+    try {
+      await session.withTransaction(async () => {
+        changed = false;
+        const n =
+          cancelQty >= p.qty
+            ? (await PendingShipmentModel.deleteOne({ _id: p._id, qty: p.qty }, { session })).deletedCount
+            : (await PendingShipmentModel.updateOne({ _id: p._id, qty: p.qty }, { $inc: { qty: -cancelQty } }, { session })).modifiedCount;
+        if (!n) return;
+        await SkuStockModel.updateOne({ sku: pool, locationCode: MAIN }, { $inc: { reserved: -cancelQty } }, { session });
+        await remember(session, cancelQty);
+        changed = true;
+      });
+    } catch (err) {
+      const again = requestId ? await QueueCancelModel.findOne({ requestId }).lean() : null;
+      if (again) return { ok: true, cancelled: again.cancelled, repeat: true };
+      throw err;
+    } finally {
+      await session.endSession();
+    }
+    if (!changed) continue;
+    return {
+      ok: true,
+      cancelled: cancelQty,
+      // Re-queueing these values puts the order back exactly as it was (Undo).
+      undo: { sku: p.sku, qty: cancelQty, channel: p.channel ?? undefined, orderId: p.orderId ?? undefined },
+    };
+  }
+  throw new Error('This order line kept changing — refresh and try again.');
 }
 
 /**

@@ -18,12 +18,16 @@ const CancelReversalSchema = new Schema(
     sku: { type: String, required: true },
     qty: { type: Number, required: true, min: 1 },
     movementIds: { type: [String], default: [] },
+    // The order-alert app's id for the request that made it (a retried
+    // request is answered from these instead of reversing more).
+    requestId: { type: String },
   },
   { timestamps: true },
 );
 
 CancelReversalSchema.index({ orderId: 1, skuSuffix: 1 });
 CancelReversalSchema.index({ altOrderIds: 1, skuSuffix: 1 });
+CancelReversalSchema.index({ requestId: 1 }, { sparse: true });
 
 export type CancelReversal = InferSchemaType<typeof CancelReversalSchema>;
 

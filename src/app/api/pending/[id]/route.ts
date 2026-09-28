@@ -50,13 +50,17 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
   }
 }
 
-/** DELETE /api/pending/[id] -> cancel some/all of this item (release reservation, no deduction). */
+/**
+ * DELETE /api/pending/[id] -> cancel some/all of this item (release reservation, no deduction).
+ * Optional `requestId` makes a repeat of the same request safe (see cancelPending).
+ */
 export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
-  const body = await req.json().catch(() => ({} as { qty?: number }));
+  const body = await req.json().catch(() => ({} as { qty?: number; requestId?: string }));
   const qty = typeof body?.qty === 'number' ? body.qty : undefined;
+  const requestId = typeof body?.requestId === 'string' && body.requestId.trim() ? body.requestId.trim().slice(0, 200) : undefined;
   try {
-    const res = await cancelPending(id, qty);
+    const res = await cancelPending(id, qty, requestId);
     return Response.json(res);
   } catch (err) {
     return Response.json({ error: err instanceof Error ? err.message : String(err) }, { status: 400 });

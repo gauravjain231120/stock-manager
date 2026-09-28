@@ -1,4 +1,4 @@
-import { randomBytes } from 'crypto';
+import { randomBytes, createHash, timingSafeEqual } from 'crypto';
 import { cookies } from 'next/headers';
 import { connectDB } from '@/lib/db';
 import { SessionModel } from '@/models/Session';
@@ -74,6 +74,11 @@ export async function getCurrentSession(): Promise<SessionData | null> {
   };
 }
 
+// Constant-time secret check (a plain === reveals how much of a guess was right).
+function sameSecret(a: string, b: string): boolean {
+  return timingSafeEqual(createHash('sha256').update(a).digest(), createHash('sha256').update(b).digest());
+}
+
 /**
  * Customer-return-vs-RTO (`returnType`) is Owner-only information. It can be
  * SET by an Owner or by the Order Alerts bot's service token (same token and
@@ -85,7 +90,7 @@ export async function canSetReturnType(): Promise<boolean> {
   const store = await cookies();
   const token = store.get(SESSION_COOKIE)?.value;
   const serviceToken = process.env.AUTH_TOKEN ?? 'rangrooh-stock-authed-9c4458';
-  if (token && token === serviceToken) return true;
+  if (token && sameSecret(token, serviceToken)) return true;
   const session = await getCurrentSession();
   return session?.role === 'OWNER';
 }

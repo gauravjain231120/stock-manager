@@ -40,6 +40,14 @@ export class DuplicateReturnError extends Error {
   }
 }
 
+/** deleteEntry() refused on a stock rule (not a failure — retrying won't change it). */
+export class EntryRuleError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'EntryRuleError';
+  }
+}
+
 const suffixOf = (sku: string) => {
   const i = sku.indexOf('-');
   return (i === -1 ? sku : sku.slice(i + 1)).trim().toUpperCase();
@@ -326,17 +334,29 @@ export async function editEntry(
  * can't delete a Produce whose units have already been shipped. Only Stock Log
  * (REGISTER) entries can be deleted this way.
  */
-export async function deleteEntry(movementId: string) {
+/**
+ * `inTransaction` runs inside the same transaction, after the entry is gone —
+ * for a record that must exist exactly when the deletion does (unshipCancelledLine's
+ * CancelReversal).
+ */
+export async function deleteEntry(
+  movementId: string,
+  { inTransaction }: { inTransaction?: (session: mongoose.ClientSession) => Promise<unknown> } = {},
+) {
   await connectDB();
   const mv = await StockMovementModel.findById(movementId).lean();
-  if (!mv) throw new Error('Entry not found');
-  if (!EDITABLE_TYPES.includes(mv.type)) throw new Error('This entry cannot be deleted here');
+  if (!mv) throw new EntryRuleError('Entry not found');
+  if (!EDITABLE_TYPES.includes(mv.type)) throw new EntryRuleError('This entry cannot be deleted here');
 
   const reverse = -mv.qty; // undo the original stock delta
   const pool = await stockSkuFor(mv.sku);
   const session = await mongoose.startSession();
   try {
     await session.withTransaction(async () => {
+      // The entry first, and only if it is still there: two deletes of the same
+      // entry at once (or a retried transaction) must not undo its stock twice.
+      const del = await StockMovementModel.deleteOne({ _id: mv._id }, { session });
+      if (!del.deletedCount) throw new EntryRuleError('Entry not found');
       if (reverse !== 0) {
         const upd = await SkuStockModel.findOneAndUpdate(
           { sku: pool, locationCode: mv.locationCode, $expr: { $gte: [{ $add: ['$onHand', reverse] }, 0] } },
@@ -344,10 +364,14 @@ export async function deleteEntry(movementId: string) {
           { session, returnDocument: 'after' },
         );
         if (!upd) {
-          throw new Error('Cannot delete: those units have already been shipped (stock would go negative).');
+          throw new EntryRuleError(
+            reverse < 0
+              ? 'Cannot delete: those units have already been shipped (stock would go negative).'
+              : 'Cannot delete: there is no stock record for this product at that location.',
+          );
         }
       }
-      await StockMovementModel.deleteOne({ _id: mv._id }, { session });
+      if (inTransaction) await inTransaction(session);
     });
   } finally {
     await session.endSession();
@@ -390,6 +414,10 @@ export async function moveShippedToQueue(movementId: string) {
   const session = await mongoose.startSession();
   try {
     await session.withTransaction(async () => {
+      // The shipment first, and only if it is still there — moved (or deleted)
+      // twice at once, its stock must not come back twice.
+      const del = await StockMovementModel.deleteOne({ _id: mv._id }, { session });
+      if (!del.deletedCount) throw new Error('Entry not found');
       // Put the unit back on the shelf, then immediately reserve it again for
       // the queue — net physical stock is unchanged, only its claim moves.
       await SkuStockModel.updateOne(
@@ -397,7 +425,6 @@ export async function moveShippedToQueue(movementId: string) {
         { $inc: { onHand: qty, reserved: qty }, $setOnInsert: { buffer: 0 } },
         { session, upsert: true },
       );
-      await StockMovementModel.deleteOne({ _id: mv._id }, { session });
       await PendingShipmentModel.create(
         [{
           sku: mv.sku,
@@ -451,51 +478,87 @@ export async function unshipCancelledLine({
   sku,
   qty,
   altOrderIds = [],
+  requestId,
 }: {
   orderId: string;
   sku: string;
   qty: number;
   /** Other numbers this order goes by (Myntra: the items' portalOrderReleaseIds) — returns may be logged under those. */
   altOrderIds?: string[];
+  /**
+   * The caller's id for this request. A repeat (its first try timed out after
+   * it went through here) counts what that id already reversed instead of
+   * reversing more of the order's shipments.
+   */
+  requestId?: string;
 }) {
   await connectDB();
   const idx = sku.indexOf('-');
   const suffix = (idx === -1 ? sku : sku.slice(idx + 1)).trim().toUpperCase();
   const escaped = suffix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const alts = [...new Set(altOrderIds.map((a) => String(a).trim()).filter(Boolean))].slice(0, 20);
 
-  const candidates = await StockMovementModel.find({
-    orderId,
-    type: MovementType.SOLD,
-    sku: new RegExp(`-${escaped}$`, 'i'),
-  })
-    .sort({ createdAt: 1 })
-    .lean();
+  const already = requestId
+    ? await CancelReversalModel.find({ requestId, orderId, skuSuffix: suffix }, { qty: 1, movementIds: 1 }).lean()
+    : [];
+  const alreadyQty = already.reduce((sum, r) => sum + r.qty, 0);
+  const movementIds: string[] = already.flatMap((r) => r.movementIds ?? []);
+  let remaining = qty - alreadyQty;
 
-  let remaining = qty;
-  const reversedIds: string[] = [];
+  const candidates =
+    remaining > 0
+      ? await StockMovementModel.find({
+          orderId,
+          type: MovementType.SOLD,
+          sku: new RegExp(`-${escaped}$`, 'i'),
+        })
+          .sort({ createdAt: 1 })
+          .lean()
+      : [];
+
+  let error: string | undefined;
   for (const mv of candidates) {
     if (remaining <= 0) break;
     const mvQty = Math.abs(mv.qty);
+    if (!mvQty) continue;
     if (mvQty > remaining) break; // would overshoot this line's cancelled qty — stop rather than guess
-    await deleteEntry(String(mv._id));
-    reversedIds.push(String(mv._id));
+    try {
+      // Remembered in the same transaction as the reversal: if this was an RTO,
+      // the parcel is scanned back in later and that scan must not add the same
+      // stock again (assertNotAlreadyReturned) — and a retry of this request
+      // must see it, or it would reverse another shipment instead.
+      await deleteEntry(String(mv._id), {
+        inTransaction: (session) =>
+          CancelReversalModel.create(
+            [
+              {
+                orderId,
+                altOrderIds: alts,
+                skuSuffix: suffix,
+                sku,
+                qty: mvQty,
+                movementIds: [String(mv._id)],
+                ...(requestId ? { requestId } : {}),
+              },
+            ],
+            { session },
+          ),
+      });
+    } catch (err) {
+      if (!(err instanceof EntryRuleError)) throw err; // a real failure: the caller retries
+      if (err.message === 'Entry not found') continue; // gone meanwhile — not ours to count
+      error = err.message;
+      break;
+    }
+    movementIds.push(String(mv._id));
     remaining -= mvQty;
   }
 
-  // Remember it: if this was an RTO, the parcel is scanned back in later —
-  // that scan must not add the same stock again (assertNotAlreadyReturned).
-  if (reversedIds.length) {
-    await CancelReversalModel.create({
-      orderId,
-      altOrderIds: [...new Set(altOrderIds.map((a) => String(a).trim()).filter(Boolean))].slice(0, 20),
-      skuSuffix: suffix,
-      sku,
-      qty: qty - remaining,
-      movementIds: reversedIds,
-    });
-  }
-
-  return { reversedQty: qty - remaining, remaining, movementIds: reversedIds };
+  // Everything this request put back (earlier tries included) — more than
+  // `qty` when a repeat asks for less than it already did; the caller must
+  // count all of it.
+  const reversedQty = qty - remaining;
+  return { reversedQty, remaining: Math.max(0, remaining), movementIds, ...(error ? { error } : {}) };
 }
 
 export interface EntrySnapshot {
