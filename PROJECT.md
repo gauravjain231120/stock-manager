@@ -906,5 +906,10 @@ already put back another way.
   Shipped rows and stats. The ledger stayed in sync after each. `verify` and `verify:e2e` pass;
   `tsc` and the build are clean.
 
+- One record added by hand (2026-09-28): order 6033650199 / MYSC1348906990, whose Shipped entry
+  had already been deleted by hand (stock back), got a CANCELLED entry with qty 0, dated 27 Sept
+  (its ship-by day), with no stock change. Its MANUAL `CancelReversal` has no `cancelledFrom`, so
+  an Undo from the bot only removes the record.
+
 **Deploy order for §14: this app first, then the bot** (the bot's Myntra Cancel page calls the new
 routes; nothing else changes for the old bot).
