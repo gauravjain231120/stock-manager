@@ -56,7 +56,7 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
   const [mrp, setMrp] = useState(group.mrp != null ? String(group.mrp) : '');
   const [imageUrl, setImageUrl] = useState(group.imageUrl ?? '');
   const [uploading, setUploading] = useState(false);
-  const [draftVariants, setDraftVariants] = useState<Record<string, { color: string; size: string }>>({});
+  const [draftVariants, setDraftVariants] = useState<Record<string, { color: string; size: string; newSku: string }>>({});
 
   // add-variant fields
   const [vColor, setVColor] = useState('');
@@ -75,9 +75,9 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
     setImageUrl(group.imageUrl ?? '');
     setMsg(null);
     
-    const initialDrafts: Record<string, { color: string; size: string }> = {};
+    const initialDrafts: Record<string, { color: string; size: string; newSku: string }> = {};
     for (const v of group.variants) {
-      initialDrafts[v.sku] = { color: v.color ?? '', size: v.size ?? '' };
+      initialDrafts[v.sku] = { color: v.color ?? '', size: v.size ?? '', newSku: v.sku };
     }
     setDraftVariants(initialDrafts);
     setEditing(true);
@@ -137,11 +137,16 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
     // Bulk save variants first
     for (const v of group.variants) {
       const draft = draftVariants[v.sku];
-      if (draft && (draft.color !== (v.color ?? '') || draft.size !== (v.size ?? ''))) {
+      if (draft && (draft.color !== (v.color ?? '') || draft.size !== (v.size ?? '') || draft.newSku !== v.sku)) {
         await fetch(`/api/products/${group.code}/variant`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sku: v.sku, color: draft.color, size: draft.size })
+          body: JSON.stringify({ 
+            sku: v.sku, 
+            newSku: draft.newSku !== v.sku ? draft.newSku : undefined,
+            color: draft.color, 
+            size: draft.size 
+          })
         });
       }
     }
@@ -267,7 +272,7 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
           </div>
 
           {/* Right: Variants List */}
-          <div className="flex w-full flex-col bg-black/[0.01] p-0 sm:w-80 dark:bg-white/[0.01]">
+          <div className="flex w-full flex-col bg-black/[0.01] p-0 sm:w-[450px] dark:bg-white/[0.01]">
             <div className="flex items-center justify-between border-b border-black/5 px-4 py-3 dark:border-white/5">
               <span className={sectionLabel}>Variants & Stock</span>
               <span className="text-[11px] text-neutral-400">{variants.length} items</span>
@@ -332,20 +337,29 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
                 <div className="divide-y divide-black/5 max-h-64 overflow-y-auto custom-scrollbar dark:divide-white/5">
                   {variants.map((v) => (
                     <div key={v.sku} className="flex items-center gap-2 px-3 py-2">
-                      <div className="font-mono text-[10px] text-neutral-400 w-24 shrink-0 truncate" title={v.sku}>{v.sku}</div>
                       <input 
-                        className={`${input} px-2 py-1 flex-1`} 
+                        type="text"
+                        className={`${input} flex-1 font-mono text-[10px] p-1.5 h-8`} 
+                        placeholder="SKU"
+                        value={draftVariants[v.sku]?.newSku ?? ''} 
+                        onChange={e => setDraftVariants(prev => ({ ...prev, [v.sku]: { ...prev[v.sku], newSku: e.target.value } }))} 
+                        title="Edit SKU"
+                      />
+                      <input 
+                        type="text"
+                        className={`${input} w-28 shrink-0 p-1.5 h-8`} 
                         placeholder="Colour"
                         value={draftVariants[v.sku]?.color ?? ''} 
                         onChange={e => setDraftVariants(prev => ({ ...prev, [v.sku]: { ...prev[v.sku], color: e.target.value } }))} 
                       />
                       <input 
-                        className={`${input} px-2 py-1 w-20 shrink-0`} 
+                        type="text"
+                        className={`${input} w-16 shrink-0 p-1.5 h-8`} 
                         placeholder="Size"
                         value={draftVariants[v.sku]?.size ?? ''} 
                         onChange={e => setDraftVariants(prev => ({ ...prev, [v.sku]: { ...prev[v.sku], size: e.target.value } }))} 
                       />
-                      <button onClick={() => removeVariant(v.sku)} disabled={busy} className="ml-2 text-neutral-400 hover:text-red-500" title="Remove"><Trash2 size={14}/></button>
+                      <button type="button" onClick={() => removeVariant(v.sku)} disabled={busy} className="ml-2 text-neutral-400 hover:text-red-500" title="Remove"><Trash2 size={14}/></button>
                     </div>
                   ))}
                 </div>
