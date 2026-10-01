@@ -88,9 +88,20 @@ export function ShipQueue({
   const exactDates = (useSearchParams().get('dates') ?? '').split(',').filter(Boolean);
 
   const categories = [...new Set(rows.map((r) => r.category).filter(Boolean))].sort();
+  const categoryCounts = rows.reduce((acc, r) => {
+    if (r.category) acc[r.category] = (acc[r.category] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+  const noCategoryCount = rows.filter((r) => !r.category).length;
+
   // Only the colours actually present in the chosen category — picking "All
   // categories" first hides the colour picker entirely (see selectCategory).
-  const colorsInCategory = [...new Set(rows.filter((r) => fCategory === 'all' || r.category === fCategory).map((r) => r.color).filter(Boolean))].sort();
+  const rowsForColor = rows.filter((r) => fCategory === 'all' || r.category === fCategory);
+  const colorsInCategory = [...new Set(rowsForColor.map((r) => r.color).filter(Boolean))].sort();
+  const colorCounts = rowsForColor.reduce((acc, r) => {
+    if (r.color) acc[r.color] = (acc[r.color] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
   // A colour picked under one category rarely exists in another, so changing
   // category clears it rather than silently filtering to nothing.
   function selectCategory(next: string) {
@@ -202,8 +213,8 @@ export function ShipQueue({
             className={filterCls}
           >
             <option value="all">All categories</option>
-            {categories.map((c) => <option key={c} value={c}>{c}</option>)}
-            {rows.some((r) => !r.category) ? <option value="">No category</option> : null}
+            {categories.map((c) => <option key={c} value={c}>{c} ({categoryCounts[c]})</option>)}
+            {noCategoryCount > 0 ? <option value="">No category ({noCategoryCount})</option> : null}
           </select>
           {/* Always rendered (even with nothing to pick yet) so the row after it
               doesn't jump position the moment a category is chosen. */}
@@ -216,7 +227,7 @@ export function ShipQueue({
             className={filterCls}
           >
             <option value="all">All colours</option>
-            {colorsInCategory.map((c) => <option key={c} value={c}>{c}</option>)}
+            {colorsInCategory.map((c) => <option key={c} value={c}>{c} ({colorCounts[c]})</option>)}
           </select>
           <PlatformFilter />
           <select
