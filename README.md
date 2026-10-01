@@ -133,3 +133,8 @@ The nav is split into **Everyday** (Stock Log · Products · Inventory) and **Ad
 ### Products (add with photo + size/colour variants)
 
 The **Products** page lets you add a product visually: name, category, price, a **photo** (upload a file or paste a URL), and its **colours + sizes**. It auto-creates one tracked SKU per colour×size combination (e.g. `POLO-BLACK-M`) with opening stock, and shows a product grid with photos and per-variant stock. Image uploads use local disk in dev and **Vercel Blob** in production (set `BLOB_READ_WRITE_TOKEN`). Existing CSV-imported SKUs still work and appear in Inventory.
+
+## Recent Updates (Oct 2026)
+- **Products UI Redesign**: The `/products` page has been redesigned. Replaced vertical CSS masonry grids with full-width horizontal cards.
+- **Bulk Inline Editing**: Built a strict CSS-Grid based inline bulk variant editor inside `ProductCard.tsx` that lets you instantly edit SKU names, colors, sizes, and shared-stock mappings for all variants at once without side-scrolling overflow.
+- **Ship Queue UI**: Added exact item counts to the Category and Colour filtering dropdowns (e.g., `Coord set (12)`) in the Ready-to-Ship Queue.
