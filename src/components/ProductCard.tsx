@@ -283,7 +283,13 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
                   {variants.map((v) => (
                     <tr key={v.sku} className="border-b border-black/5 last:border-0 dark:border-white/5">
                       <td className="py-2 pl-4 pr-2">
-                        <div className="text-neutral-700 dark:text-neutral-300 font-medium">{[v.color, v.size].filter(Boolean).join(' / ') || 'Base'}</div>
+                        <EditableVariantAttrs
+                          code={group.code}
+                          sku={v.sku}
+                          color={v.color}
+                          size={v.size}
+                          sharesStockWith={v.sharesStockWith}
+                        />
                         <div className="font-mono text-[10px] text-neutral-400">{v.sku}</div>
                       </td>
                       <td className="py-2 pr-4 text-right align-middle">
@@ -337,7 +343,7 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
                 <div className="divide-y divide-black/5 max-h-64 overflow-y-auto custom-scrollbar dark:divide-white/5">
                   {variants.map((v) => (
                     <div key={v.sku} className="grid grid-cols-12 items-center gap-2 px-3 py-2">
-                      <div className="col-span-5 sm:col-span-6">
+                      <div className="col-span-5 sm:col-span-4">
                         <input 
                           type="text"
                           className={`${input} w-full font-mono text-[10px] p-1.5 h-8`} 
@@ -347,7 +353,7 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
                           title="Edit SKU"
                         />
                       </div>
-                      <div className="col-span-4 sm:col-span-3">
+                      <div className="col-span-4 sm:col-span-5">
                         <input 
                           type="text"
                           className={`${input} w-full p-1.5 h-8`} 
