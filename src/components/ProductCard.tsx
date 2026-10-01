@@ -346,10 +346,10 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
                 </div>
                 <div className="divide-y divide-black/5 max-h-64 overflow-y-auto custom-scrollbar dark:divide-white/5">
                   {variants.map((v) => (
-                    <div key={v.sku} className="flex items-center gap-2 px-3 py-2">
+                    <div key={v.sku} className="grid grid-cols-[minmax(0,3fr)_minmax(0,4fr)_minmax(0,1.5fr)_minmax(0,3fr)_auto] items-center gap-2 px-3 py-2">
                       <input 
                         type="text"
-                        className={`${input} w-[22%] shrink-0 font-mono text-[10px] p-1.5 h-8`} 
+                        className={`${input} w-full min-w-0 font-mono text-[10px] p-1.5 h-8`} 
                         placeholder="SKU"
                         value={draftVariants[v.sku]?.newSku ?? ''} 
                         onChange={e => setDraftVariants(prev => ({ ...prev, [v.sku]: { ...prev[v.sku], newSku: e.target.value } }))} 
@@ -357,21 +357,21 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
                       />
                       <input 
                         type="text"
-                        className={`${input} flex-1 p-1.5 h-8`} 
+                        className={`${input} w-full min-w-0 p-1.5 h-8`} 
                         placeholder="Colour"
                         value={draftVariants[v.sku]?.color ?? ''} 
                         onChange={e => setDraftVariants(prev => ({ ...prev, [v.sku]: { ...prev[v.sku], color: e.target.value } }))} 
                       />
                       <input 
                         type="text"
-                        className={`${input} w-14 shrink-0 p-1.5 h-8`} 
+                        className={`${input} w-full min-w-0 p-1.5 h-8`} 
                         placeholder="Size"
                         value={draftVariants[v.sku]?.size ?? ''} 
                         onChange={e => setDraftVariants(prev => ({ ...prev, [v.sku]: { ...prev[v.sku], size: e.target.value } }))} 
                       />
                       <input 
                         type="text"
-                        className={`${input} w-[22%] shrink-0 font-mono text-[10px] p-1.5 h-8`} 
+                        className={`${input} w-full min-w-0 font-mono text-[10px] p-1.5 h-8`} 
                         placeholder="Shared SKU"
                         value={draftVariants[v.sku]?.sharesStockWith ?? ''} 
                         onChange={e => setDraftVariants(prev => ({ ...prev, [v.sku]: { ...prev[v.sku], sharesStockWith: e.target.value } }))} 
