@@ -56,6 +56,7 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
   const [mrp, setMrp] = useState(group.mrp != null ? String(group.mrp) : '');
   const [imageUrl, setImageUrl] = useState(group.imageUrl ?? '');
   const [uploading, setUploading] = useState(false);
+  const [draftVariants, setDraftVariants] = useState<Record<string, { color: string; size: string }>>({});
 
   // add-variant fields
   const [vColor, setVColor] = useState('');
@@ -73,6 +74,12 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
     setMrp(group.mrp != null ? String(group.mrp) : '');
     setImageUrl(group.imageUrl ?? '');
     setMsg(null);
+    
+    const initialDrafts: Record<string, { color: string; size: string }> = {};
+    for (const v of group.variants) {
+      initialDrafts[v.sku] = { color: v.color ?? '', size: v.size ?? '' };
+    }
+    setDraftVariants(initialDrafts);
     setEditing(true);
   }
 
@@ -126,13 +133,29 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
       confirmLabel: 'Save',
     });
     if (!ok) return;
+
+    // Bulk save variants first
+    for (const v of group.variants) {
+      const draft = draftVariants[v.sku];
+      if (draft && (draft.color !== (v.color ?? '') || draft.size !== (v.size ?? ''))) {
+        await fetch(`/api/products/${group.code}/variant`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sku: v.sku, color: draft.color, size: draft.size })
+        });
+      }
+    }
+
     const done = await call(`/api/products/${group.code}`, 'PATCH', {
       name,
       category: category.trim(),
       mrp: mrp ? Number(mrp) : undefined,
       imageUrl: imageUrl || undefined,
     });
-    if (done) setEditing(false);
+    if (done) {
+      setEditing(false);
+      router.refresh();
+    }
   }
 
   function toggleExtraSize(size: string) {
@@ -200,185 +223,171 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
   }
 
   return (
-    <div className="flex flex-col overflow-hidden rounded-xl border border-black/10 bg-white shadow-sm dark:border-white/10 dark:bg-neutral-900">
-      <div className="aspect-square w-full bg-neutral-100 dark:bg-neutral-800">
-        {imageUrl || group.imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={editing ? imageUrl || group.imageUrl : group.imageUrl} alt={group.name} className="h-full w-full object-cover object-top" />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-xs text-neutral-400">No image</div>
-        )}
-      </div>
+    <div className="flex flex-col overflow-hidden rounded-xl border border-black/10 bg-white shadow-sm dark:border-white/10 dark:bg-neutral-900 sm:flex-row">
+      {!editing ? (
+        <>
+          {/* Left: Image */}
+          <div className="relative aspect-[4/5] w-full shrink-0 bg-neutral-100 dark:bg-neutral-800 sm:w-48 sm:border-r sm:border-black/10 dark:sm:border-white/10">
+            {group.imageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={group.imageUrl} alt={group.name} className="h-full w-full object-cover object-top" />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center text-xs text-neutral-400">No image</div>
+            )}
+            <div className="absolute top-2 right-2 rounded-md bg-black/60 px-2 py-1 text-[11px] font-medium backdrop-blur-sm" style={{ color: group.totalStock > 5 ? "#4ade80" : group.totalStock > 0 ? "#facc15" : "#f87171" }}>
+              {group.totalStock > 5 ? "In Stock" : group.totalStock > 0 ? "Low Stock" : "Out of Stock"}
+            </div>
+          </div>
 
-      <div className="flex flex-1 flex-col p-4">
-        {!editing ? (
-          <>
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <div className="truncate font-medium">{group.name}</div>
-                <div className="font-mono text-xs text-neutral-500">{group.code}</div>
+          {/* Middle: Details */}
+          <div className="flex flex-1 flex-col justify-between p-4 sm:border-r sm:border-black/10 dark:sm:border-white/10">
+            <div>
+              <div className="truncate text-base font-semibold">{group.name}</div>
+              <div className="font-mono text-[11px] text-neutral-500">{group.code}</div>
+              
+              <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-neutral-500">
+                {group.category ? <Badge>{group.category}</Badge> : null}
+                {group.mrp ? <span>₹{group.mrp} MRP</span> : null}
               </div>
-              <div className="shrink-0 text-right">
-                <div className={`text-lg font-semibold tabular-nums ${qtyColor(group.totalStock)}`}>{num(group.totalStock)}</div>
-                <div className="text-[11px] text-neutral-400">in stock</div>
+
+              <div className="mt-6">
+                <div className="text-[10px] uppercase tracking-wide text-neutral-500">Total Stock</div>
+                <div className={`text-2xl font-bold tabular-nums ${qtyColor(group.totalStock)}`}>{num(group.totalStock)}</div>
               </div>
             </div>
-            <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-neutral-500">
-              {group.category ? <Badge>{group.category}</Badge> : null}
-              <span>{group.variantCount} variants</span>
-              {group.mrp ? <span>· {inr(group.mrp)}</span> : null}
-            </div>
-            <table className="mt-3 w-full text-xs">
-              <tbody>
-                {variants.map((v) => (
-                  <tr key={v.sku} id={`variant-${v.sku}`} className="scroll-mt-20 border-t border-black/5 dark:border-white/5">
-                    <td className="py-1">
-                      <div className="text-neutral-600 dark:text-neutral-300">{[v.color, v.size].filter(Boolean).join(' / ') || v.sku}</div>
-                      <div className="mt-0.5 font-mono text-[11px] text-brand-700 dark:text-brand-500">{v.sku}</div>
-                    </td>
-                    <td className="py-1 text-right align-top"><EditableStock sku={v.sku} value={v.onHand} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div className="mt-auto flex items-center justify-end gap-2 pt-3">
-              <button
-                onClick={startEdit}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium transition hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
-              >
+
+            <div className="mt-4 flex items-center gap-2">
+              <button onClick={startEdit} className="inline-flex items-center gap-1.5 rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium transition hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">
                 <Pencil size={14} /> Edit
               </button>
-              <button
-                onClick={deleteProduct}
-                disabled={busy}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-red-700 disabled:opacity-50"
-              >
+              <button onClick={deleteProduct} disabled={busy} className="inline-flex items-center gap-1.5 rounded-lg bg-red-600/10 px-3 py-1.5 text-sm font-medium text-red-600 transition hover:bg-red-600/20 disabled:opacity-50 dark:bg-red-900/20 dark:text-red-400">
                 <Trash2 size={14} /> Delete
               </button>
             </div>
-          </>
-        ) : (
-          <div className="flex flex-col gap-5">
-            <div className="flex flex-col gap-3">
-              <label className="flex flex-col gap-1.5">
-                <span className={label}>Product name</span>
-                <input className={input} value={name} onChange={(e) => setName(e.target.value)} placeholder="Product name" />
+          </div>
+
+          {/* Right: Variants List */}
+          <div className="flex w-full flex-col bg-black/[0.01] p-0 sm:w-80 dark:bg-white/[0.01]">
+            <div className="flex items-center justify-between border-b border-black/5 px-4 py-3 dark:border-white/5">
+              <span className={sectionLabel}>Variants & Stock</span>
+              <span className="text-[11px] text-neutral-400">{variants.length} items</span>
+            </div>
+            <div className="custom-scrollbar max-h-56 overflow-y-auto sm:max-h-[300px]">
+              <table className="w-full text-xs">
+                <tbody>
+                  {variants.map((v) => (
+                    <tr key={v.sku} className="border-b border-black/5 last:border-0 dark:border-white/5">
+                      <td className="py-2 pl-4 pr-2">
+                        <div className="text-neutral-700 dark:text-neutral-300 font-medium">{[v.color, v.size].filter(Boolean).join(' / ') || 'Base'}</div>
+                        <div className="font-mono text-[10px] text-neutral-400">{v.sku}</div>
+                      </td>
+                      <td className="py-2 pr-4 text-right align-middle">
+                        <EditableStock sku={v.sku} value={v.onHand} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="flex w-full flex-col gap-5 p-4 sm:p-5">
+          <div className="flex flex-col gap-3 sm:flex-row">
+            {/* Left Image Uploader in Edit Mode */}
+            <div className="flex shrink-0 flex-col gap-2 rounded-xl border border-dashed border-black/15 p-3 sm:w-48 dark:border-white/15">
+              <span className={label}>Photo</span>
+              <div className="aspect-[4/5] w-full overflow-hidden rounded-lg bg-neutral-100 dark:bg-neutral-800">
+                {imageUrl ? <img src={imageUrl} alt="" className="h-full w-full object-cover object-top" /> : null}
+              </div>
+              <label className="mt-2 inline-flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-black/15 px-3 py-1.5 text-xs font-medium transition hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">
+                <Upload size={13} /> {uploading ? 'Uploading…' : 'Choose file'}
+                <input type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} className="hidden" disabled={uploading} />
               </label>
-              <div className="flex gap-3">
-                <label className="flex flex-1 flex-col gap-1.5">
+              <input className={`${input} text-[10px] mt-1`} value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} placeholder="…or URL" />
+            </div>
+
+            {/* Middle & Right Edit Forms */}
+            <div className="flex flex-1 flex-col gap-5">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <label className="flex flex-col gap-1.5 sm:col-span-2">
+                  <span className={label}>Product name</span>
+                  <input className={input} value={name} onChange={(e) => setName(e.target.value)} placeholder="Product name" />
+                </label>
+                <label className="flex flex-col gap-1.5">
                   <span className={label}>Category</span>
                   <input className={input} list={`cat-${group.code}`} value={category} onChange={(e) => setCategory(e.target.value)} placeholder="e.g. Halter Neck" />
-                  <datalist id={`cat-${group.code}`}>
-                    {categories.map((c) => <option key={c} value={c} />)}
-                  </datalist>
                 </label>
-                <label className="flex w-24 flex-col gap-1.5">
+                <label className="flex flex-col gap-1.5 sm:col-span-1">
                   <span className={label}>MRP ₹</span>
                   <input className={input} type="number" min={0} value={mrp} onChange={(e) => setMrp(e.target.value)} placeholder="999" />
                 </label>
               </div>
-            </div>
 
-            <div className="flex flex-col gap-2 rounded-xl border border-dashed border-black/15 p-3 dark:border-white/15">
-              <span className={label}>Photo</span>
-              <div className="flex items-center gap-3">
-                <div className="size-12 shrink-0 overflow-hidden rounded-lg bg-neutral-100 dark:bg-neutral-800">
-                  {imageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={imageUrl} alt="" className="h-full w-full object-cover object-top" />
-                  ) : null}
+              {/* Bulk Edit Variants Area */}
+              <div className="overflow-hidden rounded-xl border border-black/10 dark:border-white/10">
+                <div className="bg-black/[0.025] px-3 py-2 dark:bg-white/[0.04]">
+                  <span className={sectionLabel}>Edit Variants (Color & Size)</span>
                 </div>
-                <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-black/15 px-3 py-1.5 text-xs font-medium transition hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">
-                  <Upload size={13} />
-                  {uploading ? 'Uploading…' : 'Choose file'}
-                  <input type="file" accept="image/*" onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} className="hidden" disabled={uploading} />
-                </label>
-              </div>
-              <input className={`${input} text-xs`} value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} placeholder="…or paste an image URL" />
-            </div>
-
-            <div className="overflow-hidden rounded-xl border border-black/10 dark:border-white/10">
-              <div className="flex items-center justify-between bg-black/[0.025] px-3 py-2 dark:bg-white/[0.04]">
-                <span className={sectionLabel}>Variants</span>
-                <span className="text-[11px] text-neutral-400">{variants.length}</span>
-              </div>
-
-              <div className="divide-y divide-black/5 dark:divide-white/5">
-                {variants.map((v) => (
-                  <div key={v.sku} className="flex items-start gap-2 px-3 py-2 transition hover:bg-black/[0.015] dark:hover:bg-white/[0.02]">
-                    <div className="min-w-0 flex-1">
-                      <EditableVariantAttrs
-                        code={group.code}
-                        sku={v.sku}
-                        color={v.color}
-                        size={v.size}
-                        sharesStockWith={v.sharesStockWith}
+                <div className="divide-y divide-black/5 max-h-64 overflow-y-auto custom-scrollbar dark:divide-white/5">
+                  {variants.map((v) => (
+                    <div key={v.sku} className="flex items-center gap-2 px-3 py-2">
+                      <div className="font-mono text-[10px] text-neutral-400 w-24 shrink-0 truncate" title={v.sku}>{v.sku}</div>
+                      <input 
+                        className={`${input} px-2 py-1 flex-1`} 
+                        placeholder="Colour"
+                        value={draftVariants[v.sku]?.color ?? ''} 
+                        onChange={e => setDraftVariants(prev => ({ ...prev, [v.sku]: { ...prev[v.sku], color: e.target.value } }))} 
                       />
-                      <EditableSku code={group.code} sku={v.sku} />
+                      <input 
+                        className={`${input} px-2 py-1 w-20 shrink-0`} 
+                        placeholder="Size"
+                        value={draftVariants[v.sku]?.size ?? ''} 
+                        onChange={e => setDraftVariants(prev => ({ ...prev, [v.sku]: { ...prev[v.sku], size: e.target.value } }))} 
+                      />
+                      <button onClick={() => removeVariant(v.sku)} disabled={busy} className="ml-2 text-neutral-400 hover:text-red-500" title="Remove"><Trash2 size={14}/></button>
                     </div>
-                    <div className="shrink-0 pt-0.5"><EditableStock sku={v.sku} value={v.onHand} /></div>
-                    <button
-                      onClick={() => removeVariant(v.sku)}
-                      disabled={busy}
-                      className="inline-flex size-6 shrink-0 items-center justify-center rounded-md text-neutral-400 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-50 dark:hover:bg-red-900/20"
-                      title="Remove variant"
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-
-              <div className="border-t border-black/10 bg-black/[0.015] p-3 dark:border-white/10 dark:bg-white/[0.02]">
-                <div className={`mb-2 ${sectionLabel}`}>Add a variant</div>
-                <div className="grid grid-cols-2 gap-2">
-                  <input className={`${input} px-2 py-1.5 text-xs`} value={vColor} onChange={(e) => setVColor(e.target.value)} placeholder="Colour" />
-                  <input className={`${input} px-2 py-1.5 text-xs`} value={vSize} onChange={(e) => setVSize(e.target.value)} placeholder="Size" />
-                  <input
-                    className={`${input} px-2 py-1.5 font-mono text-xs`}
-                    value={vSku}
-                    onChange={(e) => setVSku(e.target.value)}
-                    placeholder="SKU (optional)"
-                    title="Leave blank to auto-generate from colour + size"
-                  />
-                  <input className={`${input} px-2 py-1.5 text-xs`} type="number" min={0} value={vQty} onChange={(e) => setVQty(e.target.value)} placeholder="Opening qty" />
+                  ))}
                 </div>
-
-                {vSku.trim() ? (
-                  <div className="mt-2.5 flex flex-col gap-1.5">
-                    <span className="text-[10px] text-neutral-400">Also add sizes (swaps the size in the SKU above):</span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {STANDARD_SIZES.filter((sz) => sz !== vSize.trim().toUpperCase()).map((sz) => {
-                        const on = vExtraSizes.has(sz);
-                        return (
-                          <button type="button" key={sz} onClick={() => toggleExtraSize(sz)} className={`${chip} ${on ? chipOn : chipOff}`}>
-                            {sz}
-                          </button>
-                        );
-                      })}
-                    </div>
+                
+                {/* Add new variant block */}
+                <div className="border-t border-black/10 bg-black/[0.015] p-3 dark:border-white/10 dark:bg-white/[0.02]">
+                  <div className={`mb-2 ${sectionLabel}`}>Add a variant</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input className={`${input} px-2 py-1.5 text-xs`} value={vColor} onChange={(e) => setVColor(e.target.value)} placeholder="Colour" />
+                    <input className={`${input} px-2 py-1.5 text-xs`} value={vSize} onChange={(e) => setVSize(e.target.value)} placeholder="Size" />
+                    <input className={`${input} px-2 py-1.5 font-mono text-xs`} value={vSku} onChange={(e) => setVSku(e.target.value)} placeholder="SKU (optional)" />
+                    <input className={`${input} px-2 py-1.5 text-xs`} type="number" min={0} value={vQty} onChange={(e) => setVQty(e.target.value)} placeholder="Opening qty" />
                   </div>
-                ) : null}
-
-                <button
-                  onClick={addVariant}
-                  disabled={busy || (!vColor && !vSize)}
-                  className="mt-3 w-full rounded-lg border border-black/15 py-1.5 text-xs font-medium transition hover:bg-black/5 disabled:opacity-50 dark:border-white/20 dark:hover:bg-white/10"
-                >
-                  + Add variant
-                </button>
+                  {vSku.trim() ? (
+                    <div className="mt-2.5 flex flex-col gap-1.5">
+                      <span className="text-[10px] text-neutral-400">Also add sizes (swaps the size in the SKU above):</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {STANDARD_SIZES.filter((sz) => sz !== vSize.trim().toUpperCase()).map((sz) => {
+                          const on = vExtraSizes.has(sz);
+                          return (
+                            <button type="button" key={sz} onClick={() => toggleExtraSize(sz)} className={`${chip} ${on ? chipOn : chipOff}`}>{sz}</button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
+                  <button onClick={addVariant} disabled={busy || (!vColor && !vSize)} className="mt-3 w-full rounded-lg border border-black/15 py-1.5 text-xs font-medium transition hover:bg-black/5 disabled:opacity-50 dark:border-white/20 dark:hover:bg-white/10">
+                    + Add variant
+                  </button>
+                </div>
               </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2">
-              {msg ? <span className="mr-auto text-xs text-neutral-500">{msg}</span> : null}
-              <button onClick={() => setEditing(false)} className="rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium transition hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">Cancel</button>
-              <button onClick={save} disabled={busy || uploading || !name} className="rounded-lg bg-brand-600 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-brand-700 disabled:opacity-50">{busy ? 'Saving…' : 'Save'}</button>
+              
+              <div className="mt-auto flex items-center justify-end gap-2 pt-2">
+                {msg ? <span className="mr-auto text-xs text-neutral-500">{msg}</span> : null}
+                <button onClick={() => setEditing(false)} className="rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium transition hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10">Cancel</button>
+                <button onClick={save} disabled={busy || uploading || !name} className="rounded-lg bg-brand-600 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-brand-700 disabled:opacity-50">{busy ? 'Saving…' : 'Save all changes'}</button>
+              </div>
             </div>
           </div>
-        )}
-        {!editing && msg ? <span className="mt-2 text-right text-xs text-neutral-500">{msg}</span> : null}
-      </div>
+        </div>
+      )}
+      {!editing && msg ? <span className="absolute bottom-2 right-2 text-xs text-neutral-500">{msg}</span> : null}
     </div>
   );
 }

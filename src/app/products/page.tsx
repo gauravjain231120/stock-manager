@@ -43,7 +43,7 @@ export default async function ProductsPage() {
       {groups.length === 0 ? (
         <p className="text-sm text-neutral-400">No products yet. Click <b>+ Add product</b> above to create one.</p>
       ) : (
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="flex flex-col gap-5">
           {groups.map((g) => (
             <ProductCard key={g.code} group={g} categories={categories} />
           ))}
