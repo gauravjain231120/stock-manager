@@ -63,7 +63,7 @@ function showCompanionInfo(r: QueueRow) {
 }
 
 const checkboxCls = 'size-4 accent-brand-600 disabled:cursor-not-allowed disabled:opacity-40';
-const filterCls = 'rounded-lg border border-black/15 bg-transparent px-3 py-1.5 text-sm text-neutral-900 dark:border-white/20 dark:text-white';
+const filterCls = 'rounded-lg border border-black/15 bg-transparent px-3 py-1.5 text-sm text-neutral-900 dark:border-white/20 dark:text-white max-w-full w-full sm:w-auto truncate';
 
 /** The Ready-to-Ship queue: filterable table with per-row Ship/Cancel, multi-select, and Ship all. */
 export function ShipQueue({
@@ -194,7 +194,7 @@ export function ShipQueue({
     <Panel
       title={`Queue (${platform || categoryLabel || fShipDate !== 'all' || exactDates.length > 0 ? `${visible.length} of ${totalCount}` : totalCount})`}
       actions={
-        <div className="flex flex-wrap items-center justify-end gap-2">
+        <div className="flex flex-wrap items-center justify-start sm:justify-end gap-2 w-full">
           <select
             value={fCategory}
             onChange={(e) => selectCategory(e.target.value)}

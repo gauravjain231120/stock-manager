@@ -107,8 +107,8 @@ export function Panel({ title, actions, children }: { title?: string; actions?: 
   return (
     <section className={cardBase}>
       {(title || actions) && (
-        <div className="flex items-center justify-between border-b border-black/10 px-5 py-3 dark:border-white/10">
-          {title ? <h2 className="shrink-0 whitespace-nowrap text-sm font-medium">{title}</h2> : <span />}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-black/10 px-5 py-3 dark:border-white/10">
+          {title ? <h2 className="shrink-0 text-sm font-medium">{title}</h2> : <span />}
           {actions}
         </div>
       )}
@@ -132,7 +132,7 @@ export function Table({ head, children, empty }: { head: ReactNode; children: Re
 }
 
 export function Th({ children, right }: { children?: ReactNode; right?: boolean }) {
-  return <th className={`px-5 py-2 font-medium ${right ? 'text-right' : ''}`}>{children}</th>;
+  return <th className={`px-5 py-2 font-medium whitespace-nowrap ${right ? 'text-right' : ''}`}>{children}</th>;
 }
 
 export function Td({ children, right, mono, colSpan, className = '' }: { children?: ReactNode; right?: boolean; mono?: boolean; colSpan?: number; className?: string }) {
