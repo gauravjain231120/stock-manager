@@ -19,6 +19,7 @@ import {
   LogOut,
   Menu,
   X,
+  Activity,
   type LucideIcon,
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -37,6 +38,7 @@ const ICONS: Record<string, LucideIcon> = {
   '/account': Wallet,
   '/cloth': Scissors,
   '/team': Users,
+  '/return-analytics': Activity,
 };
 
 export function Sidebar({
