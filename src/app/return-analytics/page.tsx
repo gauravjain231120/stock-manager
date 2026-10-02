@@ -2,7 +2,8 @@ import { connectDB } from '@/lib/db';
 import { StockMovementModel } from '@/models/StockMovement';
 import { ProductModel } from '@/models/Product';
 import { MovementType } from '@/lib/constants';
-import { PageHeader, Panel, Table, Th, Td, Tr } from '@/components/ui';
+import { PageHeader } from '@/components/ui';
+import { AnalyticsClient } from './AnalyticsClient';
 
 export const dynamic = 'force-dynamic';
 
@@ -95,10 +96,6 @@ export default async function ReturnAnalyticsPage() {
     };
   });
 
-  const toxicSkus = analytics.filter(a => a.isToxic).sort((a,b) => b.customerReturnRate - a.customerReturnRate);
-  const otherSkus = analytics.filter(a => !a.isToxic);
-  const finalList = [...toxicSkus, ...otherSkus];
-
   return (
     <main className="px-4 py-6 sm:px-6 sm:py-8">
       <PageHeader title="Product Health & Return Analytics" subtitle="Identify toxic SKUs draining profits through high customer returns." />
@@ -108,46 +105,7 @@ export default async function ReturnAnalyticsPage() {
         SKUs highlighted in <span className="font-semibold text-red-600 dark:text-red-400">red</span> have a customer return rate over 25% (with &gt;3 returns) and should be investigated or delisted immediately to stop margin bleed.
       </div>
 
-      <Panel title="SKU Return Leaderboard">
-        <div className="overflow-x-auto">
-          <Table 
-            head={
-              <>
-                <Th>SKU</Th>
-                <Th>Product</Th>
-                <Th>Category</Th>
-                <Th right>Sold</Th>
-                <Th right>Total Returned</Th>
-                <Th right>RTO (Courier)</Th>
-                <Th right>Customer Returns</Th>
-                <Th right>Customer Return %</Th>
-              </>
-            } 
-            empty={finalList.length === 0}
-          >
-            {finalList.map((row) => (
-              <Tr key={row.sku}>
-                <Td mono className={row.isToxic ? "text-red-600 font-bold dark:text-red-400" : ""}>{row.sku}</Td>
-                <Td className={row.isToxic ? "text-red-600 font-medium dark:text-red-400" : "font-medium"}>{row.name}</Td>
-                <Td className="text-neutral-500">{row.category}</Td>
-                <Td right>{row.sold}</Td>
-                <Td right>{row.returned}</Td>
-                <Td right className="text-neutral-500">{row.rto}</Td>
-                <Td right className={row.isToxic ? "text-red-600 font-bold dark:text-red-400" : ""}>{row.customerReturns}</Td>
-                <Td right>
-                  {row.customerReturnRate > 0 ? (
-                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${row.isToxic ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' : 'bg-neutral-100 text-neutral-800 dark:bg-neutral-800 dark:text-neutral-300'}`}>
-                      {row.customerReturnRate.toFixed(1)}%
-                    </span>
-                  ) : (
-                    <span className="text-neutral-400">0%</span>
-                  )}
-                </Td>
-              </Tr>
-            ))}
-          </Table>
-        </div>
-      </Panel>
+      <AnalyticsClient data={analytics} />
     </main>
   );
 }
