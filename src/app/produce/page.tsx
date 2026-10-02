@@ -14,7 +14,7 @@ export default async function ProducePage() {
 
       <Panel title={`To produce (${produce.length}) — ${outCount} out of stock`}>
         <Table
-          head={<><Th>Product / Size</Th><Th right>Shipped</Th><Th right>In stock</Th><Th right>Status</Th><Th right>Make ~</Th></>}
+          head={<><Th>Product / Size</Th><Th right>Shipped (All Time)</Th><Th right>Sold (30d)</Th><Th right>In stock</Th><Th right>Status</Th><Th right>Make ~</Th></>}
           empty={produce.length === 0}
         >
           {produce.map((p) => {
@@ -22,10 +22,11 @@ export default async function ProducePage() {
             return (
               <Tr key={p.sku}>
                 <Td>{p.name}</Td>
-                <Td right>{num(p.shipped)}</Td>
+                <Td right className="text-neutral-500">{num(p.shipped)}</Td>
+                <Td right className="font-medium text-brand-700 dark:text-brand-400">{num(p.sold30d || 0)}</Td>
                 <Td right>{p.inStock}</Td>
                 <Td right><Badge tone={out ? 'danger' : 'warn'}>{out ? 'Out of stock' : 'Low'}</Badge></Td>
-                <Td right><span className="font-semibold text-brand-600">{p.suggest}</span></Td>
+                <Td right><span className="font-bold text-brand-600">{p.suggest}</span></Td>
               </Tr>
             );
           })}
@@ -33,8 +34,8 @@ export default async function ProducePage() {
       </Panel>
 
       <p className="mt-3 px-1 text-xs text-neutral-400">
-        Only variants you&apos;ve actually sold that are now low (≤5) or out of stock, most-shipped first.
-        &ldquo;Make ~&rdquo; is a rough quantity to cover the demand already seen (shipped − current stock).
+        Only variants you&apos;ve actually sold that are now low (≤5) or out of stock, sorted by highest 30-day velocity.
+        &ldquo;Make ~&rdquo; is a realistic production target calculated to cover the next 30 days of sales based on recent demand.
       </p>
     </main>
   );

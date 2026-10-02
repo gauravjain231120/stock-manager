@@ -1026,25 +1026,72 @@ export interface ProduceRow {
   shipped: number;
   inStock: number;
   suggest: number;
+  sold30d?: number;
 }
 
 /**
  * Restock worklist: variants that actually sell (shipped > 0) but are now Low
- * (<= 5) or Out of stock, sorted by most-shipped first. `suggest` is a rough
- * make quantity to cover the demand already seen (shipped minus what's on hand).
+ * (<= 5) or Out of stock, sorted by most-shipped first. `suggest` uses a
+ * realistic 30-day velocity-based math model for replenishment targeting a 30-day buffer.
  */
 export async function getProduceList(): Promise<ProduceRow[]> {
-  const rows = await registerTotals();
+  await connectDB();
+  const [rows, recentSales] = await Promise.all([
+    registerTotals(),
+    StockMovementModel.aggregate([
+      {
+        $match: {
+          type: 'SOLD',
+          createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
+        }
+      },
+      {
+        $group: {
+          _id: '$sku',
+          sold30d: { $sum: { $multiply: ['$qty', -1] } } // qty is negative for SOLD
+        }
+      }
+    ])
+  ]);
+
+  const salesMap = new Map(recentSales.map(r => [r._id, r.sold30d]));
+
   return rows
     .filter((r) => r.shipped > 0 && r.inStock <= 5)
-    .sort((a, b) => b.shipped - a.shipped || a.inStock - b.inStock)
-    .map((r) => ({
-      sku: r.sku,
-      name: r.name,
-      shipped: r.shipped,
-      inStock: r.inStock,
-      suggest: Math.max(1, r.shipped - r.inStock),
-    }));
+    .map((r) => {
+      const sold30d = salesMap.get(r.sku) || 0;
+      
+      // Math Logic: Calculate daily velocity over the last 30 days.
+      const dailyVelocity = sold30d / 30;
+      
+      let suggest = 0;
+
+      if (sold30d > 0) {
+        // Target to have enough stock for the next 30 days based on recent velocity.
+        // E.g., if we sell 2/day, we want 60 stock.
+        // Enforce a minimum sensible batch size (20) for active products.
+        const targetStock = Math.max(20, Math.ceil(dailyVelocity * 30));
+        
+        // The suggested amount to make is the Target Stock minus what we already have.
+        // Minimum suggestion of 10 to make it worth the manufacturing effort.
+        suggest = Math.max(10, targetStock - r.inStock); 
+      } else {
+        // If it hasn't sold at all in the last 30 days, just suggest a minimal batch of 10
+        // (if they even want to restock a dead product).
+        suggest = Math.max(10 - r.inStock, 0);
+      }
+
+      return {
+        sku: r.sku,
+        name: r.name,
+        shipped: r.shipped,
+        inStock: r.inStock,
+        suggest,
+        sold30d
+      };
+    })
+    // Sort by most urgent / highest velocity first
+    .sort((a, b) => (b.sold30d || 0) - (a.sold30d || 0) || b.shipped - a.shipped || a.inStock - b.inStock);
 }
 
 export interface EntryProductInfo {
