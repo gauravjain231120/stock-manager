@@ -85,7 +85,7 @@ export default async function ReturnAnalyticsPage() {
     <main className="px-4 py-6 sm:px-6 sm:py-8">
       <PageHeader title="Product Health & Return Analytics" subtitle="Identify toxic SKUs draining profits through high customer returns." />
 
-      <div className="mb-6 rounded-lg border border-brand-200 bg-brand-50 p-4 text-sm text-brand-900 dark:border-brand-900/50 dark:bg-brand-900/10 dark:text-brand-100">
+      <div className="mb-6 rounded-lg border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-800 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-300">
         <strong>How to read this:</strong> A high <strong>Customer Return %</strong> means customers are buying the item, trying it on, and sending it back (usually a sizing or quality defect). A high RTO means couriers failed to deliver it. 
         SKUs highlighted in <span className="font-semibold text-red-600 dark:text-red-400">red</span> have a customer return rate over 25% (with &gt;3 returns) and should be investigated or delisted immediately to stop margin bleed.
       </div>
