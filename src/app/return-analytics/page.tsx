@@ -1,5 +1,6 @@
 import { connectDB } from '@/lib/db';
 import { StockMovementModel } from '@/models/StockMovement';
+import { ProductModel } from '@/models/Product';
 import { MovementType } from '@/lib/constants';
 import { PageHeader, Panel, Table, Th, Td, Tr } from '@/components/ui';
 
@@ -57,6 +58,18 @@ export default async function ReturnAnalyticsPage() {
     { $sort: { returned: -1, sold: -1 } }
   ]);
 
+  // Fetch product details for the aggregated SKUs
+  const skus = agg.map(a => a.sku);
+  const products = await ProductModel.find({ sku: { $in: skus } }).lean();
+  const productMap = new Map(products.map(p => [
+    p.sku, 
+    { 
+      name: p.name, 
+      category: p.category || '—', 
+      attrs: p.attributes ? Object.entries(p.attributes).map(([k,v]) => v).join(' / ') : '' 
+    }
+  ]));
+
   const analytics = agg.map(row => {
     const returnRate = (row.returned / row.sold) * 100;
     
@@ -64,9 +77,15 @@ export default async function ReturnAnalyticsPage() {
     // because RTOs never reached the customer to be evaluated.
     const effectiveSold = row.sold - row.rto;
     const customerReturnRate = effectiveSold > 0 ? (row.customerReturns / effectiveSold) * 100 : 0;
+    
+    const prod = productMap.get(row.sku);
+    let fullName = prod ? prod.name : 'Unknown';
+    if (prod && prod.attrs) fullName += ` (${prod.attrs})`;
 
     return {
       sku: row.sku,
+      name: fullName,
+      category: prod ? prod.category : '—',
       sold: row.sold,
       returned: row.returned,
       rto: row.rto,
@@ -96,6 +115,8 @@ export default async function ReturnAnalyticsPage() {
             head={
               <>
                 <Th>SKU</Th>
+                <Th>Product</Th>
+                <Th>Category</Th>
                 <Th right>Sold</Th>
                 <Th right>Total Returned</Th>
                 <Th right>RTO (Courier)</Th>
@@ -108,6 +129,8 @@ export default async function ReturnAnalyticsPage() {
             {finalList.map((row) => (
               <Tr key={row.sku}>
                 <Td mono className={row.isToxic ? "text-red-600 font-bold dark:text-red-400" : ""}>{row.sku}</Td>
+                <Td className={row.isToxic ? "text-red-600 font-medium dark:text-red-400" : "font-medium"}>{row.name}</Td>
+                <Td className="text-neutral-500">{row.category}</Td>
                 <Td right>{row.sold}</Td>
                 <Td right>{row.returned}</Td>
                 <Td right className="text-neutral-500">{row.rto}</Td>
