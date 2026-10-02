@@ -80,7 +80,6 @@ export default async function ReturnAnalyticsPage() {
     
     const prod = productMap.get(row.sku);
     let fullName = prod ? prod.name : 'Unknown';
-    if (prod && prod.attrs) fullName += ` (${prod.attrs})`;
 
     return {
       sku: row.sku,
