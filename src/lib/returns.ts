@@ -89,25 +89,48 @@ export async function gradeReturn(returnId: string, grade: 'SELLABLE' | 'DAMAGED
   const rec = await ReturnRecordModel.findById(returnId);
   if (!rec) throw new Error('Return not found');
   if (rec.status === 'GRADED') throw new Error('Return already graded');
-  if (!rec.sku) throw new Error('Return has no mapped SKU — map the listing first');
+
+  let sku = rec.sku;
+  let wasInQuarantine = !!sku;
+
+  if (!sku) {
+    const listing = await ChannelListingModel.findOne({ channel: rec.channel, channelSku: rec.channelSku }).lean();
+    if (!listing) throw new Error('Return has no mapped SKU — map the listing first');
+    sku = listing.sku;
+  }
 
   const dest = grade === 'SELLABLE' ? SystemLocation.MAIN : SystemLocation.DAMAGED;
-  await transferStock({
-    sku: rec.sku,
-    fromLocation: SystemLocation.QUARANTINE,
-    toLocation: dest,
-    qty: rec.qty,
-    refType: 'RETURN_GRADE',
-    refId: String(rec._id),
-    note: `Graded ${grade}`,
-  });
+  
+  if (wasInQuarantine) {
+    await transferStock({
+      sku,
+      fromLocation: SystemLocation.QUARANTINE,
+      toLocation: dest,
+      qty: rec.qty,
+      refType: 'RETURN_GRADE',
+      refId: String(rec._id),
+      note: `Graded ${grade}`,
+    });
+  } else {
+    // If it was never in QUARANTINE, add it directly as a RETURNED movement now
+    await applyMovement({
+      sku,
+      locationCode: dest,
+      qty: rec.qty,
+      type: MovementType.RETURNED,
+      refType: 'RETURN_GRADE',
+      refId: String(rec._id),
+      note: `Graded ${grade} (delayed mapping)`,
+    });
+  }
 
   rec.status = 'GRADED';
   rec.grade = grade;
+  rec.sku = sku; // Save the newly mapped SKU
   rec.gradedAt = new Date();
   await rec.save();
 
-  if (grade === 'SELLABLE') await syncSkus([rec.sku]);
+  if (grade === 'SELLABLE') await syncSkus([sku]);
   return rec.toObject();
 }
 

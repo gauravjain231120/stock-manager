@@ -213,20 +213,31 @@ export async function setStock(sku: string, newOnHand: number) {
   await connectDB();
   const s = norm(sku);
   const loc = SystemLocation.MAIN;
-  const cur = await SkuStockModel.findOne({ sku: await stockSkuFor(s), locationCode: loc }).lean();
-  const current = cur?.onHand ?? 0;
-  const diff = newOnHand - current;
-  if (diff !== 0) {
-    await applyMovement({
-      sku: s,
-      locationCode: loc,
-      qty: diff,
-      type: MovementType.ADJUSTED,
-      refType: 'CORRECTION',
-      note: `Stock set to ${newOnHand}`,
+  const pool = await stockSkuFor(s);
+
+  const session = await mongoose.startSession();
+  try {
+    let finalDiff = 0;
+    await session.withTransaction(async () => {
+      const cur = await SkuStockModel.findOne({ sku: pool, locationCode: loc }).session(session).lean();
+      const current = cur?.onHand ?? 0;
+      finalDiff = newOnHand - current;
+      
+      if (finalDiff !== 0) {
+        await postMovement(session, {
+          sku: s,
+          locationCode: loc,
+          qty: finalDiff,
+          type: MovementType.ADJUSTED,
+          refType: 'CORRECTION',
+          note: `Stock set to ${newOnHand}`,
+        });
+      }
     });
+    return { sku: s, onHand: newOnHand, diff: finalDiff };
+  } finally {
+    await session.endSession();
   }
-  return { sku: s, onHand: newOnHand, diff };
 }
 
 /** Current cached stock for a single (sku, location), or zeros if none yet. */

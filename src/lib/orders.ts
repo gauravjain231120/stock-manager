@@ -1,11 +1,11 @@
 import { connectDB } from '@/lib/db';
 import { Channel, CHANNELS, SystemLocation } from '@/lib/constants';
 import { getAdapter } from '@/lib/marketplace/registry';
-import { sellUnits, InsufficientStockError } from '@/lib/stock';
 import { syncSkus } from '@/lib/sync';
 import { ChannelListingModel } from '@/models/ChannelListing';
 import { MarketplaceOrderModel } from '@/models/MarketplaceOrder';
 import { SyncStateModel } from '@/models/SyncState';
+import { addPending } from '@/lib/shipping';
 
 export interface IngestResult {
   channel: Channel;
@@ -15,12 +15,6 @@ export interface IngestResult {
   needsStock: number;
 }
 
-/**
- * Pull new orders for one channel and turn each line into a SOLD movement.
- * - Idempotent: an order already stored (channel + channelOrderId) is skipped.
- * - Unmapped channel SKUs and oversells are recorded on the order (issue flag) and
- *   the order is marked NEEDS_STOCK — never silently dropped.
- */
 export async function ingestOrders(channel: Channel): Promise<IngestResult> {
   await connectDB();
   const adapter = getAdapter(channel);
@@ -31,6 +25,39 @@ export async function ingestOrders(channel: Channel): Promise<IngestResult> {
 
   const res: IngestResult = { channel, pulled: orders.length, created: 0, fulfilled: 0, needsStock: 0 };
   const affected = new Set<string>();
+
+  // Retry existing NEEDS_STOCK orders (unmapped SKUs)
+  const pendingOrders = await MarketplaceOrderModel.find({ channel, status: 'NEEDS_STOCK' });
+  for (const pOrder of pendingOrders) {
+    let allFulfilled = true;
+    for (const line of pOrder.lines) {
+      if (line.fulfilled) continue;
+      
+      const listing = await ChannelListingModel.findOne({ channel, channelSku: line.channelSku }).lean();
+      if (!listing) {
+        allFulfilled = false;
+        continue;
+      }
+      
+      await addPending({
+        sku: listing.sku,
+        qty: line.qty,
+        channel,
+        orderId: pOrder.channelOrderId,
+        placedAt: pOrder.placedAt,
+      });
+      line.sku = listing.sku;
+      line.fulfilled = true;
+      line.issue = undefined;
+      affected.add(listing.sku);
+      res.fulfilled++;
+    }
+    
+    if (allFulfilled) {
+      pOrder.status = 'FULFILLED';
+    }
+    await pOrder.save();
+  }
 
   for (const order of orders) {
     const exists = await MarketplaceOrderModel.exists({
@@ -55,27 +82,16 @@ export async function ingestOrders(channel: Channel): Promise<IngestResult> {
         continue;
       }
 
-      try {
-        await sellUnits({
-          sku: listing.sku,
-          locationCode: SystemLocation.MAIN,
-          qty: line.qty,
-          refType: 'ORDER',
-          refId: `${channel}:${order.channelOrderId}`,
-          note: `${channel} order ${order.channelOrderId}`,
-        });
-        lines.push({ channelSku: line.channelSku, sku: listing.sku, qty: line.qty, price: line.price, fulfilled: true });
-        affected.add(listing.sku);
-        res.fulfilled++;
-      } catch (err) {
-        if (err instanceof InsufficientStockError) {
-          status = 'NEEDS_STOCK';
-          lines.push({ channelSku: line.channelSku, sku: listing.sku, qty: line.qty, price: line.price, fulfilled: false, issue: 'INSUFFICIENT_STOCK' });
-          res.needsStock++;
-        } else {
-          throw err;
-        }
-      }
+      await addPending({
+        sku: listing.sku,
+        qty: line.qty,
+        channel,
+        orderId: order.channelOrderId,
+        placedAt: order.placedAt,
+      });
+      lines.push({ channelSku: line.channelSku, sku: listing.sku, qty: line.qty, price: line.price, fulfilled: true });
+      affected.add(listing.sku);
+      res.fulfilled++;
     }
 
     try {
@@ -88,7 +104,6 @@ export async function ingestOrders(channel: Channel): Promise<IngestResult> {
       });
       res.created++;
     } catch (err: unknown) {
-      // Duplicate key = another poll already stored it; ignore.
       if (!(err && typeof err === 'object' && 'code' in err && (err as { code: number }).code === 11000)) {
         throw err;
       }
