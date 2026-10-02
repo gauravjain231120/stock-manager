@@ -68,6 +68,16 @@ sku, name, size, color, category, costPrice, mrp, openingQty, locationCode
 | `npm run verify` | Phase 0 acceptance test (ledger + anti-oversell) |
 | `npm run verify:e2e` | Full pipeline test across all phases |
 
+## Deployment (CRITICAL)
+
+This repository is linked to **two separate GitHub accounts**. Vercel is specifically configured to build from the secondary account (`gauravjain231120`). 
+If you only run `git push`, the code will push to the primary GitHub account (`gauravbhandari23`) and Vercel will **NOT** deploy it!
+
+To deploy updates to the live Vercel dashboard, you must explicitly push to the `vercel2` remote:
+```bash
+git push vercel2 main
+```
+
 ## API (Route Handlers)
 
 | Route | Purpose |
