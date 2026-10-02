@@ -21,12 +21,12 @@ export const SECTIONS: Section[] = [
   { href: '/produce', label: 'Produce' },
   { href: '/account', label: 'Expense' },
   { href: '/cloth', label: 'Cloth Purchases' },
+  { href: '/return-analytics', label: 'Return Analytics' },
 ];
 export const SECTION_HREFS = SECTIONS.map((s) => s.href);
 
 /** Owner-only pages — never grantable to Manager or Viewer, always available to Owner. */
 export const OWNER_SECTIONS: Section[] = [
-  { href: '/return-analytics', label: 'Return Analytics' },
   { href: '/team', label: 'Team' },
 ];
 // '/returns/marketplace' is a dormant automated-pipeline admin tool nested
@@ -34,7 +34,7 @@ export const OWNER_SECTIONS: Section[] = [
 // would also let a Manager reach it by typing the URL (page-prefix matching
 // can't otherwise tell the two apart, the same shape as /account vs
 // /account/cloth before that got its own top-level path).
-const OWNER_ONLY_PAGE_PREFIXES = ['/team', '/returns/marketplace', '/return-analytics'];
+const OWNER_ONLY_PAGE_PREFIXES = ['/team', '/returns/marketplace'];
 
 /** Always reachable once logged in, regardless of role/sections — where an
  *  account with nothing granted yet lands instead of bouncing back to the
