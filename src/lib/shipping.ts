@@ -347,7 +347,7 @@ export async function pendingCount(): Promise<number> {
  * deduct stock, release that many reservations, and remove the entry (or reduce
  * its qty if only part was shipped).
  */
-export async function shipPending(id: string, qty?: number, trackingId?: string, orderId?: string) {
+export async function shipPending(id: string, qty?: number, trackingId?: string, orderId?: string, skipFairnessCheck = false) {
   await connectDB();
   const p = await PendingShipmentModel.findById(id);
   if (!p) throw new Error('Item not found');
@@ -360,13 +360,15 @@ export async function shipPending(id: string, qty?: number, trackingId?: string,
   // position" — on an oversold pile, a later order could take the stock an
   // earlier one was shown as entitled to, silently starving it. Recomputed
   // fresh (not cached) so it reflects the queue as it stands right now.
-  const row = queueRows(await listPending()).find((r) => r.id === id);
-  if (row && shipQty > row.free) {
-    throw new Error(
-      row.free <= 0
-        ? `An earlier-queued order has first claim on this stock — ship that one first.`
-        : `Only ${row.free} available for this order right now — an earlier-queued order has first claim on the rest. Ship that one first, or ship ${row.free} here.`,
-    );
+  if (!skipFairnessCheck) {
+    const row = queueRows(await listPending()).find((r) => r.id === id);
+    if (row && shipQty > row.free) {
+      throw new Error(
+        row.free <= 0
+          ? `An earlier-queued order has first claim on this stock — ship that one first.`
+          : `Only ${row.free} available for this order right now — an earlier-queued order has first claim on the rest. Ship that one first, or ship ${row.free} here.`,
+      );
+    }
   }
 
   // A number typed at packing time wins; otherwise use whatever was saved on the row.
@@ -592,12 +594,15 @@ export async function shipOrder(orderId: string, trackingId?: string) {
   await connectDB();
   const id = orderId.trim();
   if (!id) throw new Error('Which order?');
+  const allRows = queueRows(await listPending());
   const items = await PendingShipmentModel.find({ orderId: id }).lean();
   if (items.length === 0) throw new Error('Nothing queued for that order');
 
   let units = 0;
   for (const i of items) {
-    await shipPending(String(i._id), undefined, trackingId);
+    const row = allRows.find(r => r.id === String(i._id));
+    if (row && i.qty > row.free) throw new Error(`Not enough available stock to ship this entire order right now.`);
+    await shipPending(String(i._id), undefined, trackingId, undefined, true);
     units += i.qty;
   }
   return { shipped: items.length, units };
@@ -609,12 +614,15 @@ export async function shipSelectedPending(ids: string[]) {
   // Oldest first, same reasoning as shipAllPending — the caller's array order
   // (whatever order checkboxes were clicked/collected in) shouldn't decide
   // who gets an oversold pile's stock ahead of an earlier-queued order.
+  const allRows = queueRows(await listPending());
   const sortedIds = (await PendingShipmentModel.find({ _id: { $in: ids } }, { _id: 1 }).sort({ createdAt: 1 }).lean()).map((d) =>
     String(d._id),
   );
   let shipped = 0;
   for (const id of sortedIds) {
-    await shipPending(id);
+    const row = allRows.find(r => r.id === id);
+    if (row && row.qty > row.free) throw new Error(`Not enough available stock to ship this order right now.`);
+    await shipPending(id, undefined, undefined, undefined, true);
     shipped++;
   }
   return { shipped };
@@ -626,9 +634,17 @@ export async function shipAllPending(channel?: string) {
   // shipPending()'s fairness check never trips mid-batch (each row's turn
   // only comes up once everything queued ahead of it, same pile or not, has
   // already gone through).
+  const allRows = queueRows(await listPending());
   const items = await PendingShipmentModel.find(channel ? { channel } : {}).sort({ createdAt: 1 }).lean();
-  for (const i of items) await shipPending(String(i._id));
-  return { shipped: items.length };
+  let shipped = 0;
+  for (const i of items) {
+    const id = String(i._id);
+    const row = allRows.find(r => r.id === id);
+    if (row && i.qty > row.free) continue; // skip out-of-stock items for Ship All
+    await shipPending(id, undefined, undefined, undefined, true);
+    shipped++;
+  }
+  return { shipped };
 }
 
 /**

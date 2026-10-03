@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { ShipButton } from '@/components/ShipButton';
 import { CancelButton } from '@/components/CancelButton';
@@ -32,11 +32,16 @@ export function PendingRowActions({
 }) {
   const [edit, setEdit] = useState(false);
   const [cancel, setCancel] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const [localReady, setLocalReady] = useState<boolean | null>(null);
   const router = useRouter();
   const toast = useToast();
 
+  const isReady = localReady !== null ? localReady : row.ready;
+
   async function toggleReady() {
-    const nextReady = !row.ready;
+    const nextReady = !isReady;
+    setLocalReady(nextReady);
     try {
       const res = await fetch(`/api/pending/${row.id}`, {
         method: 'PUT',
@@ -44,12 +49,17 @@ export function PendingRowActions({
         body: JSON.stringify({ ready: nextReady }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) toast.error(data?.error || 'Failed to update');
-      else {
+      if (!res.ok) {
+        setLocalReady(null);
+        toast.error(data?.error || 'Failed to update');
+      } else {
         toast.success(nextReady ? 'Marked ready — off the print sheet ✓' : 'Back in the pack pile');
-        router.refresh();
+        startTransition(() => {
+          router.refresh();
+        });
       }
     } catch (e) {
+      setLocalReady(null);
       toast.error(e instanceof Error ? e.message : 'Request failed');
     }
   }
@@ -70,14 +80,14 @@ export function PendingRowActions({
 
       <button
         onClick={toggleReady}
-        title={row.ready ? 'Back in the pack pile — will print again' : 'Packed and set aside — leaves it off the print sheet'}
+        title={isReady ? 'Back in the pack pile — will print again' : 'Packed and set aside — leaves it off the print sheet'}
         className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition ${
-          row.ready
+          isReady
             ? 'border-emerald-600/40 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-500/30 dark:bg-emerald-900/30 dark:text-emerald-300 dark:hover:bg-emerald-900/50'
             : 'border-black/15 hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10'
         }`}
       >
-        {row.ready ? 'Ready ✓' : 'Mark ready'}
+        {isReady ? 'Ready ✓' : 'Mark ready'}
       </button>
 
       {row.after < 0 ? (
