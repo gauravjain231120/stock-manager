@@ -913,3 +913,12 @@ already put back another way.
 
 **Deploy order for §14: this app first, then the bot** (the bot's Myntra Cancel page calls the new
 routes; nothing else changes for the old bot).
+
+## 15. Flipkart Timezone and Order ID Fix (2026-10-06)
+
+Flipkart passes order dates like `"2026-10-06T11:45:00"` without a timezone. The Vercel server (running in UTC) parsed this as UTC, causing the "Placed at" and "Ship by" times in the stock manager to be ~5.5 hours off. 
+
+We updated the order alert bot (`myntra-order-alert-web`) to append `+05:30` to timezone-less dates before parsing them. Additionally, the bot now successfully extracts the real `OD...` order ID instead of falling back to the `groupId`.
+
+This requires no code changes in `stock-manager` itself, but the Ready-to-Ship queue now receives the correct IST timestamps and accurate `orderId`s from Flipkart.
+
