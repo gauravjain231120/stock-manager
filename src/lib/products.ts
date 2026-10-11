@@ -141,7 +141,10 @@ export async function updateProductGroup(
 }
 
 /** Add a single colour/size variant (new SKU) to an existing product. */
-export async function addVariant(code: string, v: { color?: string; size?: string; openingQty?: number; sku?: string }) {
+export async function addVariant(
+  code: string,
+  v: { color?: string; size?: string; openingQty?: number; sku?: string; sharesStockWith?: string | null },
+) {
   await connectDB();
   const c = code.trim().toUpperCase();
   const group = await ProductGroupModel.findOne({ code: c });
@@ -157,6 +160,8 @@ export async function addVariant(code: string, v: { color?: string; size?: strin
   if (v.size) attributes.size = v.size;
   if (v.color) attributes.color = v.color;
 
+  const targetShare = v.sharesStockWith?.trim() ? v.sharesStockWith.trim().toUpperCase() : undefined;
+
   await ProductModel.create({
     sku,
     name: [group.name, v.color, v.size].filter(Boolean).join(' '),
@@ -166,7 +171,12 @@ export async function addVariant(code: string, v: { color?: string; size?: strin
     category: group.category,
     mrp: group.mrp,
     costPrice: group.costPrice,
+    sharesStockWith: targetShare,
   });
+
+  if (targetShare) {
+    invalidateStockShareCache();
+  }
 
   if (v.color && !group.colors.includes(v.color)) group.colors.push(v.color);
   if (v.size && !group.sizes.includes(v.size)) group.sizes.push(v.size);
@@ -195,19 +205,39 @@ export async function addVariant(code: string, v: { color?: string; size?: strin
  */
 export async function addVariantsForColor(
   code: string,
-  v: { color?: string; size?: string; sku: string; openingQty?: number; extraSizes?: string[] },
+  v: { color?: string; size?: string; sku: string; openingQty?: number; extraSizes?: string[]; sharesStockWith?: string | null },
 ) {
-  const primary = await addVariant(code, { color: v.color, size: v.size, sku: v.sku, openingQty: v.openingQty });
+  const primary = await addVariant(code, {
+    color: v.color,
+    size: v.size,
+    sku: v.sku,
+    openingQty: v.openingQty,
+    sharesStockWith: v.sharesStockWith,
+  });
   const sku = primary.sku;
   const idx = sku.lastIndexOf('-');
   const prefix = idx === -1 ? sku : sku.slice(0, idx);
+
+  let targetPrefix = "";
+  if (v.sharesStockWith?.trim()) {
+    const t = v.sharesStockWith.trim().toUpperCase();
+    const tIdx = t.lastIndexOf('-');
+    targetPrefix = tIdx === -1 ? t : t.slice(0, tIdx);
+  }
 
   const created: string[] = [primary.sku];
   const skipped: { size: string; reason: string }[] = [];
   for (const size of v.extraSizes ?? []) {
     const extraSku = `${prefix}-${size.trim().toUpperCase()}`;
+    const extraTarget = targetPrefix ? `${targetPrefix}-${size.trim().toUpperCase()}` : undefined;
     try {
-      const res = await addVariant(code, { color: v.color, size, sku: extraSku, openingQty: 0 });
+      const res = await addVariant(code, {
+        color: v.color,
+        size,
+        sku: extraSku,
+        openingQty: 0,
+        sharesStockWith: extraTarget,
+      });
       created.push(res.sku);
     } catch (err) {
       skipped.push({ size, reason: err instanceof Error ? err.message : String(err) });
@@ -622,7 +652,18 @@ export async function getProductGroups(): Promise<{ groups: GroupView[]; ungroup
       imageUrl: g.imageUrl ?? undefined,
       mrp: g.mrp ?? undefined,
       variantCount: variants.length,
-      totalStock: variants.reduce((acc, v) => acc + v.onHand, 0),
+      totalStock: (() => {
+        const seenPools = new Set<string>();
+        let sum = 0;
+        for (const v of variants) {
+          const pool = pileBySku.get(v.sku) || v.sku;
+          if (!seenPools.has(pool)) {
+            seenPools.add(pool);
+            sum += v.onHand;
+          }
+        }
+        return sum;
+      })(),
       variants,
     };
   });

@@ -63,6 +63,7 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
   const [vSize, setVSize] = useState('');
   const [vSku, setVSku] = useState('');
   const [vQty, setVQty] = useState('');
+  const [vSharesStockWith, setVSharesStockWith] = useState('');
   const [vExtraSizes, setVExtraSizes] = useState<Set<string>>(new Set());
 
   // Variants sorted by colour, then real size order (XS, S, M, L, XL, XXL).
@@ -186,6 +187,7 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
       details: [
         { label: 'Variant', value: [vColor, vSize].filter(Boolean).join(' / ') },
         ...(vSku.trim() ? [{ label: 'SKU', value: vSku.trim().toUpperCase() }] : []),
+        ...(vSharesStockWith.trim() ? [{ label: 'Shares stock with', value: vSharesStockWith.trim().toUpperCase() }] : []),
         { label: 'Opening stock', value: vQty || '0' },
         ...(extra.length ? [{ label: 'Also add sizes', value: extra.join(', ') }] : []),
       ],
@@ -196,10 +198,11 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
       color: vColor || undefined,
       size: vSize || undefined,
       sku: vSku.trim() || undefined,
+      sharesStockWith: vSharesStockWith.trim() || undefined,
       openingQty: vQty ? Number(vQty) : 0,
       extraSizes: extra.length ? extra : undefined,
     });
-    if (done) { setVColor(''); setVSize(''); setVSku(''); setVQty(''); setVExtraSizes(new Set()); }
+    if (done) { setVColor(''); setVSize(''); setVSku(''); setVQty(''); setVSharesStockWith(''); setVExtraSizes(new Set()); }
   }
 
   async function removeVariant(sku: string) {
@@ -390,6 +393,7 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
                     <input className={`${input} px-2 py-1.5 text-xs`} value={vSize} onChange={(e) => setVSize(e.target.value)} placeholder="Size" />
                     <input className={`${input} px-2 py-1.5 font-mono text-xs`} value={vSku} onChange={(e) => setVSku(e.target.value)} placeholder="SKU (optional)" />
                     <input className={`${input} px-2 py-1.5 text-xs`} type="number" min={0} value={vQty} onChange={(e) => setVQty(e.target.value)} placeholder="Opening qty" />
+                    <input className={`${input} col-span-2 px-2 py-1.5 font-mono text-xs`} value={vSharesStockWith} onChange={(e) => setVSharesStockWith(e.target.value)} placeholder="Shares stock with SKU (optional, e.g. RRC-001-CO-C-RED-XXL)" />
                   </div>
                   {vSku.trim() ? (
                     <div className="mt-2.5 flex flex-col gap-1.5">

@@ -16,6 +16,7 @@ const AddVariant = z.object({
   size: z.string().optional(),
   openingQty: z.number().int().min(0).optional(),
   sku: z.string().optional(),
+  sharesStockWith: z.string().nullable().optional(),
   // Extra sizes to auto-create alongside this one, swapping the size segment
   // of `sku` for each — one SKU typed in fills the whole size run.
   extraSizes: z.array(z.string()).optional(),
@@ -81,6 +82,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ code: string }
         size: parsed.data.size,
         sku: parsed.data.sku,
         openingQty: parsed.data.openingQty,
+        sharesStockWith: parsed.data.sharesStockWith,
         extraSizes: parsed.data.extraSizes,
       });
       return Response.json({ ok: true, ...res }, { status: 201 });
