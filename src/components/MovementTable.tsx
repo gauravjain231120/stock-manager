@@ -93,6 +93,7 @@ export function MovementTable({
 }) {
   const [q, setQ] = useState('');
   const [fCategory, setFCategory] = useState('all');
+  const [fColor, setFColor] = useState('all');
   const [fPlatform, setFPlatform] = useState('all');
   const [fCondition, setFCondition] = useState('all');
   const [fReturnType, setFReturnType] = useState('all');
@@ -105,9 +106,26 @@ export function MovementTable({
 
   const categories = [...new Set(rows.map((r) => r.category).filter(Boolean))].sort();
 
+  // Only the colours actually present in the chosen category — same convention
+  // as the Ready-to-Ship queue. Changing category resets colour so a colour
+  // from the old category doesn't silently filter the new one to nothing.
+  const rowsForColor = rows.filter((r) => !r.cancelled && (fCategory === 'all' || r.category === fCategory));
+  const colorsInCategory = [...new Set(rowsForColor.map((r) => r.color).filter(Boolean))].sort();
+  const colorCounts = rowsForColor.reduce((acc, r) => {
+    if (r.color) acc[r.color] = (acc[r.color] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  function selectCategory(next: string) {
+    setFCategory(next);
+    setFColor('all');
+    setPage(1);
+  }
+
   function matches(r: MovementRow) {
     // "" is a real choice here — the products that have no category at all.
     if (fCategory !== 'all' && r.category !== fCategory) return false;
+    if (fColor !== 'all' && r.color !== fColor) return false;
     if (fPlatform !== 'all' && r.channel !== fPlatform) return false;
     if (fCondition !== 'all' && r.condition !== fCondition) return false;
     if (withCondition && ownerView && fReturnType !== 'all' && (r.returnType ?? 'UNKNOWN') !== fReturnType) return false;
@@ -216,13 +234,24 @@ export function MovementTable({
         <div className="flex flex-wrap items-center justify-end gap-2">
           <select
             value={fCategory}
-            onChange={(e) => { setFCategory(e.target.value); setPage(1); }}
+            onChange={(e) => selectCategory(e.target.value)}
             aria-label="Filter by category"
             className={filterCls}
           >
             <option value="all">All categories</option>
             {categories.map((c) => <option key={c} value={c}>{c}</option>)}
             {rows.some((r) => !r.category) ? <option value="">No category</option> : null}
+          </select>
+          <select
+            value={fColor}
+            onChange={(e) => { setFColor(e.target.value); setPage(1); }}
+            aria-label="Filter by colour"
+            disabled={fCategory === 'all' || colorsInCategory.length === 0}
+            title={fCategory === 'all' ? 'Pick a category first' : undefined}
+            className={filterCls}
+          >
+            <option value="all">All colours</option>
+            {colorsInCategory.map((c) => <option key={c} value={c}>{c} ({colorCounts[c]})</option>)}
           </select>
           <label className="flex items-center gap-1.5 text-sm text-neutral-500">
             From
@@ -320,7 +349,7 @@ export function MovementTable({
           ) : null}
         </div>
         <span className="text-xs text-neutral-400">
-          {fCategory === 'all' ? 'All categories' : fCategory || 'No category'} · {rangeLabel(fromDate, toDate)}
+          {fCategory === 'all' ? 'All categories' : fCategory || 'No category'}{fColor === 'all' ? '' : ` · ${fColor}`} · {rangeLabel(fromDate, toDate)}
           {fPlatform === 'all' ? '' : ` · ${PLATFORM_LABELS[fPlatform as Platform] ?? fPlatform}`}
           {fCondition === 'all' ? '' : ` · ${RETURN_CONDITION_LABELS[fCondition as ReturnCondition] ?? fCondition}`}
         </span>
