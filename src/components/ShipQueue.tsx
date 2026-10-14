@@ -145,13 +145,6 @@ function getProductSizes(row: QueueRow, catalog: ShipProduct[]): SiblingGroup {
     pool = [direct];
   }
 
-  const seen = new Set<string>();
-  const uniquePool = pool.filter((p) => {
-    if (seen.has(p.sku)) return false;
-    seen.add(p.sku);
-    return true;
-  });
-
   const toSibling = (p: ShipProduct): SiblingSize => {
     const sLabel = (p.size?.trim() || p.sku.split('-').pop() || 'OS').toUpperCase();
     return {
@@ -165,28 +158,53 @@ function getProductSizes(row: QueueRow, catalog: ShipProduct[]): SiblingGroup {
     };
   };
 
-  const colorMap = new Map<string, SiblingSize[]>();
-  for (const p of uniquePool) {
+  // Group by color first
+  const colorMap = new Map<string, ShipProduct[]>();
+  for (const p of pool) {
     const cColor = p.color?.trim() || color || 'Default';
     const list = colorMap.get(cColor) ?? [];
-    list.push(toSibling(p));
+    list.push(p);
     colorMap.set(cColor, list);
   }
+
+  // Deduplicate by size for each color: prevent "double double" when multiple SKUs exist for the same size!
+  const candidateScore = (sku: string): number => {
+    if (sku === row.sku) return 100;
+    if (sku === row.stockSku) return 90;
+    const pfx = cutSku(sku);
+    if (rowPrefix && pfx === rowPrefix) return 80;
+    if (stockPrefix && pfx === stockPrefix) return 70;
+    return 10;
+  };
+
+  const dedupeSizesForColor = (items: ShipProduct[]): SiblingSize[] => {
+    const bySize = new Map<string, { product: ShipProduct; score: number }>();
+    for (const p of items) {
+      const sLabel = (p.size?.trim() || p.sku.split('-').pop() || 'OS').toUpperCase();
+      const score = candidateScore(p.sku);
+      const existing = bySize.get(sLabel);
+      if (!existing || score > existing.score) {
+        bySize.set(sLabel, { product: p, score });
+      }
+    }
+    return [...bySize.values()]
+      .map(({ product }) => toSibling(product))
+      .sort((a, b) => compareSize(a.sizeLabel, b.sizeLabel));
+  };
 
   let currentKey = [...colorMap.keys()].find((k) => k.toLowerCase() === color.toLowerCase());
   if (!currentKey && colorMap.size > 0) {
     currentKey = colorMap.keys().next().value;
   }
 
-  const colorSizes = (currentKey ? colorMap.get(currentKey) ?? [] : uniquePool.map(toSibling))
-    .sort((a, b) => compareSize(a.sizeLabel, b.sizeLabel));
+  const colorSizes = currentKey ? dedupeSizesForColor(colorMap.get(currentKey) ?? []) : [];
 
   const otherColors: { color: string; sizes: SiblingSize[] }[] = [];
   for (const [cName, list] of colorMap.entries()) {
     if (currentKey && cName.toLowerCase() === currentKey.toLowerCase()) continue;
     otherColors.push({
       color: cName,
-      sizes: list.sort((a, b) => compareSize(a.sizeLabel, b.sizeLabel)),
+      sizes: dedupeSizesForColor(list),
     });
   }
 
@@ -661,25 +679,25 @@ export function ShipQueue({
                               return (
                                 <div
                                   key={sz.sku}
-                                  className={`relative flex min-w-[5.25rem] flex-col justify-between rounded-xl border p-2.5 transition shadow-xs ${
+                                  className={`relative flex min-w-[5.5rem] flex-col justify-between rounded-xl p-2.5 transition shadow-xs ${
                                     isCurrentSize
-                                      ? 'border-brand-500 bg-brand-50/70 dark:border-brand-500/80 dark:bg-brand-950/40 ring-1 ring-brand-500/40'
-                                      : 'border-black/10 bg-white dark:border-white/10 dark:bg-neutral-800'
+                                      ? 'border-2 border-brand-500 bg-brand-50/80 ring-2 ring-brand-500/20 dark:border-brand-400 dark:bg-neutral-800 dark:ring-2 dark:ring-brand-500/60 dark:shadow-[0_0_14px_rgba(168,70,92,0.35)]'
+                                      : 'border border-black/10 bg-white dark:border-white/10 dark:bg-neutral-800'
                                   }`}
                                 >
                                   {isCurrentSize ? (
-                                    <span className="absolute -top-2 right-2 rounded bg-brand-600 px-1 py-0.2 text-[9px] font-bold text-white shadow-xs">
+                                    <span className="absolute -top-2.5 right-2 rounded-full bg-brand-600 px-2 py-0.5 text-[9px] font-bold text-white shadow-sm ring-1 ring-white/20 dark:bg-brand-500">
                                       Ordered
                                     </span>
                                   ) : null}
 
-                                  <div className="flex items-baseline justify-between gap-1">
+                                  <div className="flex items-baseline justify-between gap-1.5">
                                     <span className="text-sm font-bold text-neutral-900 dark:text-white">
                                       {sz.sizeLabel}
                                     </span>
                                     <span
-                                      className={`text-xs font-semibold tabular-nums ${
-                                        isShort ? 'text-red-500' : isLow ? 'text-amber-500' : 'text-emerald-600 dark:text-emerald-400'
+                                      className={`text-xs font-bold tabular-nums ${
+                                        isShort ? 'text-red-500 dark:text-red-400' : isLow ? 'text-amber-500 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'
                                       }`}
                                     >
                                       {sz.available}
@@ -688,16 +706,16 @@ export function ShipQueue({
 
                                   <div className="mt-1 flex flex-col gap-0.5 text-[10px]">
                                     <span
-                                      className={`font-medium ${
+                                      className={`font-semibold ${
                                         isShort ? 'text-red-600 dark:text-red-400' : isLow ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'
                                       }`}
                                     >
                                       {isShort ? 'Out of stock' : isLow ? 'Low stock' : 'Available'}
                                     </span>
-                                    <span className="text-neutral-400 dark:text-neutral-500">
+                                    <span className="text-neutral-500 dark:text-neutral-300 font-medium">
                                       {sz.onHand} on hand
                                     </span>
-                                    <span className="font-mono text-[9px] text-neutral-400 truncate max-w-[7rem]" title={sz.sku}>
+                                    <span className="font-mono text-[9px] text-neutral-400 dark:text-neutral-400 truncate max-w-[7.5rem]" title={sz.sku}>
                                       {sz.sku}
                                     </span>
                                   </div>
