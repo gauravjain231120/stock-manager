@@ -148,7 +148,7 @@ export default async function ShipPage({ searchParams }: { searchParams: Promise
         rows={rows}
         totalCount={pending.length}
         platform={platform}
-        products={products.map((p) => ({ sku: p.sku, name: p.name }))}
+        products={products}
       />
 
       {pending.length === 0 ? (

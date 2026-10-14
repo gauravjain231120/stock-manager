@@ -2,6 +2,7 @@
 
 import { Fragment, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { ChevronDown, ChevronRight, Package, X } from 'lucide-react';
 import { Panel, Table, Th, Td, Tr, Badge } from '@/components/ui';
 import { ActionButton } from '@/components/ActionButton';
 import { PendingRowActions } from '@/components/PendingRowActions';
@@ -9,7 +10,8 @@ import { ShipOrderButton } from '@/components/ShipOrderButton';
 import { PlatformFilter } from '@/components/PlatformFilter';
 import { ShipDateFilter } from '@/components/ShipDateFilter';
 import { PLATFORM_LABELS, Platform } from '@/lib/constants';
-import { dateTime, dayKey } from '@/lib/format';
+import { dateTime, dayKey, compareSize } from '@/lib/format';
+import type { ShipProduct } from '@/lib/shipping';
 
 export interface QueueRow {
   id: string;
@@ -62,6 +64,141 @@ function showCompanionInfo(r: QueueRow) {
   return r.category !== 'Halter with Salwar';
 }
 
+const SWATCHES: [RegExp, string][] = [
+  [/black/i, '#23262c'],
+  [/white|ivory|cream/i, '#efeae0'],
+  [/gre[ya]/i, '#8b9099'],
+  [/navy/i, '#22335c'],
+  [/blue/i, '#3070cf'],
+  [/maroon/i, '#7d2b2b'],
+  [/red/i, '#c53a33'],
+  [/green|olive/i, '#3f7d4e'],
+  [/pink|rose/i, '#dd6f92'],
+  [/yellow|mustard/i, '#dfb03c'],
+  [/orange|rust/i, '#d8752f'],
+  [/purple|violet/i, '#7a52b3'],
+  [/brown|beige|tan/i, '#98764f'],
+];
+
+function swatch(name: string): string {
+  return SWATCHES.find(([re]) => re.test(name))?.[1] ?? '#9ca3af';
+}
+
+interface SiblingSize {
+  sku: string;
+  name: string;
+  sizeLabel: string;
+  color: string;
+  onHand: number;
+  available: number;
+  isCurrent: boolean;
+}
+
+interface SiblingGroup {
+  styleName: string;
+  groupCode?: string;
+  currentColor: string;
+  colorSizes: SiblingSize[];
+  otherColors: { color: string; sizes: SiblingSize[] }[];
+}
+
+function getProductSizes(row: QueueRow, catalog: ShipProduct[]): SiblingGroup {
+  const direct = catalog.find((c) => c.sku === row.sku) || catalog.find((c) => c.sku === row.stockSku);
+  const groupCode = direct?.groupCode?.trim() || '';
+  const groupName = direct?.groupName?.trim() || '';
+  const color = (direct?.color || row.color || '').trim();
+
+  const cutSku = (s: string) => {
+    const idx = s.lastIndexOf('-');
+    return idx > 0 ? s.slice(0, idx) : s;
+  };
+  const rowPrefix = cutSku(row.sku);
+  const stockPrefix = cutSku(row.stockSku);
+
+  let pool: ShipProduct[] = [];
+
+  if (groupCode) {
+    pool = catalog.filter((c) => c.groupCode?.trim().toUpperCase() === groupCode.toUpperCase());
+  }
+
+  if (pool.length <= 1) {
+    const byPrefix = catalog.filter((c) => {
+      const pfx = cutSku(c.sku);
+      return pfx === rowPrefix || (stockPrefix && pfx === stockPrefix);
+    });
+    if (byPrefix.length > pool.length) {
+      pool = byPrefix;
+    }
+  }
+
+  if (pool.length <= 1 && color && (row.category || direct?.category)) {
+    const cat = (row.category || direct?.category || '').trim().toLowerCase();
+    const byCat = catalog.filter((c) => {
+      return (c.category?.trim().toLowerCase() === cat) && (c.color?.trim().toLowerCase() === color.toLowerCase());
+    });
+    if (byCat.length > pool.length) {
+      pool = byCat;
+    }
+  }
+
+  if (pool.length === 0 && direct) {
+    pool = [direct];
+  }
+
+  const seen = new Set<string>();
+  const uniquePool = pool.filter((p) => {
+    if (seen.has(p.sku)) return false;
+    seen.add(p.sku);
+    return true;
+  });
+
+  const toSibling = (p: ShipProduct): SiblingSize => {
+    const sLabel = (p.size?.trim() || p.sku.split('-').pop() || 'OS').toUpperCase();
+    return {
+      sku: p.sku,
+      name: p.name,
+      sizeLabel: sLabel,
+      color: p.color?.trim() || color || 'Default',
+      onHand: p.onHand ?? 0,
+      available: p.available ?? p.onHand ?? 0,
+      isCurrent: p.sku === row.sku || p.sku === row.stockSku,
+    };
+  };
+
+  const colorMap = new Map<string, SiblingSize[]>();
+  for (const p of uniquePool) {
+    const cColor = p.color?.trim() || color || 'Default';
+    const list = colorMap.get(cColor) ?? [];
+    list.push(toSibling(p));
+    colorMap.set(cColor, list);
+  }
+
+  let currentKey = [...colorMap.keys()].find((k) => k.toLowerCase() === color.toLowerCase());
+  if (!currentKey && colorMap.size > 0) {
+    currentKey = colorMap.keys().next().value;
+  }
+
+  const colorSizes = (currentKey ? colorMap.get(currentKey) ?? [] : uniquePool.map(toSibling))
+    .sort((a, b) => compareSize(a.sizeLabel, b.sizeLabel));
+
+  const otherColors: { color: string; sizes: SiblingSize[] }[] = [];
+  for (const [cName, list] of colorMap.entries()) {
+    if (currentKey && cName.toLowerCase() === currentKey.toLowerCase()) continue;
+    otherColors.push({
+      color: cName,
+      sizes: list.sort((a, b) => compareSize(a.sizeLabel, b.sizeLabel)),
+    });
+  }
+
+  return {
+    styleName: groupName || direct?.name || row.name,
+    groupCode: groupCode || undefined,
+    currentColor: currentKey || color || '',
+    colorSizes,
+    otherColors,
+  };
+}
+
 const checkboxCls = 'size-4 accent-brand-600 disabled:cursor-not-allowed disabled:opacity-40';
 const filterCls = 'rounded-lg border border-black/15 bg-transparent px-3 py-1.5 text-sm text-neutral-900 dark:border-white/20 dark:text-white max-w-full w-full sm:w-auto truncate';
 
@@ -75,9 +212,11 @@ export function ShipQueue({
   rows: QueueRow[];
   totalCount: number;
   platform: Platform | null;
-  products: { sku: string; name: string }[];
+  products: ShipProduct[];
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [activeColorByRow, setActiveColorByRow] = useState<Record<string, string>>({});
   const [fCategory, setFCategory] = useState('all');
   const [fColor, setFColor] = useState('all');
   const [fReady, setFReady] = useState<'all' | 'ready' | 'not-ready'>('all');
@@ -191,6 +330,15 @@ export function ShipQueue({
   function toggle(id: string) {
     setSelected((s) => {
       const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleExpand(id: string) {
+    setExpandedRows((prev) => {
+      const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
@@ -333,6 +481,7 @@ export function ShipQueue({
         {ordered.map((p, i) => {
           const s = stockStatus(p.free);
           const canSelect = p.free >= p.qty && p.qty > 0;
+          const isExpanded = expandedRows.has(p.id);
           // First line of a multi-item order gets the "ship it all together" header.
           const grouped = Boolean(p.orderId && multiOrders.has(p.orderId));
           const isGroupStart = grouped && (i === 0 || ordered[i - 1].orderId !== p.orderId);
@@ -373,7 +522,7 @@ export function ShipQueue({
                 </Td>
               </Tr>
             ) : null}
-            <Tr className={`${bandCls} ${isGroupEnd ? 'border-b-2 border-brand-600/30' : ''}`}>
+            <Tr className={`${bandCls} ${isGroupEnd && !isExpanded ? 'border-b-2 border-brand-600/30' : ''}`}>
               <Td className={accentCls}>
                 <input
                   type="checkbox"
@@ -386,8 +535,19 @@ export function ShipQueue({
                 />
               </Td>
               <Td>
-                <div className="flex items-center gap-1.5">
-                  <span>{p.name}</span>
+                <div className="flex items-start justify-between gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => toggleExpand(p.id)}
+                    className="group/name flex items-start gap-1.5 text-left font-medium text-neutral-900 transition hover:text-brand-600 dark:text-neutral-100 dark:hover:text-brand-400"
+                    title="Click to view all size stock for this product"
+                  >
+                    <span className="underline-offset-2 hover:underline">{p.name}</span>
+                    <span className="mt-0.5 inline-flex items-center gap-0.5 rounded border border-neutral-200 bg-neutral-50 px-1 py-0.2 text-[10px] font-normal text-neutral-500 transition group-hover/name:border-brand-500/40 group-hover/name:bg-brand-50 group-hover/name:text-brand-700 dark:border-neutral-800 dark:bg-neutral-800/80 dark:text-neutral-400 dark:group-hover/name:border-brand-500/40 dark:group-hover/name:text-brand-300">
+                      {isExpanded ? <ChevronDown size={11} className="text-brand-600 dark:text-brand-400" /> : <ChevronRight size={11} />}
+                      <span>Sizes</span>
+                    </span>
+                  </button>
                   {p.ready ? <Badge tone="good">Ready</Badge> : null}
                 </div>
                 <div className="font-mono text-[11px] text-neutral-400">{p.sku}</div>
@@ -418,6 +578,140 @@ export function ShipQueue({
                 <PendingRowActions row={p} products={products} grouped={grouped} />
               </Td>
             </Tr>
+            {isExpanded ? (() => {
+              const info = getProductSizes(p, products);
+              const selectedColor = activeColorByRow[p.id] || info.currentColor;
+              const activeSizes = (selectedColor && selectedColor !== info.currentColor
+                ? info.otherColors.find((c) => c.color === selectedColor)?.sizes
+                : info.colorSizes) || info.colorSizes;
+              const allColors = [
+                ...(info.currentColor ? [{ color: info.currentColor, isCurrent: true, count: info.colorSizes.length }] : []),
+                ...info.otherColors.map((c) => ({ color: c.color, isCurrent: false, count: c.sizes.length })),
+              ];
+
+              return (
+                <Tr className={`${bandCls} ${isGroupEnd ? 'border-b-2 border-brand-600/30' : ''} bg-neutral-50/80 dark:bg-neutral-900/60`}>
+                  <Td colSpan={8} className={`${accentCls} p-0`}>
+                    <div className="border-t border-b border-black/10 dark:border-white/10 px-4 py-3 sm:px-6">
+                      <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-black/5 dark:border-white/5">
+                        <div className="flex items-center gap-2">
+                          <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-brand-500/10 text-brand-600 dark:text-brand-400">
+                            <Package size={13} />
+                          </span>
+                          <div>
+                            <div className="text-xs font-semibold text-neutral-800 dark:text-neutral-200">
+                              Stock by Size: <span className="text-brand-600 dark:text-brand-400">{info.styleName}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-[11px] text-neutral-500">
+                              {info.groupCode ? <span className="font-mono">Style: {info.groupCode}</span> : null}
+                              {p.category ? <span>· {p.category}</span> : null}
+                            </div>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => toggleExpand(p.id)}
+                          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-neutral-500 hover:bg-black/5 dark:text-neutral-400 dark:hover:bg-white/10 transition"
+                          title="Close size stock view"
+                        >
+                          <X size={12} />
+                          <span>Close</span>
+                        </button>
+                      </div>
+
+                      {allColors.length > 1 ? (
+                        <div className="flex items-center gap-1.5 pt-2.5 pb-1 overflow-x-auto">
+                          <span className="text-[11px] font-medium text-neutral-500 shrink-0 mr-1">Colour:</span>
+                          {allColors.map((c) => {
+                            const isActive = (selectedColor || info.currentColor) === c.color;
+                            return (
+                              <button
+                                key={c.color}
+                                type="button"
+                                onClick={() => setActiveColorByRow((prev) => ({ ...prev, [p.id]: c.color }))}
+                                className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition ${
+                                  isActive
+                                    ? 'border border-brand-600 bg-brand-600 text-white shadow-sm'
+                                    : 'border border-black/10 bg-white text-neutral-700 hover:bg-neutral-100 dark:border-white/15 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700'
+                                }`}
+                              >
+                                <span
+                                  className="size-2.5 rounded-full border border-black/20 dark:border-white/20 shrink-0"
+                                  style={{ background: swatch(c.color) }}
+                                />
+                                <span>{c.color}</span>
+                                {c.isCurrent ? <span className="text-[10px] opacity-75">(this order)</span> : null}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : null}
+
+                      <div className="pt-2.5">
+                        {activeSizes.length === 0 ? (
+                          <p className="text-xs text-neutral-400 py-1">No sizes found for this product in catalog.</p>
+                        ) : (
+                          <div className="flex flex-wrap items-stretch gap-2">
+                            {activeSizes.map((sz) => {
+                              const isShort = sz.available <= 0;
+                              const isLow = sz.available > 0 && sz.available <= 5;
+                              const isCurrentSize = sz.isCurrent;
+
+                              return (
+                                <div
+                                  key={sz.sku}
+                                  className={`relative flex min-w-[5.25rem] flex-col justify-between rounded-xl border p-2.5 transition shadow-xs ${
+                                    isCurrentSize
+                                      ? 'border-brand-500 bg-brand-50/70 dark:border-brand-500/80 dark:bg-brand-950/40 ring-1 ring-brand-500/40'
+                                      : 'border-black/10 bg-white dark:border-white/10 dark:bg-neutral-800'
+                                  }`}
+                                >
+                                  {isCurrentSize ? (
+                                    <span className="absolute -top-2 right-2 rounded bg-brand-600 px-1 py-0.2 text-[9px] font-bold text-white shadow-xs">
+                                      Ordered
+                                    </span>
+                                  ) : null}
+
+                                  <div className="flex items-baseline justify-between gap-1">
+                                    <span className="text-sm font-bold text-neutral-900 dark:text-white">
+                                      {sz.sizeLabel}
+                                    </span>
+                                    <span
+                                      className={`text-xs font-semibold tabular-nums ${
+                                        isShort ? 'text-red-500' : isLow ? 'text-amber-500' : 'text-emerald-600 dark:text-emerald-400'
+                                      }`}
+                                    >
+                                      {sz.available}
+                                    </span>
+                                  </div>
+
+                                  <div className="mt-1 flex flex-col gap-0.5 text-[10px]">
+                                    <span
+                                      className={`font-medium ${
+                                        isShort ? 'text-red-600 dark:text-red-400' : isLow ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'
+                                      }`}
+                                    >
+                                      {isShort ? 'Out of stock' : isLow ? 'Low stock' : 'Available'}
+                                    </span>
+                                    <span className="text-neutral-400 dark:text-neutral-500">
+                                      {sz.onHand} on hand
+                                    </span>
+                                    <span className="font-mono text-[9px] text-neutral-400 truncate max-w-[7rem]" title={sz.sku}>
+                                      {sz.sku}
+                                    </span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </Td>
+                </Tr>
+              );
+            })() : null}
             </Fragment>
           );
         })}
