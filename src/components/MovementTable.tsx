@@ -211,7 +211,7 @@ export function MovementTable({
 
   return (
     <Panel
-      title={`${title} (${filtered.length})`}
+      title={`${title} (${num(filtered.length)})`}
       actions={
         <div className="flex flex-wrap items-center justify-end gap-2">
           <select
@@ -454,7 +454,7 @@ export function MovementTable({
 
       {filtered.length > 0 ? (
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-black/10 px-5 py-3 dark:border-white/10">
-          <span className="text-sm text-neutral-500">Showing {from}–{to} of {filtered.length}</span>
+          <span className="text-sm text-neutral-500">Showing {from}–{to} of {num(filtered.length)}</span>
           <div className="flex flex-wrap items-center gap-2">
             <select
               value={perPage}

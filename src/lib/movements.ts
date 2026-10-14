@@ -45,9 +45,13 @@ export interface MovementStats {
 }
 
 /** Movements of one type (or several), newest first, with product name / colour / size resolved. */
-export async function listMovementRows(type: MovementType | MovementType[], limit = 2000): Promise<MovementRow[]> {
+export async function listMovementRows(type: MovementType | MovementType[], limit?: number): Promise<MovementRow[]> {
   await connectDB();
-  const movements = await StockMovementModel.find({ type: Array.isArray(type) ? { $in: type } : type }).sort({ createdAt: -1 }).limit(limit).lean();
+  let query = StockMovementModel.find({ type: Array.isArray(type) ? { $in: type } : type }).sort({ createdAt: -1 });
+  if (typeof limit === 'number' && limit > 0) {
+    query = query.limit(limit);
+  }
+  const movements = await query.lean();
 
   const skus = [...new Set(movements.map((m) => m.sku))];
   const products = await ProductModel.find({ sku: { $in: skus } }, { sku: 1, name: 1, category: 1, attributes: 1 }).lean();
