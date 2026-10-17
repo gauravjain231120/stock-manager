@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Printer } from 'lucide-react';
+import { Printer, Palette } from 'lucide-react';
 import { getProductGroups } from '@/lib/products';
 import { PageHeader, StatCard } from '@/components/ui';
 import { AddProductForm } from '@/components/AddProductForm';
@@ -20,13 +20,21 @@ export default async function ProductsPage() {
         title="Products"
         subtitle="Add a product with a photo and its colours & sizes — each variant gets its own tracked stock."
         actions={
-          <Link
-            href="/products/print?print=1"
-            target="_blank"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium transition hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
-          >
-            <Printer size={14} /> Print SKU
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/products/colors"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-brand-500/30 bg-brand-50/50 px-3 py-1.5 text-sm font-medium text-brand-700 transition hover:bg-brand-100/50 dark:border-brand-500/40 dark:bg-brand-500/10 dark:text-brand-300 dark:hover:bg-brand-500/20 shadow-sm"
+            >
+              <Palette size={14} className="text-brand-600 dark:text-brand-400" /> Cloth Colors
+            </Link>
+            <Link
+              href="/products/print?print=1"
+              target="_blank"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium transition hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+            >
+              <Printer size={14} /> Print SKU
+            </Link>
+          </div>
         }
       />
 

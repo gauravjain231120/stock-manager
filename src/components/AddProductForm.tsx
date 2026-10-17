@@ -2,6 +2,8 @@
 
 import { FormEvent, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { Palette } from 'lucide-react';
 import { useConfirm } from '@/components/ConfirmProvider';
 
 const input = 'rounded-lg border border-black/15 bg-transparent px-3 py-1.5 text-sm text-neutral-900 dark:border-white/20 dark:text-white';
@@ -116,7 +118,16 @@ export function AddProductForm() {
 
   if (!open) {
     return (
-      <button className={btn} onClick={() => setOpen(true)}>+ Add product</button>
+      <div className="flex flex-wrap items-center gap-2.5">
+        <button className={btn} onClick={() => setOpen(true)}>+ Add product</button>
+        <Link
+          href="/products/colors"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-black/15 bg-white px-3.5 py-2 text-sm font-medium text-neutral-800 transition hover:bg-neutral-50 dark:border-white/15 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800 shadow-sm"
+        >
+          <Palette size={16} className="text-brand-600 dark:text-brand-400" />
+          <span>Cloth Colors</span>
+        </Link>
+      </div>
     );
   }
 
