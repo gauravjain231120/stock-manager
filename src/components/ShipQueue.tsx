@@ -9,6 +9,7 @@ import { PendingRowActions } from '@/components/PendingRowActions';
 import { ShipOrderButton } from '@/components/ShipOrderButton';
 import { PlatformFilter } from '@/components/PlatformFilter';
 import { ShipDateFilter } from '@/components/ShipDateFilter';
+import { MyntraRtdButton } from '@/components/MyntraRtdButton';
 import { PLATFORM_LABELS, Platform } from '@/lib/constants';
 import { dateTime, dayKey, compareSize } from '@/lib/format';
 import type { ShipProduct } from '@/lib/shipping';
@@ -226,11 +227,13 @@ export function ShipQueue({
   totalCount,
   platform,
   products,
+  rtdCutoff = "13:00",
 }: {
   rows: QueueRow[];
   totalCount: number;
   platform: Platform | null;
   products: ShipProduct[];
+  rtdCutoff?: string;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
@@ -239,6 +242,7 @@ export function ShipQueue({
   const [fColor, setFColor] = useState('all');
   const [fReady, setFReady] = useState<'all' | 'ready' | 'not-ready'>('all');
   const [fShipDate, setFShipDate] = useState<'all' | 'today' | 'tomorrow' | 'overdue'>('all');
+  const [fMyntraRtd, setFMyntraRtd] = useState(false);
   // A SET of exact calendar dates, picked via ShipDateFilter, lives in the URL
   // (not local state) so the Print queue link can carry the same set too — it
   // takes priority over the quick preset dropdown when any are picked.
@@ -284,8 +288,16 @@ export function ShipQueue({
   // "" is a real choice here — the queued products that have no category at all.
   // Filtered by everything EXCEPT the ready/not-ready dropdown, so its own
   // options can show counts for what picking each one would leave visible.
+  const myntraRtdCount = rows.filter(
+    (r) => r.channel === "MYNTRA" && r.shipByAt && dayKey(r.shipByAt) <= todayKey,
+  ).length;
+
   const visibleBeforeReady = rows.filter(
-    (r) => (fCategory === 'all' || r.category === fCategory) && (fColor === 'all' || r.color === fColor) && matchesShipDate(r),
+    (r) =>
+      (!fMyntraRtd || (r.channel === "MYNTRA" && r.shipByAt && dayKey(r.shipByAt) <= todayKey)) &&
+      (fCategory === 'all' || r.category === fCategory) &&
+      (fColor === 'all' || r.color === fColor) &&
+      matchesShipDate(r),
   );
   const readyCount = visibleBeforeReady.filter((r) => r.ready).length;
   const notReadyCount = visibleBeforeReady.length - readyCount;
@@ -339,9 +351,9 @@ export function ShipQueue({
   // respect these. Previously only categoryLabel was checked here, so
   // ship-all with just a date filter active silently shipped the WHOLE queue
   // instead of the filtered date — a real incident, not hypothetical.
-  const hasNarrowFilter = Boolean(categoryLabel) || Boolean(colorLabel) || Boolean(shipDateLabel) || Boolean(readyLabel);
+  const hasNarrowFilter = fMyntraRtd || Boolean(categoryLabel) || Boolean(colorLabel) || Boolean(shipDateLabel) || Boolean(readyLabel);
   // What "all" currently means, spelled out on the Ship all button.
-  const scope = [platform ? PLATFORM_LABELS[platform] : null, categoryLabel, colorLabel, shipDateLabel, readyLabel]
+  const scope = [fMyntraRtd ? "Myntra RTD" : null, platform ? PLATFORM_LABELS[platform] : null, categoryLabel, colorLabel, shipDateLabel, readyLabel]
     .filter(Boolean)
     .join(' · ');
 
@@ -420,6 +432,12 @@ export function ShipQueue({
             <option value="tomorrow">Ship by tomorrow</option>
           </select>
           <ShipDateFilter />
+          <MyntraRtdButton
+            initialCutoff={rtdCutoff}
+            isActive={fMyntraRtd}
+            onToggleFilter={() => setFMyntraRtd((prev) => !prev)}
+            count={myntraRtdCount}
+          />
           {visible.length > 0 ? (
             <>
               {/* Forces the Ship buttons onto their own line every time, so a long

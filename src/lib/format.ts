@@ -134,3 +134,14 @@ export function timeAgo(d?: Date | string | null): string {
   if (secs < 86400) return `${Math.round(secs / 3600)}h ago`;
   return `${Math.round(secs / 86400)}d ago`;
 }
+
+export function formatTime12h(timeStr?: string | null): string {
+  if (!timeStr) return "1:00 PM";
+  const [hStr, mStr] = timeStr.split(":");
+  let h = Number(hStr) || 0;
+  const m = Number(mStr) || 0;
+  const ampm = h >= 12 ? "PM" : "AM";
+  h = h % 12 || 12;
+  const mPart = m > 0 ? `:${String(m).padStart(2, "0")}` : ":00";
+  return `${h}${mPart} ${ampm}`;
+}
