@@ -114,6 +114,7 @@ export function MyntraHolidayPicker({ initialHolidays }: MyntraHolidayPickerProp
 
   const upcomingHolidays = [...holidays].filter((d) => d >= today).sort();
   const weeks = monthGrid(calYear, calMonth);
+  const activeCount = upcomingHolidays.length;
 
   return (
     <>
@@ -121,19 +122,17 @@ export function MyntraHolidayPicker({ initialHolidays }: MyntraHolidayPickerProp
         type="button"
         onClick={() => setIsOpen(true)}
         className={`inline-flex items-center gap-1.5 rounded-lg border text-sm transition px-3 py-1.5 ${
-          holidays.size > 0
+          activeCount > 0
             ? "border-orange-400 bg-orange-50 text-orange-700 dark:border-orange-500 dark:bg-orange-500/20 dark:text-orange-300 font-semibold shadow-sm"
             : "border-black/15 bg-transparent text-neutral-800 hover:bg-black/5 dark:border-white/20 dark:text-neutral-200 dark:hover:bg-white/10"
         }`}
-        title={holidays.size > 0 ? `${holidays.size} holiday(s) set — click to manage` : "Set Myntra holidays (ship-by skips these dates)"}
+        title={activeCount > 0 ? `${activeCount} upcoming holiday(s) set — click to manage` : "Set Myntra holidays (ship-by skips these dates)"}
       >
-        <CalendarOff size={14} className={holidays.size > 0 ? "text-orange-600 dark:text-orange-400" : "text-neutral-500"} />
+        <CalendarOff size={14} className={activeCount > 0 ? "text-orange-600 dark:text-orange-400" : "text-neutral-500"} />
         <span>Holidays</span>
-        {holidays.size > 0 ? (
-          <span className={`ml-0.5 rounded-full px-1.5 py-0.5 text-[11px] ${
-            "bg-orange-500 text-white dark:bg-orange-500"
-          }`}>
-            {holidays.size}
+        {activeCount > 0 ? (
+          <span className="ml-0.5 rounded-full px-1.5 py-0.5 text-[11px] bg-orange-500 text-white dark:bg-orange-500">
+            {activeCount}
           </span>
         ) : null}
       </button>
@@ -205,10 +204,10 @@ export function MyntraHolidayPicker({ initialHolidays }: MyntraHolidayPickerProp
                         disabled={busy || isPast}
                         onClick={() => toggleDate(dateStr)}
                         className={`relative m-0.5 rounded-lg py-1.5 text-xs font-medium transition ${
-                          isHoliday
-                            ? "bg-orange-500 text-white shadow-sm hover:bg-orange-600 dark:bg-orange-500 dark:hover:bg-orange-600"
-                            : isPast
-                              ? "text-neutral-300 dark:text-neutral-600 cursor-not-allowed"
+                          isPast
+                            ? "text-neutral-300 dark:text-neutral-600 cursor-not-allowed opacity-50"
+                            : isHoliday
+                              ? "bg-orange-500 text-white shadow-sm hover:bg-orange-600 dark:bg-orange-500 dark:hover:bg-orange-600"
                               : "text-neutral-700 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-white/10"
                         } ${isToday && !isHoliday ? "ring-2 ring-brand-500/50 ring-inset" : ""}`}
                         title={

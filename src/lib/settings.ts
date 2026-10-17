@@ -17,16 +17,28 @@ export async function getMyntraRtdCutoff(): Promise<string> {
 // Holidays — array of "YYYY-MM-DD" strings stored under _id: "myntra_holidays"
 // ---------------------------------------------------------------------------
 
+export function todayIST(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+}
+
 export async function getMyntraHolidays(): Promise<string[]> {
   await connectDB();
   const doc = await SettingModel.findById("myntra_holidays").lean();
-  if (doc && Array.isArray(doc.value)) return doc.value;
+  if (doc && Array.isArray(doc.value)) {
+    const today = todayIST();
+    const active = doc.value.filter((d) => typeof d === "string" && d >= today).sort();
+    if (active.length !== doc.value.length) {
+      SettingModel.findByIdAndUpdate("myntra_holidays", { value: active }).catch(() => {});
+    }
+    return active;
+  }
   return [];
 }
 
 export async function setMyntraHolidays(dates: string[]): Promise<string[]> {
   await connectDB();
-  const clean = [...new Set(dates.filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)))].sort();
+  const today = todayIST();
+  const clean = [...new Set(dates.filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d) && d >= today))].sort();
   await SettingModel.findByIdAndUpdate(
     "myntra_holidays",
     { value: clean, updatedBy: "UI", updatedAt: new Date() },
