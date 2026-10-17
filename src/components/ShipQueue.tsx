@@ -10,6 +10,7 @@ import { ShipOrderButton } from '@/components/ShipOrderButton';
 import { PlatformFilter } from '@/components/PlatformFilter';
 import { ShipDateFilter } from '@/components/ShipDateFilter';
 import { MyntraRtdButton } from '@/components/MyntraRtdButton';
+import { MyntraHolidayPicker } from '@/components/MyntraHolidayPicker';
 import { PLATFORM_LABELS, Platform } from '@/lib/constants';
 import { dateTime, dayKey, compareSize } from '@/lib/format';
 import type { ShipProduct } from '@/lib/shipping';
@@ -228,12 +229,14 @@ export function ShipQueue({
   platform,
   products,
   rtdCutoff = "13:00",
+  holidays = [],
 }: {
   rows: QueueRow[];
   totalCount: number;
   platform: Platform | null;
   products: ShipProduct[];
   rtdCutoff?: string;
+  holidays?: string[];
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
@@ -438,6 +441,7 @@ export function ShipQueue({
             onToggleFilter={() => setFMyntraRtd((prev) => !prev)}
             count={myntraRtdCount}
           />
+          <MyntraHolidayPicker initialHolidays={holidays} />
           {visible.length > 0 ? (
             <>
               {/* Forces the Ship buttons onto their own line every time, so a long

@@ -155,6 +155,13 @@ async function addPendingRow(
     );
     if (existing) return String(existing._id);
   }
+  let shipByAt = input.shipByAt;
+  if (channel === 'MYNTRA' && !shipByAt) {
+    const { getMyntraRtdCutoff, getMyntraHolidays, myntraShipByDate } = await import('@/lib/settings');
+    const [cutoff, holidays] = await Promise.all([getMyntraRtdCutoff(), getMyntraHolidays()]);
+    shipByAt = myntraShipByDate(input.placedAt || new Date(), cutoff, holidays);
+  }
+
   const [doc] = await PendingShipmentModel.create(
     [
       {
@@ -164,7 +171,7 @@ async function addPendingRow(
         orderId,
         trackingId: cleanTracking(input.trackingId),
         placedAt: input.placedAt,
-        shipByAt: input.shipByAt,
+        shipByAt,
       },
     ],
     { session },
