@@ -59,8 +59,7 @@ export function ShipOrderButton({
     <>
       <button
         onClick={() => { setTracking(trackingId ?? ''); setOpen(true); }}
-        disabled={short.length > 0}
-        title={short.length > 0 ? 'Some items in this order are out of stock' : undefined}
+        disabled={items.length === 0}
         className="flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40"
       >
         <Package size={14} /> Ship whole order

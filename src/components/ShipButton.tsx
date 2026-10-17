@@ -27,7 +27,7 @@ export function ShipButton({
 }) {
   const router = useRouter();
   const toast = useToast();
-  const maxShip = Math.min(qty, stock); // can't ship more than ordered or more than in stock
+  const maxShip = Math.max(1, qty); // can ship up to ordered quantity (auto-produces if short)
   const [open, setOpen] = useState(false);
   const [n, setN] = useState(maxShip);
   const [tracking, setTracking] = useState(trackingId ?? '');
@@ -63,9 +63,8 @@ export function ShipButton({
   return (
     <>
       <button
-        onClick={() => { setN(maxShip); setTracking(trackingId ?? ''); setOrder(orderId ?? ''); setOpen(true); }}
-        disabled={maxShip <= 0}
-        title={maxShip <= 0 ? 'Out of stock — produce it first' : undefined}
+        onClick={() => { setN(qty); setTracking(trackingId ?? ''); setOrder(orderId ?? ''); setOpen(true); }}
+        disabled={qty <= 0}
         className="rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40"
       >
         Ship
@@ -89,7 +88,7 @@ export function ShipButton({
                 className="w-20 rounded-lg border border-black/15 bg-transparent px-2 py-1.5 text-center text-sm text-neutral-900 dark:border-white/20 dark:text-white"
               />
               <button type="button" onClick={() => setN((v) => clamp(v + 1))} className="rounded-lg border border-black/15 p-1.5 hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"><Plus size={16} /></button>
-              <span className="text-xs text-neutral-400">of {qty} ordered · {stock} in stock</span>
+              <span className="text-xs text-neutral-400">of {qty} ordered · {stock > 0 ? `${stock} in stock` : 'out of stock (auto-produces)'}</span>
             </div>
 
             <label className="mt-4 flex flex-col gap-1 text-xs text-neutral-500">

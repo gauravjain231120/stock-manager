@@ -307,7 +307,7 @@ export function ShipQueue({
   const visible = visibleBeforeReady.filter(matchesReady);
 
   // Rows that can be ticked: enough left for this row to ship it in full.
-  const selectable = visible.filter((r) => r.free >= r.qty && r.qty > 0);
+  const selectable = visible.filter((r) => r.qty > 0);
   // Only what's on screen counts as selected — a row the filter hides must never
   // ship on the back of a button that says it ships what you can see.
   const sel = visible.filter((r) => selected.has(r.id));
@@ -322,7 +322,7 @@ export function ShipQueue({
     e.qty += r.qty;
     selBySku.set(r.stockSku, e);
   }
-  const selShort = [...selBySku.values()].some((e) => e.qty > e.free);
+  const selShort = false; // Auto-produces missing stock on ship
 
   // Lines of the same order ship as one parcel, so keep them together and give
   // multi-item orders a header with a single "ship it all" action. Counted over
@@ -342,7 +342,7 @@ export function ShipQueue({
 
   const allChecked = selectable.length > 0 && selectable.every((r) => selected.has(r.id));
   const shownUnits = visible.reduce((a, r) => a + r.qty, 0);
-  const shownShort = visible.some((r) => r.short);
+  const shownShort = false; // Auto-produces missing stock on ship
   const categoryLabel = fCategory === 'all' ? null : fCategory || 'No category';
   const colorLabel = fColor === 'all' ? null : fColor;
   const shipDateLabel = exactDates.length > 0 ? exactDates.join(', ') : fShipDate !== 'all' ? fShipDate : null;
@@ -460,14 +460,8 @@ export function ShipQueue({
                 confirmDetails={[{ label: 'Items', value: String(sel.length) }, { label: 'Units', value: String(selUnits) }]}
                 confirmLabel="Ship selected"
                 successMessage="Shipped ✓"
-                disabled={sel.length === 0 || selShort}
-                title={
-                  sel.length === 0
-                    ? 'Tick some items in the queue first'
-                    : selShort
-                      ? 'Not enough stock for some selected items'
-                      : undefined
-                }
+                disabled={sel.length === 0}
+                title={sel.length === 0 ? 'Tick some items in the queue first' : undefined}
               />
               <ActionButton
                 label={scope ? `Ship all ${scope}` : 'Ship all'}
@@ -492,8 +486,8 @@ export function ShipQueue({
                 ]}
                 confirmLabel="Ship all"
                 successMessage="All shipped ✓"
-                disabled={shownShort}
-                title={shownShort ? 'Some items are out of stock — produce them or remove them first' : undefined}
+                disabled={visible.length === 0}
+                title={visible.length === 0 ? 'Nothing in the queue to ship' : undefined}
               />
             </>
           ) : null}
@@ -520,7 +514,7 @@ export function ShipQueue({
       >
         {ordered.map((p, i) => {
           const s = stockStatus(p.free);
-          const canSelect = p.free >= p.qty && p.qty > 0;
+          const canSelect = p.qty > 0;
           const isExpanded = expandedRows.has(p.id);
           // First line of a multi-item order gets the "ship it all together" header.
           const grouped = Boolean(p.orderId && multiOrders.has(p.orderId));
@@ -547,8 +541,8 @@ export function ShipQueue({
                       {groupRows.length} items · {groupRows.reduce((a, r) => a + r.qty, 0)} units — one parcel, one tracking number
                     </span>
                     {groupShort.length > 0 ? (
-                      <span className="text-xs font-medium text-red-500">
-                        {groupShort.length} item{groupShort.length === 1 ? '' : 's'} out of stock — produce first
+                      <span className="text-xs font-medium text-amber-600 dark:text-amber-400">
+                        {groupShort.length} item{groupShort.length === 1 ? '' : 's'} out of stock (will auto-produce)
                       </span>
                     ) : null}
                     <span className="ml-auto">
@@ -569,7 +563,7 @@ export function ShipQueue({
                   checked={selected.has(p.id)}
                   onChange={() => toggle(p.id)}
                   disabled={!canSelect}
-                  title={canSelect ? undefined : 'Not enough stock left for this order — earlier orders come first'}
+                  
                   aria-label={`Select ${p.sku}`}
                   className={checkboxCls}
                 />
