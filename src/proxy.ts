@@ -53,7 +53,7 @@ function isServiceRequest(pathname: string, token: string | undefined): boolean 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  if (PUBLIC_PATHS.has(pathname)) {
+  if (PUBLIC_PATHS.has(pathname) || pathname.startsWith('/api/images/')) {
     return NextResponse.next();
   }
 
@@ -108,5 +108,5 @@ export async function proxy(req: NextRequest) {
 
 export const config = {
   // Run on everything except Next internals and public assets.
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|rangrooh-logo.png|uploads/).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|rangrooh-logo.png|uploads/|api/images/).*)'],
 };

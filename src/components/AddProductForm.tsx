@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Palette } from 'lucide-react';
 import { useConfirm } from '@/components/ConfirmProvider';
+import { compressImageIfNeeded } from '@/lib/clientImage';
 
 const input = 'rounded-lg border border-black/15 bg-transparent px-3 py-1.5 text-sm text-neutral-900 dark:border-white/20 dark:text-white';
 const btn = 'rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50';
@@ -52,8 +53,9 @@ export function AddProductForm() {
     setUploading(true);
     setMsg(null);
     try {
+      const processed = await compressImageIfNeeded(file);
       const fd = new FormData();
-      fd.append('file', file);
+      fd.append('file', processed);
       const res = await fetch('/api/upload', { method: 'POST', body: fd });
       const data = await res.json();
       if (!res.ok) setMsg(data?.error || 'Upload failed');

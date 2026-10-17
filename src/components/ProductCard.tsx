@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Pencil, Trash2, Upload } from 'lucide-react';
 import { Badge } from '@/components/ui';
 import { useConfirm } from '@/components/ConfirmProvider';
+import { compressImageIfNeeded } from '@/lib/clientImage';
 import { EditableStock } from '@/components/EditableStock';
 import { EditableSku } from '@/components/EditableSku';
 import { EditableVariantAttrs } from '@/components/EditableVariantAttrs';
@@ -112,8 +113,9 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
     setUploading(true);
     setMsg(null);
     try {
+      const processed = await compressImageIfNeeded(file);
       const fd = new FormData();
-      fd.append('file', file);
+      fd.append('file', processed);
       const res = await fetch('/api/upload', { method: 'POST', body: fd });
       const data = await res.json();
       if (!res.ok) setMsg(data?.error || 'Upload failed');

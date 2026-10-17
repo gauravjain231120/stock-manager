@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/components/ToastProvider';
 import type { ClothColorRow } from '@/lib/clothColors';
+import { compressImageIfNeeded } from '@/lib/clientImage';
 
 interface Props {
   initialColors: ClothColorRow[];
@@ -75,8 +76,9 @@ export function ClothColorsManager({ initialColors }: Props) {
     }
     setUploading(true);
     try {
+      const processed = await compressImageIfNeeded(file);
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', processed);
       const res = await fetch('/api/upload', {
         method: 'POST',
         body: formData,
