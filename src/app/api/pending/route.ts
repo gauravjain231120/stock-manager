@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { addPending, pendingCount } from '@/lib/shipping';
+import { addPending, pendingCount, autoShipPassedOrders } from '@/lib/shipping';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,6 +16,7 @@ const Add = z.object({
 
 /** GET /api/pending -> { count } (for the sidebar badge). */
 export async function GET() {
+  await autoShipPassedOrders();
   return Response.json({ count: await pendingCount() });
 }
 

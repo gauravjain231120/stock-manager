@@ -10,6 +10,8 @@ import { postMovement } from '@/lib/stock';
 import { MovementType, SystemLocation, infoStockFor, cleanTracking } from '@/lib/constants';
 import { stockSkuFor } from '@/lib/stockShare';
 import { VariantMeta, variantMeta, attrsOf } from '@/lib/variants';
+import { dayKey } from '@/lib/format';
+import { todayIST } from '@/lib/settings';
 
 const MAIN = SystemLocation.MAIN;
 
@@ -645,6 +647,62 @@ export async function shipAllPending(channel?: string) {
     shipped++;
   }
   return { shipped };
+}
+
+let autoShipRunningPromise: Promise<{ shipped: number }> | null = null;
+let lastAutoShipDate: string | null = null;
+let lastAutoShipRunTime = 0;
+
+/**
+ * Automatically pack & ship any queued order whose ship-by date has passed
+ * (shipByAt in IST is earlier than today in IST).
+ * For example: if shipBy is 19 Oct, once the date becomes 20 Oct in IST,
+ * all 19 Oct orders are automatically moved to Shipped, auto-producing any deficit stock.
+ */
+export async function autoShipPassedOrders(): Promise<{ shipped: number }> {
+  if (autoShipRunningPromise) return autoShipRunningPromise;
+
+  const today = todayIST();
+  const now = Date.now();
+  // Rate-limit guard: avoid hammering DB if called multiple times within 10s on the same day
+  if (lastAutoShipDate === today && now - lastAutoShipRunTime < 10_000) {
+    return { shipped: 0 };
+  }
+
+  autoShipRunningPromise = (async () => {
+    try {
+      await connectDB();
+      const pendingWithDate = await PendingShipmentModel.find({
+        shipByAt: { $exists: true, $ne: null },
+      }).sort({ createdAt: 1 }).lean();
+
+      const passed = pendingWithDate.filter((p) => p.shipByAt && dayKey(p.shipByAt) < today);
+      if (passed.length === 0) {
+        lastAutoShipDate = today;
+        lastAutoShipRunTime = Date.now();
+        return { shipped: 0 };
+      }
+
+      console.log(`[AutoShip] Found ${passed.length} passed order(s) (shipBy < ${today}). Auto-shipping...`);
+      let shipped = 0;
+      for (const p of passed) {
+        try {
+          await shipPending(String(p._id), undefined, undefined, undefined, true);
+          shipped++;
+        } catch (err: any) {
+          console.error(`[AutoShip] Failed to auto-ship order ${p.orderId || p._id}:`, err.message);
+        }
+      }
+      console.log(`[AutoShip] Completed auto-shipping: ${shipped}/${passed.length} orders shipped.`);
+      lastAutoShipDate = today;
+      lastAutoShipRunTime = Date.now();
+      return { shipped };
+    } finally {
+      autoShipRunningPromise = null;
+    }
+  })();
+
+  return autoShipRunningPromise;
 }
 
 /**

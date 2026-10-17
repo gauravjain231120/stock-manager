@@ -5,10 +5,12 @@ import { MovementTable } from '@/components/MovementTable';
 import { MovementDayPanel } from '@/components/MovementDayPanel';
 import { RevealableStats } from '@/components/RevealableStats';
 import { num } from '@/lib/format';
+import { autoShipPassedOrders } from '@/lib/shipping';
 
 export const dynamic = 'force-dynamic';
 
 export default async function ShippedPage() {
+  await autoShipPassedOrders();
   const [rows, stats, allReturnRows] = await Promise.all([
     // Cancelled parcels too (marked on the bot's Myntra Cancel page) — listed
     // with a Cancelled tag, never counted as shipped (the stats are SOLD only).

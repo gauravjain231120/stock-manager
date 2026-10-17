@@ -2,6 +2,7 @@ import { isAuthorizedCron } from '@/lib/cron';
 import { ingestAllOrders } from '@/lib/orders';
 import { ingestAllReturns } from '@/lib/returns';
 import { syncAll } from '@/lib/sync';
+import { autoShipPassedOrders } from '@/lib/shipping';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // seconds (Vercel function limit)
@@ -14,10 +15,12 @@ export const maxDuration = 60; // seconds (Vercel function limit)
  * durable retries at higher volume, move the resync onto Inngest/QStash later.
  */
 async function run() {
+  const autoShip = await autoShipPassedOrders();
   const orders = await ingestAllOrders();
   const returns = await ingestAllReturns();
   const sync = await syncAll();
   return {
+    autoShip,
     orders,
     returns,
     sync: { pushed: sync.length, changed: sync.filter((r) => r.changed).length, failed: sync.filter((r) => !r.ok).length },

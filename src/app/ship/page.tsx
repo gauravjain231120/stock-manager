@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { FileText, Printer } from 'lucide-react';
-import { listPending, shipProducts, queueRows } from '@/lib/shipping';
+import { listPending, shipProducts, queueRows, autoShipPassedOrders } from '@/lib/shipping';
 import { PageHeader, StatCard } from '@/components/ui';
 import { AddPendingForm } from '@/components/AddPendingForm';
 import { ShipQueue } from '@/components/ShipQueue';
@@ -19,6 +19,7 @@ function platformLabel(c?: string | null) {
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export default async function ShipPage({ searchParams }: { searchParams: Promise<{ platform?: string; dates?: string }> }) {
+  await autoShipPassedOrders();
   const [pending, products, rtdCutoff, holidays] = await Promise.all([listPending(), shipProducts(), getMyntraRtdCutoff(), getMyntraHolidays()]);
   // Optional platform filter (?platform=AMAZON). Narrows only the visible queue.
   const sp = await searchParams;

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
-import { listPending, queueRows } from '@/lib/shipping';
+import { listPending, queueRows, autoShipPassedOrders } from '@/lib/shipping';
 import { PrintButton } from '@/components/PrintButton';
 import { PLATFORMS, PLATFORM_LABELS, Platform } from '@/lib/constants';
 import { dateTime, dayKey } from '@/lib/format';
@@ -56,6 +56,7 @@ export default async function QueuePrintPage({
   const sp = await searchParams;
   const platform = PLATFORMS.includes(sp.platform as Platform) ? (sp.platform as Platform) : null;
   const dates = sp.dates ? sp.dates.split(',').filter((d) => DATE_RE.test(d)) : [];
+  await autoShipPassedOrders();
   const pending = await listPending();
   // Stock is allocated over the WHOLE queue before narrowing to a platform —
   // who has a claim on a garment can't depend on which tab was open when
