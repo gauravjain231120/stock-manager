@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Search, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Search, CheckCircle2, AlertTriangle, Copy, Check } from 'lucide-react';
 import { Badge } from '@/components/ui';
 import { dateOnly, matchesSearch } from '@/lib/format';
 import { PLATFORM_LABELS, Platform } from '@/lib/constants';
@@ -22,7 +22,15 @@ function platformLabel(c: string | null) {
  */
 export function ReturnSearch({ rows, reports }: { rows: MovementRow[]; reports: ReportView[] }) {
   const [q, setQ] = useState('');
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const term = q.trim();
+
+  function copyText(text: string, id: string) {
+    if (!text) return;
+    navigator.clipboard?.writeText(text).catch(() => {});
+    setCopiedId(id);
+    setTimeout(() => setCopiedId((curr) => (curr === id ? null : curr)), 2000);
+  }
 
   const foundReturns = term
     ? rows.filter((r) => matchesSearch(`${r.sku} ${r.name} ${r.color} ${r.size} ${r.trackingId ?? ''} ${r.orderId ?? ''} ${platformLabel(r.channel)}`, term, r.sku))
@@ -60,9 +68,23 @@ export function ReturnSearch({ rows, reports }: { rows: MovementRow[]; reports: 
               <ul className="flex flex-col gap-1.5">
                 {foundReturns.slice(0, MAX_SHOWN).map((r) => (
                   <li key={r.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-emerald-500/10 px-3 py-2 text-sm">
-                    <CheckCircle2 size={15} className="text-emerald-600" />
+                    <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
                     <span className="font-medium">{r.qty} × {r.name}{r.color ? ` — ${r.color}` : ''}{r.size ? ` · ${r.size}` : ''}</span>
-                    <span className="font-mono text-xs text-neutral-500">{r.trackingId ?? 'no tracking'}</span>
+                    {r.trackingId ? (
+                      <span className="inline-flex items-center gap-1 font-mono text-xs text-neutral-600 dark:text-neutral-300">
+                        {r.trackingId}
+                        <button
+                          type="button"
+                          onClick={() => copyText(r.trackingId!, `ret-${r.id}`)}
+                          className="rounded p-0.5 text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200"
+                          title="Copy tracking ID"
+                        >
+                          {copiedId === `ret-${r.id}` ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} />}
+                        </button>
+                      </span>
+                    ) : (
+                      <span className="font-mono text-xs text-neutral-400">no tracking</span>
+                    )}
                     <span className="text-xs text-neutral-400">{platformLabel(r.channel)} · returned {dateOnly(r.at)}</span>
                   </li>
                 ))}
@@ -85,8 +107,18 @@ export function ReturnSearch({ rows, reports }: { rows: MovementRow[]; reports: 
                       line.received ? 'bg-emerald-500/10' : line.settled ? 'bg-black/5 dark:bg-white/5' : 'bg-red-500/10'
                     }`}
                   >
-                    {line.received ? <CheckCircle2 size={15} className="text-emerald-600" /> : <AlertTriangle size={15} className={line.settled ? 'text-neutral-400' : 'text-red-600'} />}
-                    <span className="font-mono text-xs">{line.trackingId}</span>
+                    {line.received ? <CheckCircle2 size={15} className="text-emerald-600 shrink-0" /> : <AlertTriangle size={15} className={`shrink-0 ${line.settled ? 'text-neutral-400' : 'text-red-600'}`} />}
+                    <span className="inline-flex items-center gap-1 font-mono text-xs">
+                      {line.trackingId}
+                      <button
+                        type="button"
+                        onClick={() => copyText(line.trackingId, `rep-${rep.id}-${line.trackingId}`)}
+                        className="rounded p-0.5 text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200"
+                        title="Copy tracking ID"
+                      >
+                        {copiedId === `rep-${rep.id}-${line.trackingId}` ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} />}
+                      </button>
+                    </span>
                     <span className="text-xs text-neutral-400">{platformLabel(rep.platform)} report · {dateOnly(rep.reportDate)}</span>
                     {line.received ? (
                       <Badge tone="good">received</Badge>
