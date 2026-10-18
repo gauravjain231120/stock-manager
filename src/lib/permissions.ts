@@ -72,7 +72,7 @@ export const SECTION_API_PREFIXES: Record<string, string[]> = {
 /** Small shared utility endpoints every authenticated role can use regardless
  *  of section grants — they back pickers/search used across many pages, not
  *  a page of their own. Read-only by nature, so fine for Viewer too. */
-const SHARED_API_PREFIXES = ['/api/skus', '/api/images'];
+const SHARED_API_PREFIXES = ['/api/skus', '/api/images', '/api/settings/holidays', '/api/settings/rtd'];
 
 /** Owner-only API surface — never reachable by Manager or Viewer. Note:
  *  '/api/account' (singular, the Expense ledger) is now a grantable section

@@ -9,7 +9,7 @@ import { isPathAllowed, sectionsForRole, NO_ACCESS_PATH, type Role } from '@/lib
 // so Vercel Cron can reach them without ever carrying a session cookie —
 // otherwise this gate would 401 Cron's bearer-token request before it ever
 // reached that route's own check.
-const PUBLIC_PATHS = new Set(['/login', '/api/login', '/api/logout', '/api/backup', '/api/cron/poll']);
+const PUBLIC_PATHS = new Set(['/login', '/api/login', '/api/logout', '/api/backup', '/api/cron/poll', '/api/settings/holidays', '/api/settings/rtd']);
 
 // The order-alert integration (a SEPARATE app — Myntra/Amazon order events
 // adding/removing rows in the Ready-to-Ship queue, and now also its own
