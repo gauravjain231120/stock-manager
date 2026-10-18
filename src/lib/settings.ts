@@ -62,7 +62,7 @@ export async function toggleMyntraHoliday(date: string): Promise<string[]> {
 // Ship-by date calculation (holiday-aware)
 // ---------------------------------------------------------------------------
 
-function skipHolidays(dayStr: string, holidays: string[]): string {
+export function skipHolidays(dayStr: string, holidays: string[]): string {
   if (!holidays.length) return dayStr;
   const set = new Set(holidays);
   let [y, m, d] = dayStr.split("-").map(Number);

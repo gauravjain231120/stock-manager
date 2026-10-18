@@ -158,10 +158,19 @@ async function addPendingRow(
     if (existing) return String(existing._id);
   }
   let shipByAt = input.shipByAt;
-  if (channel === 'MYNTRA' && !shipByAt) {
-    const { getMyntraRtdCutoff, getMyntraHolidays, myntraShipByDate } = await import('@/lib/settings');
+  if (channel === 'MYNTRA') {
+    const { getMyntraRtdCutoff, getMyntraHolidays, myntraShipByDate, skipHolidays } = await import('@/lib/settings');
     const [cutoff, holidays] = await Promise.all([getMyntraRtdCutoff(), getMyntraHolidays()]);
-    shipByAt = myntraShipByDate(input.placedAt || new Date(), cutoff, holidays);
+    if (!shipByAt) {
+      shipByAt = myntraShipByDate(input.placedAt || new Date(), cutoff, holidays);
+    } else if (holidays.length) {
+      const dStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date(shipByAt));
+      const adjusted = skipHolidays(dStr, holidays);
+      if (adjusted !== dStr) {
+        const [y, m, d] = adjusted.split('-').map(Number);
+        shipByAt = new Date(Date.UTC(y, m - 1, d, 23, 59, 59, 999) - 5.5 * 3600 * 1000);
+      }
+    }
   }
 
   const [doc] = await PendingShipmentModel.create(
