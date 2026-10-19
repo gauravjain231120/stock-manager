@@ -922,3 +922,15 @@ We updated the order alert bot (`myntra-order-alert-web`) to append `+05:30` to 
 
 This requires no code changes in `stock-manager` itself, but the Ready-to-Ship queue now receives the correct IST timestamps and accurate `orderId`s from Flipkart.
 
+
+## 16. Myntra Cutoff Sync & Cleaned Ready to Ship UI (2026-10-19)
+
+1. **Cutoff Synchronization & Manual Setting Removal**:
+   - Removed manual RTD cutoff settings (e.g. `13:00`) and holiday picker modals from the Ready to Ship screen (`ShipQueue.tsx`).
+   - Myntra orders now receive their authoritative ship date directly from Myntra's `dispatchWarehouseEndTime` via the order-alert bot integration.
+   - Replaced complex modals with a clean, single **`Myntra RTD (Today)`** toggle button with a live count badge showing only Myntra orders due for dispatch today (`shipByAt <= today`).
+
+2. **Dynamic Auto-Ship on Ship Date Change**:
+   - `autoShipPassedOrders()` queries `PendingShipmentModel` dynamically on every run, evaluating `dayKey(p.shipByAt) < today`.
+   - When an order's ship-by date is changed (via the `EditPendingButton` or API `/api/pending/[id]`), its `shipByAt` field in MongoDB is immediately updated.
+   - If an order's ship date is pushed forward (e.g. from 19 Oct to 21 Oct), `autoShipPassedOrders()` respects the updated date and will NOT auto-ship the order until the new date has actually passed.
