@@ -2,13 +2,13 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { stockAfterQueue } from '@/lib/stockAfter';
 import { PrintButton } from '@/components/PrintButton';
-import { dateTime, dayKey, num } from '@/lib/format';
+import { dateTime, dayKey, num, formatDayDMY } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
 
 // Chrome names the saved file after the document title, so put the date in it.
 export async function generateMetadata() {
-  return { title: `Rangrooh stock after Ready to Ship ${dayKey(new Date())}` };
+  return { title: `Rangrooh stock after Ready to Ship ${formatDayDMY(new Date())}` };
 }
 
 const th = 'border-b-2 border-black/40 px-2 py-1.5 text-left font-semibold dark:border-white/40';

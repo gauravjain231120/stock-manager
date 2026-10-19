@@ -934,3 +934,10 @@ This requires no code changes in `stock-manager` itself, but the Ready-to-Ship q
    - `autoShipPassedOrders()` queries `PendingShipmentModel` dynamically on every run, evaluating `dayKey(p.shipByAt) < today`.
    - When an order's ship-by date is changed (via the `EditPendingButton` or API `/api/pending/[id]`), its `shipByAt` field in MongoDB is immediately updated.
    - If an order's ship date is pushed forward (e.g. from 19 Oct to 21 Oct), `autoShipPassedOrders()` respects the updated date and will NOT auto-ship the order until the new date has actually passed.
+
+
+## 17. Print Queue Date Format Update to DD-MM-YYYY (2026-10-19)
+
+- Updated print sheet metadata title and on-page ship-by dates from `YYYY-MM-DD` (`2026-10-19`) to `DD-MM-YYYY` (`19-10-2026`).
+- When printing via `/ship/queue-print`, the document title / browser header now reads `Rangrooh Ready to Ship queue 19-10-2026`.
+- Sheet subtitle and empty-state date filters similarly display dates in `DD-MM-YYYY` format.

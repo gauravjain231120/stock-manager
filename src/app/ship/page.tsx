@@ -5,7 +5,7 @@ import { PageHeader, StatCard } from '@/components/ui';
 import { AddPendingForm } from '@/components/AddPendingForm';
 import { ShipQueue } from '@/components/ShipQueue';
 import { ToMakeTable } from '@/components/ToMakeTable';
-import { num, dayKey } from '@/lib/format';
+import { num, dayKey, formatDayDMY } from '@/lib/format';
 import { PLATFORMS, PLATFORM_LABELS, Platform } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
@@ -99,7 +99,7 @@ export default async function ShipPage({ searchParams }: { searchParams: Promise
               target="_blank"
               title={
                 dates.length > 0
-                  ? `The queue ship-by ${dates.join(', ')}${platform ? ` (${PLATFORM_LABELS[platform]})` : ''} — on one printed page`
+                  ? `The queue ship-by ${dates.map(formatDayDMY).join(', ')}${platform ? ` (${PLATFORM_LABELS[platform]})` : ''} — on one printed page`
                   : platform
                     ? `The ${PLATFORM_LABELS[platform]} queue — product, platform, stock, and status — on one printed page`
                     : 'The whole queue — product, platform, stock, and status — on one printed page'

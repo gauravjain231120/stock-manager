@@ -3,7 +3,7 @@ import { ArrowLeft } from 'lucide-react';
 import { listPending, queueRows, autoShipPassedOrders } from '@/lib/shipping';
 import { PrintButton } from '@/components/PrintButton';
 import { PLATFORMS, PLATFORM_LABELS, Platform } from '@/lib/constants';
-import { dateTime, dayKey } from '@/lib/format';
+import { dateTime, dayKey, formatDayDMY } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,7 +13,7 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 export async function generateMetadata({ searchParams }: { searchParams: Promise<{ dates?: string }> }) {
   const sp = await searchParams;
   const dates = sp.dates ? sp.dates.split(',').filter((d) => DATE_RE.test(d)) : [];
-  const label = dates.length > 0 ? dates.join('_') : dayKey(new Date());
+  const label = dates.length > 0 ? dates.map(formatDayDMY).join('_') : formatDayDMY(new Date());
   return { title: `Rangrooh Ready to Ship queue ${label}` };
 }
 
@@ -105,7 +105,7 @@ export default async function QueuePrintPage({
       <div className="print-sheet">
         <p className="mb-1 text-[10px] text-neutral-500 print-muted">
           {rows.length} order{rows.length === 1 ? '' : 's'} · {units} unit{units === 1 ? '' : 's'} · {generated}
-          {dates.length > 0 ? ` · Ship by ${dates.join(', ')}` : ''}
+          {dates.length > 0 ? ` · Ship by ${dates.map(formatDayDMY).join(', ')}` : ''}
         </p>
         {platformSummary ? <p className="mb-1 text-[10px] font-semibold">{platformSummary}</p> : null}
 
@@ -136,9 +136,9 @@ export default async function QueuePrintPage({
 
         {rows.length === 0 ? (
           <p className="py-8 text-center text-sm text-neutral-400">
-            {[platform ? platformLabel(platform) : null, dates.length > 0 ? `ship-by ${dates.join(', ')}` : null].filter(Boolean)
+            {[platform ? platformLabel(platform) : null, dates.length > 0 ? `ship-by ${dates.map(formatDayDMY).join(', ')}` : null].filter(Boolean)
               .length > 0
-              ? `Nothing queued for ${[platform ? platformLabel(platform) : null, dates.length > 0 ? `ship-by ${dates.join(', ')}` : null]
+              ? `Nothing queued for ${[platform ? platformLabel(platform) : null, dates.length > 0 ? `ship-by ${dates.map(formatDayDMY).join(', ')}` : null]
                   .filter(Boolean)
                   .join(', ')} right now.`
               : 'Nothing queued right now.'}

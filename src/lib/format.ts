@@ -33,6 +33,18 @@ export function dayKey(d?: Date | string | null): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(date);
 }
 
+/**
+ * India-time calendar day formatted as DD-MM-YYYY (e.g. 19-10-2026).
+ */
+export function formatDayDMY(d?: Date | string | null): string {
+  if (!d) return '';
+  if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)) {
+    return d.split('-').reverse().join('-');
+  }
+  const key = dayKey(d);
+  return key ? key.split('-').reverse().join('-') : '';
+}
+
 // 3XL is what the marketplaces call it and what our SKUs use; XXXL stays as an
 // alias so any older data still sorts into the same slot rather than last.
 const SIZE_ORDER = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', 'XXXL', 'OS', 'FREE'];
