@@ -2,15 +2,13 @@
 
 import { Fragment, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { ChevronDown, ChevronRight, Package, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, Package, X, Clock } from 'lucide-react';
 import { Panel, Table, Th, Td, Tr, Badge } from '@/components/ui';
 import { ActionButton } from '@/components/ActionButton';
 import { PendingRowActions } from '@/components/PendingRowActions';
 import { ShipOrderButton } from '@/components/ShipOrderButton';
 import { PlatformFilter } from '@/components/PlatformFilter';
 import { ShipDateFilter } from '@/components/ShipDateFilter';
-import { MyntraRtdButton } from '@/components/MyntraRtdButton';
-import { MyntraHolidayPicker } from '@/components/MyntraHolidayPicker';
 import { PLATFORM_LABELS, Platform } from '@/lib/constants';
 import { dateTime, dayKey, compareSize } from '@/lib/format';
 import type { ShipProduct } from '@/lib/shipping';
@@ -228,8 +226,6 @@ export function ShipQueue({
   totalCount,
   platform,
   products,
-  rtdCutoff = "13:00",
-  holidays = [],
 }: {
   rows: QueueRow[];
   totalCount: number;
@@ -435,13 +431,30 @@ export function ShipQueue({
             <option value="tomorrow">Ship by tomorrow</option>
           </select>
           <ShipDateFilter />
-          <MyntraRtdButton
-            initialCutoff={rtdCutoff}
-            isActive={fMyntraRtd}
-            onToggleFilter={() => setFMyntraRtd((prev) => !prev)}
-            count={myntraRtdCount}
-          />
-          <MyntraHolidayPicker initialHolidays={holidays} />
+          <button
+            type="button"
+            onClick={() => setFMyntraRtd((prev) => !prev)}
+            title={fMyntraRtd ? "Showing Myntra orders due today (click to clear)" : "Filter Myntra orders due today"}
+            className={`inline-flex items-center gap-1.5 rounded-lg border text-sm transition px-3 py-1.5 ${
+              fMyntraRtd
+                ? "border-brand-600 bg-brand-50 text-brand-700 dark:border-brand-500 dark:bg-brand-500/20 dark:text-brand-300 font-semibold shadow-sm"
+                : "border-black/15 bg-transparent text-neutral-800 hover:bg-black/5 dark:border-white/20 dark:text-neutral-200 dark:hover:bg-white/10"
+            }`}
+          >
+            <Clock size={14} className={fMyntraRtd ? "text-brand-600 dark:text-brand-400" : "text-neutral-500"} />
+            <span>Myntra RTD (Today)</span>
+            {myntraRtdCount !== undefined ? (
+              <span
+                className={`ml-0.5 rounded-full px-1.5 py-0.2 text-[11px] ${
+                  fMyntraRtd
+                    ? "bg-brand-600 text-white dark:bg-brand-500"
+                    : "bg-black/10 text-neutral-700 dark:bg-white/20 dark:text-neutral-200"
+                }`}
+              >
+                {myntraRtdCount}
+              </span>
+            ) : null}
+          </button>
           {visible.length > 0 ? (
             <>
               {/* Forces the Ship buttons onto their own line every time, so a long

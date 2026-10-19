@@ -7,7 +7,6 @@ import { ShipQueue } from '@/components/ShipQueue';
 import { ToMakeTable } from '@/components/ToMakeTable';
 import { num, dayKey } from '@/lib/format';
 import { PLATFORMS, PLATFORM_LABELS, Platform } from '@/lib/constants';
-import { getMyntraRtdCutoff, getMyntraHolidays } from '@/lib/settings';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,7 +19,7 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export default async function ShipPage({ searchParams }: { searchParams: Promise<{ platform?: string; dates?: string }> }) {
   await autoShipPassedOrders();
-  const [pending, products, rtdCutoff, holidays] = await Promise.all([listPending(), shipProducts(), getMyntraRtdCutoff(), getMyntraHolidays()]);
+  const [pending, products] = await Promise.all([listPending(), shipProducts()]);
   // Optional platform filter (?platform=AMAZON). Narrows only the visible queue.
   const sp = await searchParams;
   const platform = PLATFORMS.includes(sp.platform as Platform) ? (sp.platform as Platform) : null;
@@ -151,8 +150,6 @@ export default async function ShipPage({ searchParams }: { searchParams: Promise
         totalCount={pending.length}
         platform={platform}
         products={products}
-        rtdCutoff={rtdCutoff}
-        holidays={holidays}
       />
 
       {pending.length === 0 ? (
