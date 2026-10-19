@@ -134,8 +134,19 @@ export async function recalcPendingMyntraShipBy(cutoffTime?: string): Promise<vo
     for (const p of pendingMyntra) {
       const orderDate = p.placedAt || (p as any).createdAt;
       if (orderDate) {
-        const newShipBy = myntraShipByDate(orderDate, cutoff, holidays);
-        await PendingShipmentModel.updateOne({ _id: p._id }, { $set: { shipByAt: newShipBy } });
+        const currentShipBy = p.shipByAt;
+        if (currentShipBy) {
+          const dStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date(currentShipBy));
+          const adjusted = skipHolidays(dStr, holidays);
+          if (adjusted !== dStr) {
+            const [y, m, d] = adjusted.split('-').map(Number);
+            const newShipBy = new Date(Date.UTC(y, m - 1, d, 23, 59, 59, 999) - 5.5 * 3600 * 1000);
+            await PendingShipmentModel.updateOne({ _id: p._id }, { $set: { shipByAt: newShipBy } });
+          }
+        } else {
+          const newShipBy = myntraShipByDate(orderDate, cutoff, holidays);
+          await PendingShipmentModel.updateOne({ _id: p._id }, { $set: { shipByAt: newShipBy } });
+        }
       }
     }
   } catch (err: any) {
