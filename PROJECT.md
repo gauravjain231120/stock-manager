@@ -941,3 +941,14 @@ This requires no code changes in `stock-manager` itself, but the Ready-to-Ship q
 - Updated print sheet metadata title and on-page ship-by dates from `YYYY-MM-DD` (`2026-10-19`) to `DD-MM-YYYY` (`19-10-2026`).
 - When printing via `/ship/queue-print`, the document title / browser header now reads `Rangrooh Ready to Ship queue 19-10-2026`.
 - Sheet subtitle and empty-state date filters similarly display dates in `DD-MM-YYYY` format.
+
+
+## 18. Return Quality and Fraud Numbers Visible to Manager Role (2026-10-21)
+
+1. **Access Level Update**:
+   - Previously, the Return condition breakdown (`Good`, `Used`, `Faked`, `Wrong`) and return types (`Customer returns`, `RTO`, `Type unknown`) were restricted strictly to `OWNER` accounts. For any other account, `rowsForViewer` stripped `FAKED` and `USED` labels.
+   - Now, both `OWNER` and `MANAGER` roles have full visibility into these numbers and movement rows.
+
+2. **Changes**:
+   - `src/lib/movements.ts`: `rowsForViewer()` preserves `returnType` and `FAKED`/`USED` conditions when accessed by either an Owner or Manager (stripped only for `VIEWER`).
+   - `src/app/returns/page.tsx`: Updated `isOwnerOrManager` permission check so Managers see the condition StatCards (including `Faked` and `Used`), return type cards, condition filters, and table badges.

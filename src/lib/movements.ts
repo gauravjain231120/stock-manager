@@ -144,23 +144,24 @@ export async function movementStats(type: MovementType): Promise<MovementStats> 
   };
 }
 
-// Conditions only an Owner may see. Wrong item / Defective stay visible to
+// Conditions only an Owner or Manager may see. Wrong item / Defective stay visible to
 // everyone — they decide which shelf the units are on — while Faked and Used
-// are a quality/fraud signal, like the Owner-only condition counts.
-const OWNER_ONLY_CONDITIONS = ['FAKED', 'USED'];
+// are a quality/fraud signal, like the condition counts.
+const PRIVILEGED_CONDITIONS = ['FAKED', 'USED'];
 
 /**
- * Strip Owner-only return info from rows before they're handed to a
- * non-Owner's page, so it never reaches their browser at all (hiding it in the
+ * Strip privileged return info from rows before they're handed to a
+ * non-privileged Viewer's page, so it never reaches their browser at all (hiding it in the
  * UI alone would still ship it in the page data): customer return vs RTO
  * (`returnType`), and the Faked / Used conditions (shown as no condition —
  * both sit in sellable stock like Good, so "back in stock" stays correct).
+ * Both Owner and Manager accounts have full visibility into these details.
  */
-export function rowsForViewer(rows: MovementRow[], isOwner: boolean): MovementRow[] {
-  if (isOwner) return rows;
+export function rowsForViewer(rows: MovementRow[], isOwnerOrManager: boolean): MovementRow[] {
+  if (isOwnerOrManager) return rows;
   return rows.map((r) => ({
     ...r,
     returnType: null,
-    condition: r.condition && OWNER_ONLY_CONDITIONS.includes(r.condition) ? null : r.condition,
+    condition: r.condition && PRIVILEGED_CONDITIONS.includes(r.condition) ? null : r.condition,
   }));
 }

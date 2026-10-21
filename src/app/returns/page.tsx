@@ -26,9 +26,9 @@ export default async function ReturnsPage() {
     getCurrentSession(),
   ]);
   const outstanding = reports.reduce((a, r) => a + r.missing, 0);
-  const isOwner = session?.role === 'OWNER';
-  // Return type + Faked/Used are Owner-only — stripped server-side for anyone else.
-  const rows = rowsForViewer(allRows, isOwner);
+  const isOwnerOrManager = session?.role === 'OWNER' || session?.role === 'MANAGER';
+  // Return type + Faked/Used are visible to Owner and Manager — stripped server-side for Viewers.
+  const rows = rowsForViewer(allRows, isOwnerOrManager);
 
   // Returned units per platform, busiest first.
   const perPlatform = new Map<string, { units: number; count: number }>();
@@ -41,8 +41,7 @@ export default async function ReturnsPage() {
   }
   const platformStats = [...perPlatform.entries()].sort((a, b) => b[1].units - a[1].units);
 
-  // How every graded return came back — Owner only, since this is a quality/
-  // fraud signal rather than a day-to-day operating number.
+  // How every graded return came back — Owner and Manager can view quality/fraud numbers.
   const conditionCounts = { GOOD: 0, USED: 0, FAKED: 0, WRONG: 0 };
   const returnTypeCounts = { CUSTOMER: 0, RTO: 0, UNKNOWN: 0 };
   for (const r of rows) {
@@ -60,7 +59,7 @@ export default async function ReturnsPage() {
       <div className="mb-6">
         <RegisterEntryForm
           lockedAction="RETURN"
-          showReturnType={isOwner}
+          showReturnType={isOwnerOrManager}
           products={registerRows.map((r) => ({
             sku: r.sku,
             name: r.name,
@@ -105,7 +104,7 @@ export default async function ReturnsPage() {
           </section>
         ) : null}
 
-        {isOwner ? (
+        {isOwnerOrManager ? (
           <section className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
             <StatCard label="Good" value={num(conditionCounts.GOOD)} tone="good" />
             <StatCard label="Used" value={num(conditionCounts.USED)} tone="warn" />
@@ -114,7 +113,7 @@ export default async function ReturnsPage() {
           </section>
         ) : null}
 
-        {isOwner ? (
+        {isOwnerOrManager ? (
           <section className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
             <StatCard label="Customer returns" value={num(returnTypeCounts.CUSTOMER)} />
             <StatCard label="RTO" value={num(returnTypeCounts.RTO)} tone="warn" />
@@ -142,8 +141,8 @@ export default async function ReturnsPage() {
         verb="returned"
         csvName="returns"
         withCondition
-        showConditionFilter={isOwner}
-        ownerView={isOwner}
+        showConditionFilter={isOwnerOrManager}
+        ownerView={isOwnerOrManager}
         products={products}
       />
     </main>
