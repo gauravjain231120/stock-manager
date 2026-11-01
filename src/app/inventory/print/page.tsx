@@ -17,6 +17,12 @@ function sizeFromSku(sku: string) {
   return sku.split('-').pop() ?? '';
 }
 
+function baseTitle(name: string, sku: string) {
+  const sz = sizeFromSku(sku).toUpperCase();
+  const parts = name.trim().split(/\s+/);
+  return parts.length > 1 && parts[parts.length - 1].toUpperCase() === sz ? parts.slice(0, -1).join(' ') : name;
+}
+
 // Solid, fully-opaque borders on every side — an opacity-based border (e.g.
 // border-black/10) can render too faint to see once a page actually prints
 // or gets saved as a PDF, even though it looks fine on screen.
@@ -44,7 +50,9 @@ export default async function InventoryPrintPage({
     .filter((r) => (!category || r.category === category) && (!color || r.color === color))
     .sort((a, b) => {
       if (a.category !== b.category) return a.category.localeCompare(b.category);
-      if (a.name !== b.name) return a.name.localeCompare(b.name);
+      const btA = baseTitle(a.name, a.sku);
+      const btB = baseTitle(b.name, b.sku);
+      if (btA !== btB) return btA.localeCompare(btB);
       return compareVariant(a.sku, b.sku);
     });
 
