@@ -89,6 +89,8 @@ export default async function QueuePrintPage({
     .map(([channel, qty]) => `${platformLabel(channel || null)}: ${qty}`)
     .join(' · ');
 
+  const outOfStock = rows.reduce((a, r) => a + (r.after < 0 ? -r.after : 0), 0);
+
   return (
     <main className="px-4 py-6 sm:px-6 sm:py-8 print:p-0">
       <div className="no-print mb-6 flex flex-wrap items-center justify-between gap-3">
@@ -107,7 +109,15 @@ export default async function QueuePrintPage({
           {rows.length} order{rows.length === 1 ? '' : 's'} · {units} unit{units === 1 ? '' : 's'} · {generated}
           {dates.length > 0 ? ` · Ship by ${dates.map(formatDayDMY).join(', ')}` : ''}
         </p>
-        {platformSummary ? <p className="mb-1 text-[10px] font-semibold">{platformSummary}</p> : null}
+        {platformSummary ? (
+          <p className="mb-1 text-[10px] font-semibold">
+            {platformSummary}
+            {' · '}
+            <span className={outOfStock > 0 ? 'print-short text-red-600' : ''}>
+              Out of stock: {outOfStock}
+            </span>
+          </p>
+        ) : null}
 
         <table className="w-full border-collapse text-[10px] leading-tight">
           <thead>
