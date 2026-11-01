@@ -37,7 +37,7 @@ export async function getInventoryOverview(): Promise<InventoryOverview> {
   await connectDB();
 
   const [products, stock, listings, locations, summary] = await Promise.all([
-    ProductModel.find().sort({ sku: 1 }).lean(),
+    ProductModel.find({ active: { $ne: false } }).sort({ sku: 1 }).lean(),
     SkuStockModel.find().lean(),
     ChannelListingModel.find().lean(),
     LocationModel.find().lean(),

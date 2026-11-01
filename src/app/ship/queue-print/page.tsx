@@ -117,6 +117,7 @@ export default async function QueuePrintPage({
               <th className={th}>Platform</th>
               <th className={thR}>Stock</th>
               <th className={thR}>Status</th>
+              <th className={thR}>#</th>
             </tr>
           </thead>
           <tbody>
@@ -129,6 +130,7 @@ export default async function QueuePrintPage({
                 <td className={`${tdR} ${r.after < 0 ? 'print-short text-red-600' : ''}`}>
                   {r.after < 0 ? `Out of stock (make ${-r.after})` : statusLabel(r.free)}
                 </td>
+                <td className={tdR}>{i + 1}</td>
               </tr>
             ))}
           </tbody>
