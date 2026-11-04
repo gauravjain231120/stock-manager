@@ -1,5 +1,6 @@
 import { getInventoryOverview } from '@/lib/queries';
 import { registerTotals } from '@/lib/register';
+import { getCurrentSession } from '@/lib/auth';
 import { PageHeader, StatCard } from '@/components/ui';
 import { InventoryTable } from '@/components/InventoryTable';
 import { num } from '@/lib/format';
@@ -16,7 +17,12 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
   // "to" needs to reach the end of that calendar day to include its movements.
   const range = from || to ? { from: from ? new Date(`${from}T00:00:00.000Z`) : undefined, to: to ? new Date(`${to}T23:59:59.999Z`) : undefined } : undefined;
 
-  const [{ totals, rows }, regRows] = await Promise.all([getInventoryOverview(), registerTotals(range)]);
+  const [session, { totals, rows }, regRows] = await Promise.all([
+    getCurrentSession(),
+    getInventoryOverview(),
+    registerTotals(range),
+  ]);
+  const isOwner = session?.role === 'OWNER';
   const flowBySku = new Map(regRows.map((r) => [r.sku, r]));
   const toMake = rows.filter((r) => r.onHand <= 0).length;
   const low = rows.filter((r) => r.onHand > 0 && r.onHand <= 5).length;
@@ -35,6 +41,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
       <InventoryTable
         dateFrom={from}
         dateTo={to}
+        isOwner={isOwner}
         rows={rows.map((r) => {
           const flow = flowBySku.get(r.sku);
           return {
@@ -45,8 +52,12 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
             available: r.available,
             shipped: flow?.shipped ?? 0,
             returned: flow?.returned ?? 0,
-            returnedGood: flow?.returnedGood ?? 0,
-            returnedFaked: flow?.returnedFaked ?? 0,
+            ...(isOwner
+              ? {
+                  returnedGood: flow?.returnedGood ?? 0,
+                  returnedFaked: flow?.returnedFaked ?? 0,
+                }
+              : {}),
             color: flow?.color ?? r.color,
             size: flow?.size,
             sharedStock: flow?.sharedStock,

@@ -954,10 +954,10 @@ This requires no code changes in `stock-manager` itself, but the Ready-to-Ship q
    - `src/app/returns/page.tsx`: Updated `isOwnerOrManager` permission check so Managers see the condition StatCards (including `Faked` and `Used`), return type cards, condition filters, and table badges.
 
 
-## 19. Inventory Table Shows Good and Faked Return Breakdown Per Product (2026-11-05)
+## 19. Inventory Table Shows Good and Faked Return Breakdown Per Product (Owner-Only) (2026-11-05)
 
 1. **Feature**:
-   - In the Inventory page (`/inventory`), each product/size row in the "Returned" column now displays the breakdown of `good` and `faked` units (e.g. `1 good · 1 faked`) directly underneath the total returned count.
+   - In the Inventory page (`/inventory`), for users with role OWNER, each product/size row in the "Returned" column now displays the breakdown of `good` and `faked` units (e.g. `1 good · 1 faked`) directly underneath the total returned count. For non-owners, this information is stripped server-side and only the regular return count is displayed.
    - The total row for each color group and the top-level "Total returned" stat card similarly display the aggregated `good` and `faked` counts.
    - The inventory CSV export now includes `Returned Good` and `Returned Faked` columns alongside `Returned`.
 

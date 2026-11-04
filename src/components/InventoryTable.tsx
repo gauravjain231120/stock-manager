@@ -41,11 +41,13 @@ export function InventoryTable({
   rows,
   dateFrom = '',
   dateTo = '',
+  isOwner = false,
 }: {
   rows: InvRow[];
   /** Shipped/Returned narrowed to this window server-side — on-hand stays current. */
   dateFrom?: string;
   dateTo?: string;
+  isOwner?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -165,22 +167,28 @@ export function InventoryTable({
   );
 
   function buildCsv() {
+    const head = isOwner
+      ? ['SKU', 'Product', 'Colour', 'Size', 'In stock', 'Available', 'Shipped', 'Returned', 'Returned Good', 'Returned Faked', 'Status', 'Shared stock']
+      : ['SKU', 'Product', 'Colour', 'Size', 'In stock', 'Available', 'Shipped', 'Returned', 'Status', 'Shared stock'];
     return toCsv(
-      ['SKU', 'Product', 'Colour', 'Size', 'In stock', 'Available', 'Shipped', 'Returned', 'Returned Good', 'Returned Faked', 'Status', 'Shared stock'],
-      filtered.map((r) => [
-        r.sku,
-        r.category || r.name,
-        r.color ?? '',
-        r.size ?? r.sku.split('-').pop() ?? '',
-        r.onHand,
-        r.available ?? r.onHand,
-        r.shipped,
-        r.returned,
-        r.returnedGood ?? 0,
-        r.returnedFaked ?? 0,
-        stockStatus(r.onHand).label,
-        r.sharedStock ? 'Yes' : 'No',
-      ]),
+      head,
+      filtered.map((r) => {
+        const row = [
+          r.sku,
+          r.category || r.name,
+          r.color ?? '',
+          r.size ?? r.sku.split('-').pop() ?? '',
+          r.onHand,
+          r.available ?? r.onHand,
+          r.shipped,
+          r.returned,
+        ];
+        if (isOwner) {
+          row.push(r.returnedGood ?? 0, r.returnedFaked ?? 0);
+        }
+        row.push(stockStatus(r.onHand).label, r.sharedStock ? 'Yes' : 'No');
+        return row;
+      }),
     );
   }
 
@@ -283,7 +291,7 @@ export function InventoryTable({
                 <div className={`mt-0.5 text-2xl font-semibold tabular-nums ${totals.returned > 0 ? 'text-amber-500' : ''}`}>
                   {num(totals.returned)}
                 </div>
-                {totals.returned > 0 ? (
+                {isOwner && totals.returned > 0 ? (
                   <div className="mt-0.5 flex items-center gap-1.5 text-xs tabular-nums">
                     <span className="text-emerald-600 dark:text-emerald-400 font-medium">{totals.returnedGood} good</span>
                     <span className="text-neutral-300 dark:text-neutral-600">·</span>
@@ -359,7 +367,7 @@ export function InventoryTable({
                       <Td right>{r.shipped}</Td>
                       <Td right>
                         <div className="tabular-nums">{r.returned}</div>
-                        {r.returned > 0 ? (
+                        {isOwner && r.returned > 0 ? (
                           <div className="mt-0.5 flex items-center justify-end gap-1 text-[11px] font-normal leading-tight tabular-nums">
                             <span className="text-emerald-600 dark:text-emerald-400 font-medium">{r.returnedGood ?? 0} good</span>
                             <span className="text-neutral-300 dark:text-neutral-600">·</span>
@@ -393,7 +401,7 @@ export function InventoryTable({
                   <Td right>{gt.shipped}</Td>
                   <Td right>
                     <div className="tabular-nums">{gt.returned}</div>
-                    {gt.returned > 0 ? (
+                    {isOwner && gt.returned > 0 ? (
                       <div className="mt-0.5 flex items-center justify-end gap-1 text-[11px] font-normal leading-tight tabular-nums">
                         <span className="text-emerald-600 dark:text-emerald-400 font-medium">{gt.returnedGood} good</span>
                         <span className="text-neutral-300 dark:text-neutral-600">·</span>
