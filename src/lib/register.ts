@@ -957,6 +957,8 @@ export interface RegisterRow extends VariantMeta {
   produced: number;
   shipped: number;
   returned: number;
+  returnedGood?: number;
+  returnedFaked?: number;
   inStock: number;
   /** True for bundles: inStock is another SKU's pool, so don't sum it twice. */
   sharedStock?: boolean;
@@ -974,9 +976,9 @@ export async function registerTotals(range?: { from?: Date; to?: Date }): Promis
   if (range?.to) dateMatch.$lte = range.to;
   const [products, byType, stock, locations, groups] = await Promise.all([
     ProductModel.find({ active: true }).sort({ sku: 1 }).lean(),
-    StockMovementModel.aggregate<{ _id: { sku: string; type: string }; qty: number }>([
+    StockMovementModel.aggregate<{ _id: { sku: string; type: string; condition: string | null }; qty: number }>([
       ...(Object.keys(dateMatch).length ? [{ $match: { createdAt: dateMatch } }] : []),
-      { $group: { _id: { sku: '$sku', type: '$type' }, qty: { $sum: '$qty' } } },
+      { $group: { _id: { sku: '$sku', type: '$type', condition: '$condition' }, qty: { $sum: '$qty' } } },
     ]),
     SkuStockModel.find().lean(),
     LocationModel.find({ kind: 'SELLABLE' }).lean(),
@@ -992,20 +994,29 @@ export async function registerTotals(range?: { from?: Date; to?: Date }): Promis
     inStockBySku.set(r.sku, (inStockBySku.get(r.sku) ?? 0) + r.onHand);
   }
 
-  type Agg = { produced: number; shipped: number; returned: number };
+  type Agg = { produced: number; shipped: number; returned: number; returnedGood: number; returnedFaked: number };
   const aggBySku = new Map<string, Agg>();
   for (const m of byType) {
-    const a = aggBySku.get(m._id.sku) ?? { produced: 0, shipped: 0, returned: 0 };
-    if (m._id.type === MovementType.PRODUCED) a.produced += m.qty;
-    else if (m._id.type === MovementType.SOLD) a.shipped += -m.qty;
-    else if (m._id.type === MovementType.RETURNED) a.returned += m.qty;
+    const a = aggBySku.get(m._id.sku) ?? { produced: 0, shipped: 0, returned: 0, returnedGood: 0, returnedFaked: 0 };
+    if (m._id.type === MovementType.PRODUCED) {
+      a.produced += m.qty;
+    } else if (m._id.type === MovementType.SOLD) {
+      a.shipped += -m.qty;
+    } else if (m._id.type === MovementType.RETURNED) {
+      a.returned += m.qty;
+      if (m._id.condition === 'FAKED') {
+        a.returnedFaked += m.qty;
+      } else if (!m._id.condition || m._id.condition === 'GOOD') {
+        a.returnedGood += m.qty;
+      }
+    }
     aggBySku.set(m._id.sku, a);
   }
 
   const pileBySku = new Map(await Promise.all(products.map(async (p) => [p.sku, await stockSkuFor(p.sku)] as const)));
 
   return products.map((p) => {
-    const a = aggBySku.get(p.sku) ?? { produced: 0, shipped: 0, returned: 0 };
+    const a = aggBySku.get(p.sku) ?? { produced: 0, shipped: 0, returned: 0, returnedGood: 0, returnedFaked: 0 };
     const pool = pileBySku.get(p.sku)!;
     return {
       ...variantMeta(p, p.groupCode ? groupNameByCode.get(p.groupCode) : undefined),
@@ -1014,6 +1025,8 @@ export async function registerTotals(range?: { from?: Date; to?: Date }): Promis
       produced: a.produced,
       shipped: a.shipped,
       returned: a.returned,
+      returnedGood: a.returnedGood,
+      returnedFaked: a.returnedFaked,
       inStock: inStockBySku.get(pool) ?? 0,
       sharedStock: pool !== p.sku || undefined,
     };

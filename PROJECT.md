@@ -952,3 +952,16 @@ This requires no code changes in `stock-manager` itself, but the Ready-to-Ship q
 2. **Changes**:
    - `src/lib/movements.ts`: `rowsForViewer()` preserves `returnType` and `FAKED`/`USED` conditions when accessed by either an Owner or Manager (stripped only for `VIEWER`).
    - `src/app/returns/page.tsx`: Updated `isOwnerOrManager` permission check so Managers see the condition StatCards (including `Faked` and `Used`), return type cards, condition filters, and table badges.
+
+
+## 19. Inventory Table Shows Good and Faked Return Breakdown Per Product (2026-11-05)
+
+1. **Feature**:
+   - In the Inventory page (`/inventory`), each product/size row in the "Returned" column now displays the breakdown of `good` and `faked` units (e.g. `1 good · 1 faked`) directly underneath the total returned count.
+   - The total row for each color group and the top-level "Total returned" stat card similarly display the aggregated `good` and `faked` counts.
+   - The inventory CSV export now includes `Returned Good` and `Returned Faked` columns alongside `Returned`.
+
+2. **Changes**:
+   - `src/lib/register.ts`: `registerTotals()` aggregates return movements by condition (`FAKED` vs `GOOD` / default) to populate `returnedGood` and `returnedFaked` per SKU.
+   - `src/app/inventory/page.tsx`: Passes `returnedGood` and `returnedFaked` into `InventoryTable` rows.
+   - `src/components/InventoryTable.tsx`: Renders the good/faked breakdown in size rows, color totals, top stat card, and CSV export.

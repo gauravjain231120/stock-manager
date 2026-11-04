@@ -20,6 +20,8 @@ export interface InvRow {
   onHand: number;
   shipped: number;
   returned: number;
+  returnedGood?: number;
+  returnedFaked?: number;
   color?: string;
   size?: string;
   /** On-hand minus units already reserved by the ship queue. */
@@ -153,13 +155,18 @@ export function InventoryTable({
   // this SKU's own ledger rows, so a bundle never counts twice (unlike on-hand,
   // which it shares with its component SKU).
   const totals = filtered.reduce(
-    (a, r) => ({ shipped: a.shipped + r.shipped, returned: a.returned + r.returned }),
-    { shipped: 0, returned: 0 },
+    (a, r) => ({
+      shipped: a.shipped + r.shipped,
+      returned: a.returned + r.returned,
+      returnedGood: a.returnedGood + (r.returnedGood ?? 0),
+      returnedFaked: a.returnedFaked + (r.returnedFaked ?? 0),
+    }),
+    { shipped: 0, returned: 0, returnedGood: 0, returnedFaked: 0 },
   );
 
   function buildCsv() {
     return toCsv(
-      ['SKU', 'Product', 'Colour', 'Size', 'In stock', 'Available', 'Shipped', 'Returned', 'Status', 'Shared stock'],
+      ['SKU', 'Product', 'Colour', 'Size', 'In stock', 'Available', 'Shipped', 'Returned', 'Returned Good', 'Returned Faked', 'Status', 'Shared stock'],
       filtered.map((r) => [
         r.sku,
         r.category || r.name,
@@ -169,6 +176,8 @@ export function InventoryTable({
         r.available ?? r.onHand,
         r.shipped,
         r.returned,
+        r.returnedGood ?? 0,
+        r.returnedFaked ?? 0,
         stockStatus(r.onHand).label,
         r.sharedStock ? 'Yes' : 'No',
       ]),
@@ -274,6 +283,13 @@ export function InventoryTable({
                 <div className={`mt-0.5 text-2xl font-semibold tabular-nums ${totals.returned > 0 ? 'text-amber-500' : ''}`}>
                   {num(totals.returned)}
                 </div>
+                {totals.returned > 0 ? (
+                  <div className="mt-0.5 flex items-center gap-1.5 text-xs tabular-nums">
+                    <span className="text-emerald-600 dark:text-emerald-400 font-medium">{totals.returnedGood} good</span>
+                    <span className="text-neutral-300 dark:text-neutral-600">·</span>
+                    <span className="text-purple-600 dark:text-purple-400 font-medium">{totals.returnedFaked} faked</span>
+                  </div>
+                ) : null}
               </div>
             </div>
           </RevealableStats>
@@ -289,10 +305,12 @@ export function InventoryTable({
             (a, r) => ({
               shipped: a.shipped + r.shipped,
               returned: a.returned + r.returned,
+              returnedGood: a.returnedGood + (r.returnedGood ?? 0),
+              returnedFaked: a.returnedFaked + (r.returnedFaked ?? 0),
               onHand: a.onHand + r.onHand,
               available: a.available + (r.available ?? r.onHand),
             }),
-            { shipped: 0, returned: 0, onHand: 0, available: 0 },
+            { shipped: 0, returned: 0, returnedGood: 0, returnedFaked: 0, onHand: 0, available: 0 },
           );
           const editingThis = editingGroup === g.key;
           return (
@@ -339,7 +357,16 @@ export function InventoryTable({
                     <Tr key={r.sku}>
                       <Td>{r.sku.split('-').pop()}</Td>
                       <Td right>{r.shipped}</Td>
-                      <Td right>{r.returned}</Td>
+                      <Td right>
+                        <div className="tabular-nums">{r.returned}</div>
+                        {r.returned > 0 ? (
+                          <div className="mt-0.5 flex items-center justify-end gap-1 text-[11px] font-normal leading-tight tabular-nums">
+                            <span className="text-emerald-600 dark:text-emerald-400 font-medium">{r.returnedGood ?? 0} good</span>
+                            <span className="text-neutral-300 dark:text-neutral-600">·</span>
+                            <span className="text-purple-600 dark:text-purple-400 font-medium">{r.returnedFaked ?? 0} faked</span>
+                          </div>
+                        ) : null}
+                      </Td>
                       <Td right>
                         {editingThis ? (
                           <input
@@ -364,7 +391,16 @@ export function InventoryTable({
                 <Tr className="bg-brand-50 font-semibold text-brand-900 dark:bg-brand-500/10 dark:text-brand-100">
                   <Td>Total</Td>
                   <Td right>{gt.shipped}</Td>
-                  <Td right>{gt.returned}</Td>
+                  <Td right>
+                    <div className="tabular-nums">{gt.returned}</div>
+                    {gt.returned > 0 ? (
+                      <div className="mt-0.5 flex items-center justify-end gap-1 text-[11px] font-normal leading-tight tabular-nums">
+                        <span className="text-emerald-600 dark:text-emerald-400 font-medium">{gt.returnedGood} good</span>
+                        <span className="text-neutral-300 dark:text-neutral-600">·</span>
+                        <span className="text-purple-600 dark:text-purple-400 font-medium">{gt.returnedFaked} faked</span>
+                      </div>
+                    ) : null}
+                  </Td>
                   <Td right>
                     {/* Matches EditableStock's layout (incl. its reserved icon space)
                         so this plain total lines up under the editable values above it. */}

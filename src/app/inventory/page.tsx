@@ -45,6 +45,8 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
             available: r.available,
             shipped: flow?.shipped ?? 0,
             returned: flow?.returned ?? 0,
+            returnedGood: flow?.returnedGood ?? 0,
+            returnedFaked: flow?.returnedFaked ?? 0,
             color: flow?.color ?? r.color,
             size: flow?.size,
             sharedStock: flow?.sharedStock,
