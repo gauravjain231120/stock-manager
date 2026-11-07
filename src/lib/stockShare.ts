@@ -70,5 +70,8 @@ export async function stockSkuFor(sku: string): Promise<string> {
     seen.add(current);
     current = map.get(current)!;
   }
+  if (current === sku && sku.includes('-YLL-')) {
+    return stockSkuFor(sku.replace(/-YLL-/g, '-YL-'));
+  }
   return current;
 }

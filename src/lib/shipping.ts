@@ -103,7 +103,11 @@ export async function addPending(input: {
     const idx = sku.indexOf('-');
     const suffix = idx === -1 ? sku : sku.slice(idx + 1);
     const escaped = suffix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const match = await ProductModel.findOne({ sku: new RegExp(`-${escaped}$`, 'i') });
+    let match = await ProductModel.findOne({ sku: new RegExp(`-${escaped}$`, 'i') });
+    if (!match && escaped.includes('-YLL-')) {
+      const ylEscaped = escaped.replace(/-YLL-/g, '-YL-');
+      match = await ProductModel.findOne({ sku: new RegExp(`-${ylEscaped}$`, 'i') });
+    }
     if (!match) throw new Error('Product not found');
     sku = match.sku;
   }
