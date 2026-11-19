@@ -60,6 +60,8 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
   const [bulkAliasMode, setBulkAliasMode] = useState(false);
   const [bulkFrom, setBulkFrom] = useState('');
   const [bulkTo, setBulkTo] = useState('');
+  const [selectedColor, setSelectedColor] = useState<string>('ALL');
+  const [aliasOverrides, setAliasOverrides] = useState<Record<string, string[]>>({});
 
   // edit fields
   const [name, setName] = useState(group.name);
@@ -79,6 +81,13 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
 
   // Variants sorted by colour, then real size order (XS, S, M, L, XL, XXL).
   const variants = [...group.variants].sort((a, b) => compareVariant(a.sku, b.sku));
+  const allColors = Array.from(new Set(variants.map((v) => v.color).filter(Boolean))) as string[];
+  const viewVariants = selectedColor === 'ALL'
+    ? variants
+    : variants.filter((v) => v.color === selectedColor);
+  const editVariants = selectedColor === 'ALL'
+    ? variants
+    : variants.filter((v) => (draftVariants[v.sku]?.color || v.color) === selectedColor);
 
   function startEdit() {
     setName(group.name);
@@ -247,6 +256,13 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
       aliasSku: alias,
     });
     if (done) {
+      setAliasOverrides((prev) => {
+        const existing = prev[primarySku] ?? group.variants.find((v) => v.sku === primarySku)?.aliasSkus ?? [];
+        return {
+          ...prev,
+          [primarySku]: [...existing, alias],
+        };
+      });
       setNewAliasSku('');
       setAddingAliasFor(null);
       toast.success(`Alias ${alias} added ✓`);
@@ -263,7 +279,17 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
     });
     if (!ok) return;
     const done = await call(`/api/products/${group.code}/alias?sku=${encodeURIComponent(aliasSku)}`, 'DELETE');
-    if (done) toast.success(`Alias ${aliasSku} removed ✓`);
+    if (done) {
+      setAliasOverrides((prev) => {
+        const next: Record<string, string[]> = {};
+        for (const v of group.variants) {
+          const list = prev[v.sku] ?? v.aliasSkus ?? [];
+          next[v.sku] = list.filter((a) => a !== aliasSku);
+        }
+        return next;
+      });
+      toast.success(`Alias ${aliasSku} removed ✓`);
+    }
   }
 
   async function bulkAddAliases() {
@@ -358,79 +384,124 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
           <div className="flex w-full flex-col bg-black/[0.01] p-0 sm:w-[500px] dark:bg-white/[0.01]">
             <div className="flex items-center justify-between border-b border-black/5 px-4 py-3 dark:border-white/5">
               <span className={sectionLabel}>Variants & Stock</span>
-              <span className="text-[11px] text-neutral-400">{variants.length} items</span>
+              <span className="text-[11px] text-neutral-400">
+                {selectedColor === 'ALL' ? `${variants.length} items` : `${viewVariants.length} of ${variants.length} items`}
+              </span>
             </div>
-            <div className="custom-scrollbar max-h-56 overflow-y-auto sm:max-h-[300px]">
+
+            {/* Color Filter in View Mode */}
+            {allColors.length > 1 ? (
+              <div className="flex flex-wrap items-center gap-1 border-b border-black/5 px-3 py-1.5 bg-black/[0.02] dark:bg-white/[0.02] dark:border-white/5">
+                <span className="text-[9px] uppercase font-semibold text-neutral-400 mr-0.5">Color:</span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedColor('ALL')}
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-medium transition ${
+                    selectedColor === 'ALL'
+                      ? 'bg-brand-600 text-white'
+                      : 'bg-black/5 text-neutral-600 hover:bg-black/10 dark:bg-white/10 dark:text-neutral-300'
+                  }`}
+                >
+                  All ({variants.length})
+                </button>
+                {allColors.map((c) => {
+                  const count = variants.filter((v) => v.color === c).length;
+                  return (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setSelectedColor(c)}
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-medium transition ${
+                        selectedColor === c
+                          ? 'bg-brand-600 text-white shadow-sm'
+                          : 'bg-black/5 text-neutral-600 hover:bg-black/10 dark:bg-white/10 dark:text-neutral-300'
+                      }`}
+                    >
+                      {c} ({count})
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+
+            <div className="custom-scrollbar max-h-56 overflow-y-auto sm:max-h-[320px]">
               <table className="w-full text-xs">
                 <tbody>
-                  {variants.map((v) => (
-                    <tr key={v.sku} className="border-b border-black/5 last:border-0 dark:border-white/5">
-                      <td className="py-2 pl-4 pr-2">
-                        <EditableVariantAttrs
-                          code={group.code}
-                          sku={v.sku}
-                          color={v.color}
-                          size={v.size}
-                          sharesStockWith={v.sharesStockWith}
-                        />
-                        <div className="font-mono text-[10px] text-neutral-400">{v.sku}</div>
+                  {viewVariants.map((v) => {
+                    const currentAliases = aliasOverrides[v.sku] ?? v.aliasSkus ?? [];
+                    return (
+                      <tr key={v.sku} className="border-b border-black/5 last:border-0 dark:border-white/5">
+                        <td className="py-2.5 pl-4 pr-2">
+                          <EditableVariantAttrs
+                            code={group.code}
+                            sku={v.sku}
+                            color={v.color}
+                            size={v.size}
+                            sharesStockWith={v.sharesStockWith}
+                          />
+                          
+                          {/* All SKUs for this variant */}
+                          <div className="mt-1 flex flex-wrap items-center gap-1">
+                            <span className="font-mono text-[10px] font-medium text-neutral-600 bg-black/5 dark:bg-white/10 dark:text-neutral-300 px-1.5 py-0.5 rounded">
+                              {v.sku} <span className="text-[9px] text-neutral-400 font-sans font-normal">(Primary)</span>
+                            </span>
 
-                        {/* Alias SKUs */}
-                        {(v.aliasSkus && v.aliasSkus.length > 0) ? (
-                          <div className="mt-1 flex flex-col gap-0.5">
-                            {v.aliasSkus.map((alias) => (
-                              <div key={alias} className="inline-flex items-center gap-1 group/alias">
-                                <Copy size={9} className="text-blue-400 shrink-0" />
-                                <span className="font-mono text-[10px] text-blue-500 dark:text-blue-400">{alias}</span>
+                            {/* Alias SKUs */}
+                            {currentAliases.map((alias) => (
+                              <span key={alias} className="inline-flex items-center gap-1 rounded bg-blue-50 px-1.5 py-0.5 font-mono text-[10px] font-medium text-blue-700 border border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800">
+                                <Copy size={9} />
+                                {alias}
                                 <button
+                                  type="button"
                                   onClick={() => removeAlias(alias)}
                                   disabled={busy}
-                                  className="opacity-0 group-hover/alias:opacity-100 text-red-400 hover:text-red-600 transition shrink-0"
+                                  className="ml-0.5 text-blue-400 hover:text-red-500 transition"
                                   title="Remove alias"
                                 >
                                   <X size={10} />
                                 </button>
-                              </div>
+                              </span>
                             ))}
-                          </div>
-                        ) : null}
 
-                        {/* Add alias inline */}
-                        {addingAliasFor === v.sku ? (
-                          <div className="mt-1 flex items-center gap-1">
-                            <input
-                              autoFocus
-                              className="w-36 rounded border border-black/15 bg-transparent px-1.5 py-0.5 font-mono text-[10px] text-neutral-900 focus:border-brand-500 focus:outline-none dark:border-white/20 dark:text-white"
-                              value={newAliasSku}
-                              onChange={(e) => setNewAliasSku(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') addAlias(v.sku);
-                                if (e.key === 'Escape') { setAddingAliasFor(null); setNewAliasSku(''); }
-                              }}
-                              placeholder="Alias SKU…"
-                            />
-                            <button onClick={() => addAlias(v.sku)} disabled={busy || !newAliasSku.trim()} className="text-emerald-600 disabled:opacity-50" title="Add">
-                              <Plus size={12} />
-                            </button>
-                            <button onClick={() => { setAddingAliasFor(null); setNewAliasSku(''); }} className="text-neutral-400" title="Cancel">
-                              <X size={12} />
-                            </button>
+                            {/* Add alias inline */}
+                            {addingAliasFor === v.sku ? (
+                              <div className="inline-flex items-center gap-1">
+                                <input
+                                  autoFocus
+                                  className="w-36 rounded border border-brand-500 bg-white dark:bg-neutral-900 px-1.5 py-0.5 font-mono text-[10px] text-neutral-900 focus:outline-none dark:text-white"
+                                  value={newAliasSku}
+                                  onChange={(e) => setNewAliasSku(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') addAlias(v.sku);
+                                    if (e.key === 'Escape') { setAddingAliasFor(null); setNewAliasSku(''); }
+                                  }}
+                                  placeholder="Alias SKU…"
+                                />
+                                <button onClick={() => addAlias(v.sku)} disabled={busy || !newAliasSku.trim()} className="text-emerald-600 disabled:opacity-50" title="Add">
+                                  <Plus size={12} />
+                                </button>
+                                <button onClick={() => { setAddingAliasFor(null); setNewAliasSku(''); }} className="text-neutral-400" title="Cancel">
+                                  <X size={12} />
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => { setAddingAliasFor(v.sku); setNewAliasSku(''); }}
+                                className="inline-flex items-center gap-0.5 rounded border border-dashed border-neutral-300 px-1.5 py-0.5 text-[9px] font-medium text-neutral-500 hover:text-brand-600 hover:border-brand-500 transition dark:border-neutral-700 dark:text-neutral-400"
+                                title="Add an alias SKU for this variant"
+                              >
+                                <Plus size={9} /> SKU
+                              </button>
+                            )}
                           </div>
-                        ) : (
-                          <button
-                            onClick={() => { setAddingAliasFor(v.sku); setNewAliasSku(''); }}
-                            className="mt-0.5 inline-flex items-center gap-0.5 text-[10px] text-neutral-400 hover:text-brand-600 transition"
-                            title="Add an alias SKU for this variant"
-                          >
-                            <Plus size={9} /> alias
-                          </button>
-                        )}
-                      </td>
-                      <td className="py-2 pr-4 text-right align-middle">
-                        <EditableStock sku={v.sku} value={v.onHand} />
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="py-2.5 pr-4 text-right align-top">
+                          <EditableStock sku={v.sku} value={v.onHand} />
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -510,45 +581,175 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
 
               {/* Bulk Edit Variants Area */}
               <div className="overflow-hidden rounded-xl border border-black/10 dark:border-white/10">
-                <div className="bg-black/[0.025] px-3 py-2 dark:bg-white/[0.04]">
-                  <span className={sectionLabel}>Edit Variants (Color & Size)</span>
+                <div className="flex items-center justify-between bg-black/[0.025] px-3 py-2 dark:bg-white/[0.04]">
+                  <div>
+                    <span className={sectionLabel}>Edit Variants & Multiple SKUs</span>
+                    <span className="ml-2 text-[10px] text-neutral-400">Add or manage multiple SKUs for any color below</span>
+                  </div>
+                  <span className="text-[11px] text-neutral-400">
+                    {selectedColor === 'ALL' ? `${variants.length} variants` : `${editVariants.length} of ${variants.length} variants`}
+                  </span>
                 </div>
-                <div className="divide-y divide-black/5 max-h-64 overflow-y-auto custom-scrollbar dark:divide-white/5">
-                  {variants.map((v) => (
-                    <div key={v.sku} className="grid grid-cols-[minmax(0,3fr)_minmax(0,4fr)_minmax(0,1.5fr)_minmax(0,3fr)_auto] items-center gap-2 px-3 py-2">
-                      <input 
-                        type="text"
-                        className={`${input} w-full min-w-0 font-mono text-[10px] p-1.5 h-8`} 
-                        placeholder="SKU"
-                        value={draftVariants[v.sku]?.newSku ?? ''} 
-                        onChange={e => setDraftVariants(prev => ({ ...prev, [v.sku]: { ...prev[v.sku], newSku: e.target.value } }))} 
-                        title="Edit SKU"
-                      />
-                      <input 
-                        type="text"
-                        className={`${input} w-full min-w-0 p-1.5 h-8`} 
-                        placeholder="Colour"
-                        value={draftVariants[v.sku]?.color ?? ''} 
-                        onChange={e => setDraftVariants(prev => ({ ...prev, [v.sku]: { ...prev[v.sku], color: e.target.value } }))} 
-                      />
-                      <input 
-                        type="text"
-                        className={`${input} w-full min-w-0 p-1.5 h-8`} 
-                        placeholder="Size"
-                        value={draftVariants[v.sku]?.size ?? ''} 
-                        onChange={e => setDraftVariants(prev => ({ ...prev, [v.sku]: { ...prev[v.sku], size: e.target.value } }))} 
-                      />
-                      <input 
-                        type="text"
-                        className={`${input} w-full min-w-0 font-mono text-[10px] p-1.5 h-8`} 
-                        placeholder="Shared SKU"
-                        value={draftVariants[v.sku]?.sharesStockWith ?? ''} 
-                        onChange={e => setDraftVariants(prev => ({ ...prev, [v.sku]: { ...prev[v.sku], sharesStockWith: e.target.value } }))} 
-                        title="Shares stock with SKU (leave empty for own stock)"
-                      />
-                      <button type="button" onClick={() => removeVariant(v.sku)} disabled={busy} className="shrink-0 text-neutral-400 hover:text-red-500" title="Remove"><Trash2 size={14}/></button>
-                    </div>
-                  ))}
+
+                {/* Color filter tabs in edit mode */}
+                {allColors.length > 1 ? (
+                  <div className="flex flex-wrap items-center gap-1 border-b border-black/5 px-3 py-1.5 bg-black/[0.015] dark:bg-white/[0.02] dark:border-white/5">
+                    <span className="text-[9px] uppercase font-semibold text-neutral-400 mr-0.5">Filter Colour:</span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedColor('ALL')}
+                      className={`rounded-full px-2.5 py-0.5 text-[10px] font-medium transition ${
+                        selectedColor === 'ALL'
+                          ? 'bg-brand-600 text-white'
+                          : 'bg-black/5 text-neutral-600 hover:bg-black/10 dark:bg-white/10 dark:text-neutral-300'
+                      }`}
+                    >
+                      All ({variants.length})
+                    </button>
+                    {allColors.map((c) => {
+                      const count = variants.filter((v) => (draftVariants[v.sku]?.color || v.color) === c).length;
+                      return (
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={() => setSelectedColor(c)}
+                          className={`rounded-full px-2.5 py-0.5 text-[10px] font-medium transition ${
+                            selectedColor === c
+                              ? 'bg-brand-600 text-white shadow-sm'
+                              : 'bg-black/5 text-neutral-600 hover:bg-black/10 dark:bg-white/10 dark:text-neutral-300'
+                          }`}
+                        >
+                          {c} ({count})
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
+
+                <div className="divide-y divide-black/5 max-h-[380px] overflow-y-auto custom-scrollbar dark:divide-white/5">
+                  {editVariants.map((v) => {
+                    const currentAliases = aliasOverrides[v.sku] ?? v.aliasSkus ?? [];
+                    return (
+                      <div key={v.sku} className="flex flex-col gap-2 p-3 hover:bg-black/[0.01] dark:hover:bg-white/[0.01]">
+                        {/* Primary variant inputs */}
+                        <div className="grid grid-cols-[minmax(0,3.5fr)_minmax(0,3fr)_minmax(0,1.5fr)_minmax(0,3fr)_auto] items-center gap-2">
+                          <div>
+                            <span className="text-[9px] font-semibold uppercase text-neutral-400 block mb-0.5">Primary SKU</span>
+                            <input 
+                              type="text"
+                              className={`${input} w-full min-w-0 font-mono text-[10px] p-1.5 h-8`} 
+                              placeholder="SKU"
+                              value={draftVariants[v.sku]?.newSku ?? ''} 
+                              onChange={e => setDraftVariants(prev => ({ ...prev, [v.sku]: { ...prev[v.sku], newSku: e.target.value } }))} 
+                              title="Edit Primary SKU"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[9px] font-semibold uppercase text-neutral-400 block mb-0.5">Colour</span>
+                            <input 
+                              type="text"
+                              className={`${input} w-full min-w-0 p-1.5 h-8`} 
+                              placeholder="Colour"
+                              value={draftVariants[v.sku]?.color ?? ''} 
+                              onChange={e => setDraftVariants(prev => ({ ...prev, [v.sku]: { ...prev[v.sku], color: e.target.value } }))} 
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[9px] font-semibold uppercase text-neutral-400 block mb-0.5">Size</span>
+                            <input 
+                              type="text"
+                              className={`${input} w-full min-w-0 p-1.5 h-8`} 
+                              placeholder="Size"
+                              value={draftVariants[v.sku]?.size ?? ''} 
+                              onChange={e => setDraftVariants(prev => ({ ...prev, [v.sku]: { ...prev[v.sku], size: e.target.value } }))} 
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[9px] font-semibold uppercase text-neutral-400 block mb-0.5">Shared Stock SKU</span>
+                            <input 
+                              type="text"
+                              className={`${input} w-full min-w-0 font-mono text-[10px] p-1.5 h-8`} 
+                              placeholder="Optional (bundle stock)"
+                              value={draftVariants[v.sku]?.sharesStockWith ?? ''} 
+                              onChange={e => setDraftVariants(prev => ({ ...prev, [v.sku]: { ...prev[v.sku], sharesStockWith: e.target.value } }))} 
+                              title="Shares stock with SKU (leave empty for own stock)"
+                            />
+                          </div>
+                          <div className="pt-3">
+                            <button type="button" onClick={() => removeVariant(v.sku)} disabled={busy} className="shrink-0 text-neutral-400 hover:text-red-500 p-1 rounded" title="Remove variant"><Trash2 size={14}/></button>
+                          </div>
+                        </div>
+
+                        {/* All SKUs for this color & size */}
+                        <div className="flex flex-wrap items-center gap-1.5 rounded-lg bg-black/[0.02] dark:bg-white/[0.02] p-2 border border-black/5 dark:border-white/5">
+                          <span className="text-[10px] font-semibold text-neutral-500 dark:text-neutral-400 flex items-center gap-1">
+                            <Copy size={10} className="text-blue-500" />
+                            All SKUs for {draftVariants[v.sku]?.color || v.color} {draftVariants[v.sku]?.size || v.size}:
+                          </span>
+                          <span className="rounded bg-black/5 dark:bg-white/10 px-1.5 py-0.5 font-mono text-[10px] font-medium text-neutral-700 dark:text-neutral-300">
+                            {draftVariants[v.sku]?.newSku || v.sku} <span className="text-[9px] text-neutral-400 font-sans">(Primary)</span>
+                          </span>
+
+                          {/* Alias SKUs */}
+                          {currentAliases.map((alias) => (
+                            <span key={alias} className="inline-flex items-center gap-1 rounded bg-blue-50 px-1.5 py-0.5 font-mono text-[10px] font-medium text-blue-700 border border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800">
+                              {alias}
+                              <button
+                                type="button"
+                                onClick={() => removeAlias(alias)}
+                                disabled={busy}
+                                className="ml-0.5 text-blue-400 hover:text-red-500 transition"
+                                title="Remove this SKU"
+                              >
+                                <X size={10} />
+                              </button>
+                            </span>
+                          ))}
+
+                          {/* Add another SKU inline */}
+                          {addingAliasFor === v.sku ? (
+                            <div className="inline-flex items-center gap-1 ml-1">
+                              <input
+                                autoFocus
+                                className="w-44 rounded border border-brand-500 bg-white px-2 py-0.5 font-mono text-[10px] text-neutral-900 focus:outline-none dark:bg-neutral-900 dark:text-white"
+                                placeholder="e.g. RRC-001-CO-B-RED-L"
+                                value={newAliasSku}
+                                onChange={(e) => setNewAliasSku(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') { e.preventDefault(); addAlias(v.sku); }
+                                  if (e.key === 'Escape') { setAddingAliasFor(null); setNewAliasSku(''); }
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => addAlias(v.sku)}
+                                disabled={busy || !newAliasSku.trim()}
+                                className="rounded bg-brand-600 px-2 py-0.5 text-[10px] font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+                              >
+                                Add SKU
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => { setAddingAliasFor(null); setNewAliasSku(''); }}
+                                className="text-neutral-400 hover:text-neutral-600"
+                              >
+                                <X size={12} />
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => { setAddingAliasFor(v.sku); setNewAliasSku(''); }}
+                              className="ml-1 inline-flex items-center gap-0.5 rounded border border-dashed border-brand-500/50 bg-brand-50/50 px-2 py-0.5 text-[10px] font-medium text-brand-700 hover:bg-brand-100 dark:bg-brand-950/30 dark:text-brand-300 transition"
+                              title="Add another SKU for this color and size"
+                            >
+                              <Plus size={10} /> Add another SKU for this color
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
                 
                 {/* Add new variant block */}
