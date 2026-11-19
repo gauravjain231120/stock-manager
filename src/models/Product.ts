@@ -24,6 +24,12 @@ const ProductSchema = new Schema(
     // product's unit). Configured per-variant from the Products page — see
     // stockSkuFor in lib/stockShare.ts, which resolves this at read/write time.
     sharesStockWith: { type: String, trim: true, uppercase: true, default: null },
+    // When true, this product is an alias SKU for another variant in the same
+    // group.  Its sharesStockWith points at the primary variant's SKU so stock
+    // is tracked once.  Alias SKUs exist only so that marketplace orders with
+    // alternate SKU codes (e.g. RRC-001-CO-B-RED-L vs RRC-001-CO-C-RED-L)
+    // resolve to the same real product.
+    isAlias: { type: Boolean, default: false },
     active: { type: Boolean, default: true },
   },
   { timestamps: true },

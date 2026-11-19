@@ -2,14 +2,14 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Pencil, Trash2, Upload } from 'lucide-react';
+import { Pencil, Trash2, Upload, Plus, X, Copy } from 'lucide-react';
 import { Badge } from '@/components/ui';
 import { useConfirm } from '@/components/ConfirmProvider';
+import { useToast } from '@/components/ToastProvider';
 import { compressImageIfNeeded } from '@/lib/clientImage';
 import { EditableStock } from '@/components/EditableStock';
-import { EditableSku } from '@/components/EditableSku';
 import { EditableVariantAttrs } from '@/components/EditableVariantAttrs';
-import { inr, num, compareVariant } from '@/lib/format';
+import { num, compareVariant } from '@/lib/format';
 import { STANDARD_SIZES } from '@/lib/constants';
 
 interface Variant {
@@ -18,6 +18,8 @@ interface Variant {
   size?: string;
   onHand: number;
   sharesStockWith?: string | null;
+  isAlias?: boolean;
+  aliasSkus?: string[];
 }
 export interface CardGroup {
   code: string;
@@ -47,9 +49,17 @@ function qtyColor(n: number) {
 export function ProductCard({ group, categories = [] }: { group: CardGroup; categories?: string[] }) {
   const router = useRouter();
   const ask = useConfirm();
+  const toast = useToast();
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+
+  // alias management state
+  const [addingAliasFor, setAddingAliasFor] = useState<string | null>(null);
+  const [newAliasSku, setNewAliasSku] = useState('');
+  const [bulkAliasMode, setBulkAliasMode] = useState(false);
+  const [bulkFrom, setBulkFrom] = useState('');
+  const [bulkTo, setBulkTo] = useState('');
 
   // edit fields
   const [name, setName] = useState(group.name);
@@ -219,6 +229,70 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
     await call(`/api/products/${group.code}/variant?sku=${encodeURIComponent(sku)}`, 'DELETE');
   }
 
+  async function addAlias(primarySku: string) {
+    const alias = newAliasSku.trim().toUpperCase();
+    if (!alias) return;
+    const ok = await ask({
+      title: 'Add alias SKU?',
+      description: 'This creates an alternate SKU code that maps to the same product & stock.',
+      details: [
+        { label: 'Primary SKU', value: primarySku },
+        { label: 'Alias SKU', value: alias },
+      ],
+      confirmLabel: 'Add alias',
+    });
+    if (!ok) return;
+    const done = await call(`/api/products/${group.code}/alias`, 'POST', {
+      primarySku,
+      aliasSku: alias,
+    });
+    if (done) {
+      setNewAliasSku('');
+      setAddingAliasFor(null);
+      toast.success(`Alias ${alias} added ✓`);
+    }
+  }
+
+  async function removeAlias(aliasSku: string) {
+    const ok = await ask({
+      title: 'Remove alias SKU?',
+      description: 'Orders using this code will no longer match this product.',
+      details: [{ label: 'Alias SKU', value: aliasSku }],
+      tone: 'danger',
+      confirmLabel: 'Remove',
+    });
+    if (!ok) return;
+    const done = await call(`/api/products/${group.code}/alias?sku=${encodeURIComponent(aliasSku)}`, 'DELETE');
+    if (done) toast.success(`Alias ${aliasSku} removed ✓`);
+  }
+
+  async function bulkAddAliases() {
+    const from = bulkFrom.trim().toUpperCase();
+    const to = bulkTo.trim().toUpperCase();
+    if (!from || !to) return;
+    const ok = await ask({
+      title: 'Bulk add alias SKUs?',
+      description: `For every variant, replace "${from}" segment with "${to}" in the SKU to create an alias.`,
+      details: [
+        { label: 'Replace segment', value: from },
+        { label: 'With segment', value: to },
+        { label: 'Product', value: group.name },
+      ],
+      confirmLabel: 'Add all aliases',
+    });
+    if (!ok) return;
+    const done = await call(`/api/products/${group.code}/alias`, 'POST', {
+      replaceSegment: from,
+      withSegment: to,
+    });
+    if (done) {
+      setBulkFrom('');
+      setBulkTo('');
+      setBulkAliasMode(false);
+      toast.success('Alias SKUs created ✓');
+    }
+  }
+
   async function deleteProduct() {
     const pw = await ask({
       title: 'Delete product?',
@@ -300,6 +374,57 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
                           sharesStockWith={v.sharesStockWith}
                         />
                         <div className="font-mono text-[10px] text-neutral-400">{v.sku}</div>
+
+                        {/* Alias SKUs */}
+                        {(v.aliasSkus && v.aliasSkus.length > 0) ? (
+                          <div className="mt-1 flex flex-col gap-0.5">
+                            {v.aliasSkus.map((alias) => (
+                              <div key={alias} className="inline-flex items-center gap-1 group/alias">
+                                <Copy size={9} className="text-blue-400 shrink-0" />
+                                <span className="font-mono text-[10px] text-blue-500 dark:text-blue-400">{alias}</span>
+                                <button
+                                  onClick={() => removeAlias(alias)}
+                                  disabled={busy}
+                                  className="opacity-0 group-hover/alias:opacity-100 text-red-400 hover:text-red-600 transition shrink-0"
+                                  title="Remove alias"
+                                >
+                                  <X size={10} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+
+                        {/* Add alias inline */}
+                        {addingAliasFor === v.sku ? (
+                          <div className="mt-1 flex items-center gap-1">
+                            <input
+                              autoFocus
+                              className="w-36 rounded border border-black/15 bg-transparent px-1.5 py-0.5 font-mono text-[10px] text-neutral-900 focus:border-brand-500 focus:outline-none dark:border-white/20 dark:text-white"
+                              value={newAliasSku}
+                              onChange={(e) => setNewAliasSku(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') addAlias(v.sku);
+                                if (e.key === 'Escape') { setAddingAliasFor(null); setNewAliasSku(''); }
+                              }}
+                              placeholder="Alias SKU…"
+                            />
+                            <button onClick={() => addAlias(v.sku)} disabled={busy || !newAliasSku.trim()} className="text-emerald-600 disabled:opacity-50" title="Add">
+                              <Plus size={12} />
+                            </button>
+                            <button onClick={() => { setAddingAliasFor(null); setNewAliasSku(''); }} className="text-neutral-400" title="Cancel">
+                              <X size={12} />
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => { setAddingAliasFor(v.sku); setNewAliasSku(''); }}
+                            className="mt-0.5 inline-flex items-center gap-0.5 text-[10px] text-neutral-400 hover:text-brand-600 transition"
+                            title="Add an alias SKU for this variant"
+                          >
+                            <Plus size={9} /> alias
+                          </button>
+                        )}
                       </td>
                       <td className="py-2 pr-4 text-right align-middle">
                         <EditableStock sku={v.sku} value={v.onHand} />
@@ -308,6 +433,45 @@ export function ProductCard({ group, categories = [] }: { group: CardGroup; cate
                   ))}
                 </tbody>
               </table>
+            </div>
+
+            {/* Bulk alias section */}
+            <div className="border-t border-black/5 px-4 py-2 dark:border-white/5">
+              {!bulkAliasMode ? (
+                <button
+                  onClick={() => setBulkAliasMode(true)}
+                  className="inline-flex items-center gap-1 text-[10px] text-neutral-400 hover:text-brand-600 transition"
+                  title="Add alias SKUs for all variants at once by swapping a segment"
+                >
+                  <Copy size={10} /> Bulk add aliases
+                </button>
+              ) : (
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-[10px] font-medium text-neutral-500">Swap SKU segment for all variants:</span>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      className="w-16 rounded border border-black/15 bg-transparent px-1.5 py-0.5 font-mono text-[10px] text-neutral-900 focus:border-brand-500 focus:outline-none dark:border-white/20 dark:text-white"
+                      value={bulkFrom}
+                      onChange={(e) => setBulkFrom(e.target.value)}
+                      placeholder="From"
+                    />
+                    <span className="text-[10px] text-neutral-400">→</span>
+                    <input
+                      className="w-16 rounded border border-black/15 bg-transparent px-1.5 py-0.5 font-mono text-[10px] text-neutral-900 focus:border-brand-500 focus:outline-none dark:border-white/20 dark:text-white"
+                      value={bulkTo}
+                      onChange={(e) => setBulkTo(e.target.value)}
+                      placeholder="To"
+                    />
+                    <button onClick={bulkAddAliases} disabled={busy || !bulkFrom.trim() || !bulkTo.trim()} className="rounded bg-brand-600 px-2 py-0.5 text-[10px] font-medium text-white disabled:opacity-50">
+                      Add
+                    </button>
+                    <button onClick={() => { setBulkAliasMode(false); setBulkFrom(''); setBulkTo(''); }} className="text-neutral-400">
+                      <X size={12} />
+                    </button>
+                  </div>
+                  <span className="text-[9px] text-neutral-400">{'e.g. Replace "C" → "B" turns RRC-001-CO-C-RED-L into RRC-001-CO-B-RED-L'}</span>
+                </div>
+              )}
             </div>
           </div>
         </>

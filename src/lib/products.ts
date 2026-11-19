@@ -319,6 +319,12 @@ export async function editVariantAttributes(sku: string, changes: { color?: stri
   if (group) product.name = [group.name, newColor, newSize].filter(Boolean).join(' ');
   await product.save();
 
+  // Keep any alias variants in sync with their primary
+  await ProductModel.updateMany(
+    { sharesStockWith: s, isAlias: true },
+    { $set: { attributes: Object.fromEntries(attrs), name: product.name } }
+  );
+
   if (group) {
     let groupChanged = false;
     if (newColor && !group.colors.includes(newColor)) {
@@ -496,12 +502,29 @@ export async function setSharesStockWith(sku: string, targetSku: string | null) 
 export async function removeVariant(sku: string) {
   await connectDB();
   const s = sku.trim().toUpperCase();
-  const dependents = await ProductModel.find({ sharesStockWith: s }, { sku: 1 }).lean();
-  if (dependents.length > 0) {
+  const dependents = await ProductModel.find({ sharesStockWith: s }, { sku: 1, isAlias: 1 }).lean();
+
+  // Alias dependents are auto-removed when their primary is removed.
+  const aliasSkus = dependents.filter((d) => d.isAlias).map((d) => d.sku);
+  const realDependents = dependents.filter((d) => !d.isAlias);
+
+  if (realDependents.length > 0) {
     throw new Error(
-      `Can't remove — ${dependents.map((d) => d.sku).join(', ')} still shares stock with this variant. Repoint or remove those first.`,
+      `Can't remove — ${realDependents.map((d) => d.sku).join(', ')} still shares stock with this variant. Repoint or remove those first.`,
     );
   }
+
+  // Remove any alias SKUs that point at this variant.
+  if (aliasSkus.length > 0) {
+    await Promise.all([
+      ProductModel.deleteMany({ sku: { $in: aliasSkus } }),
+      SkuStockModel.deleteMany({ sku: { $in: aliasSkus } }),
+      StockMovementModel.deleteMany({ sku: { $in: aliasSkus } }),
+      ChannelListingModel.deleteMany({ sku: { $in: aliasSkus } }),
+      ChannelInventoryStateModel.deleteMany({ sku: { $in: aliasSkus } }),
+    ]);
+  }
+
   await Promise.all([
     ProductModel.deleteOne({ sku: s }),
     SkuStockModel.deleteMany({ sku: s }),
@@ -590,6 +613,10 @@ export interface GroupVariant {
   onHand: number;
   /** The other SKU this variant's stock is actually tracked on, if any. */
   sharesStockWith?: string | null;
+  /** Whether this variant is an alias SKU (alternate marketplace code). */
+  isAlias?: boolean;
+  /** Additional alias SKUs that map to this variant (only on primary variants). */
+  aliasSkus?: string[];
 }
 export interface GroupView {
   code: string;
@@ -635,7 +662,21 @@ export async function getProductGroups(): Promise<{ groups: GroupView[]; ungroup
 
   const views: GroupView[] = groups.map((g) => {
     const items = productsByGroup.get(g.code) ?? [];
-    const variants: GroupVariant[] = items
+    // Separate primary variants from alias SKUs.
+    const primaries = items.filter((p) => !p.isAlias);
+    const aliases = items.filter((p) => p.isAlias);
+
+    // Build a map: primarySku -> list of alias SKU strings.
+    const aliasMap = new Map<string, string[]>();
+    for (const a of aliases) {
+      const target = a.sharesStockWith;
+      if (!target) continue;
+      const arr = aliasMap.get(target) ?? [];
+      arr.push(a.sku);
+      aliasMap.set(target, arr);
+    }
+
+    const variants: GroupVariant[] = primaries
       .map((p) => ({
         sku: p.sku,
         size: p.attributes?.get?.('size') ?? (p.attributes as unknown as Record<string, string>)?.size,
@@ -643,6 +684,8 @@ export async function getProductGroups(): Promise<{ groups: GroupView[]; ungroup
         // Bundles show their component's pool (e.g. the set shows halter stock).
         onHand: onHandBySku.get(pileBySku.get(p.sku)!) ?? 0,
         sharesStockWith: p.sharesStockWith ?? null,
+        isAlias: false,
+        aliasSkus: (aliasMap.get(p.sku) ?? []).sort(),
       }))
       .sort((a, b) => a.sku.localeCompare(b.sku));
     return {
@@ -651,7 +694,7 @@ export async function getProductGroups(): Promise<{ groups: GroupView[]; ungroup
       category: g.category ?? undefined,
       imageUrl: g.imageUrl ?? undefined,
       mrp: g.mrp ?? undefined,
-      variantCount: variants.length,
+      variantCount: primaries.length,
       totalStock: (() => {
         const seenPools = new Set<string>();
         let sum = 0;
@@ -669,6 +712,101 @@ export async function getProductGroups(): Promise<{ groups: GroupView[]; ungroup
   });
 
   return { groups: views, ungrouped };
+}
+
+/**
+ * Add an alias SKU to an existing variant (primary SKU). The alias is a Product
+ * entry with the same colour/size, `isAlias: true`, and `sharesStockWith` pointing
+ * at the primary. Orders from marketplaces that use the alias code are automatically
+ * resolved to the primary's stock.
+ */
+export async function addAliasSku(
+  code: string,
+  primarySku: string,
+  aliasSku: string,
+) {
+  await connectDB();
+  const c = code.trim().toUpperCase();
+  const primary = primarySku.trim().toUpperCase();
+  const alias = aliasSku.trim().toUpperCase();
+  if (!alias) throw new Error('Alias SKU is required');
+  if (alias === primary) throw new Error('Alias cannot be the same as the primary SKU');
+
+  const group = await ProductGroupModel.findOne({ code: c });
+  if (!group) throw new Error('Product not found');
+  const primaryProduct = await ProductModel.findOne({ sku: primary, groupCode: c });
+  if (!primaryProduct) throw new Error(`Primary variant ${primary} not found in ${c}`);
+  if (primaryProduct.isAlias) throw new Error(`${primary} is itself an alias — add aliases to its primary instead`);
+  if (await ProductModel.exists({ sku: alias })) throw new Error(`SKU ${alias} already exists`);
+
+  const attrs: Record<string, string> = {};
+  const pAttrs = attrsOf(primaryProduct.attributes);
+  if (pAttrs.size) attrs.size = pAttrs.size;
+  if (pAttrs.color) attrs.color = pAttrs.color;
+
+  await ProductModel.create({
+    sku: alias,
+    name: primaryProduct.name,
+    groupCode: c,
+    imageUrl: primaryProduct.imageUrl,
+    attributes: attrs,
+    category: primaryProduct.category,
+    mrp: primaryProduct.mrp,
+    costPrice: primaryProduct.costPrice,
+    sharesStockWith: primary,
+    isAlias: true,
+  });
+  invalidateStockShareCache();
+  return { aliasSku: alias, primarySku: primary };
+}
+
+/**
+ * Bulk-add alias SKUs for every colour/size variant in a product group. For
+ * each primary variant with SKU pattern PREFIX-COLOR-SIZE, creates an alias
+ * with the same colour/size but a different SKU pattern. The `skuTemplate`
+ * function receives (groupCode, color, size, primarySku) and returns the
+ * alias SKU string.
+ */
+export async function addAliasSkusForGroup(
+  code: string,
+  buildAliasSku: (groupCode: string, color: string, size: string, primarySku: string) => string,
+) {
+  await connectDB();
+  const c = code.trim().toUpperCase();
+  const group = await ProductGroupModel.findOne({ code: c });
+  if (!group) throw new Error('Product not found');
+
+  const primaries = await ProductModel.find({ groupCode: c, isAlias: { $ne: true } }).lean();
+  const created: string[] = [];
+  const skipped: { sku: string; reason: string }[] = [];
+
+  for (const p of primaries) {
+    const pAttrs = attrsOf(p.attributes);
+    const color = pAttrs.color?.trim();
+    const size = pAttrs.size?.trim();
+    if (!color || !size) continue;
+
+    const aliasSku = buildAliasSku(c, color, size, p.sku).toUpperCase();
+    if (aliasSku === p.sku) continue;
+    try {
+      await addAliasSku(c, p.sku, aliasSku);
+      created.push(aliasSku);
+    } catch (err) {
+      skipped.push({ sku: aliasSku, reason: err instanceof Error ? err.message : String(err) });
+    }
+  }
+  return { created, skipped };
+}
+
+/** Remove an alias SKU. Only alias SKUs can be removed this way. */
+export async function removeAliasSku(aliasSku: string) {
+  await connectDB();
+  const s = aliasSku.trim().toUpperCase();
+  const product = await ProductModel.findOne({ sku: s });
+  if (!product) throw new Error('SKU not found');
+  if (!product.isAlias) throw new Error(`${s} is not an alias — use the regular remove variant to delete it`);
+  await removeVariant(s);
+  return { sku: s };
 }
 
 export interface ProductOption {
